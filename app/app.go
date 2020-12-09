@@ -54,13 +54,17 @@ type settingsItem struct {
 	SecondaryID string   `json:"secondary_id"`
 	Settings    Settings `json:"value"`
 }
+
 type Settings struct {
-	Shell shell `json:"shell"`
+	Shell struct {
+		Command    string `json:"command"`
+		TaskFamily string `json:"task_family"`
+	} `json:"shell"`
+	DBUtils struct {
+		ShellTaskFamily string `json:"shell_task_family"`
+	} `json:"dbutils"`
 }
-type shell struct {
-	Command    string `json:"command"`
-	TaskFamily string `json:"task_family"`
-}
+
 type appItem struct {
 	PrimaryID   string `json:"primary_id"`
 	SecondaryID string `json:"secondary_id"`
@@ -145,7 +149,7 @@ func (a *App) LoadSettings() error {
 }
 
 // StartShellTask start a new shell task on ECS
-func (a *App) StartShellTask() (*ecs.RunTaskOutput, error) {
+func (a *App) StartShellTask(taskFamily *string) (*ecs.RunTaskOutput, error) {
 	ecsSvc := ecs.New(a.Session)
 	err := a.LoadSettings()
 	if err != nil {
@@ -156,7 +160,7 @@ func (a *App) StartShellTask() (*ecs.RunTaskOutput, error) {
 		return nil, err
 	}
 	taskDefn, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
-		TaskDefinition: &(*a).Settings.Shell.TaskFamily,
+		TaskDefinition: taskFamily,
 	})
 	if err != nil {
 		return nil, err
@@ -185,7 +189,7 @@ func (a *App) StartShellTask() (*ecs.RunTaskOutput, error) {
 }
 
 // ConnectToTask open a SSM Session to the Docker host and exec into container
-func (a *App) ConnectToTask(task *ecs.Task) error {
+func (a *App) ConnectToTask(task *ecs.Task, cmd *string) error {
 	binaryPath, err := exec.LookPath("session-manager-plugin")
 	if err != nil {
 		fmt.Println(aurora.Red("AWS Session Manager plugin was not found on the path. Install it to use this feature."))
@@ -204,7 +208,7 @@ func (a *App) ConnectToTask(task *ecs.Task) error {
 	if err != nil {
 		return err
 	}
-	command := fmt.Sprintf("docker exec -it $(docker ps -q -f label=com.amazonaws.ecs.task-arn=%s) %s", *task.TaskArn, a.Settings.Shell.Command)
+	command := fmt.Sprintf("docker exec -it $(docker ps -q -f label=com.amazonaws.ecs.task-arn=%s) %s", *task.TaskArn, *cmd)
 	input := ssm.StartSessionInput{
 		DocumentName: &documentName,
 		Target:       resp.ContainerInstances[0].Ec2InstanceId,
