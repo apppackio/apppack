@@ -26,7 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 
 	"github.com/lincolnloop/apppack/app"
-	. "github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
@@ -86,9 +86,9 @@ var listCmd = &cobra.Command{
 		for _, value := range resp.Parameters {
 			parts := strings.Split(*value.Name, "/")
 			varname := parts[len(parts)-1]
-			fmt.Fprintf(w, "%s\t%s\t\n", Green(fmt.Sprintf("%s:", varname)), *value.Value)
+			fmt.Fprintf(w, "%s\t%s\t\n", aurora.Green(fmt.Sprintf("%s:", varname)), *value.Value)
 		}
-		fmt.Println(Faint("==="), Bold(White(fmt.Sprintf("%s Config Vars", AppName))))
+		fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(fmt.Sprintf("%s Config Vars", AppName))))
 		w.Flush()
 	},
 }

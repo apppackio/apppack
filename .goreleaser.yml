@@ -31,3 +31,4 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^ci:'
+      - '^lint:'

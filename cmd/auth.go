@@ -22,7 +22,6 @@ import (
 
 	"github.com/lincolnloop/apppack/auth"
 	"github.com/logrusorgru/aurora"
-	. "github.com/logrusorgru/aurora"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 )
@@ -52,7 +51,7 @@ var loginCmd = &cobra.Command{
 		_, _ = reader.ReadString('\n')
 		userInfo, err := auth.LoginComplete(data["device_code"])
 		checkErr(err)
-		fmt.Println(Green(fmt.Sprintf("Logged in as %s", (*userInfo).Email)))
+		printSuccess(fmt.Sprintf("Logged in as %s", aurora.Bold(userInfo.Email)))
 	},
 }
 
