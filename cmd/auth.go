@@ -44,12 +44,12 @@ var loginCmd = &cobra.Command{
 		dataPtr, err := auth.LoginInit()
 		checkErr(err)
 		data := *dataPtr
-		fmt.Println("Your verification code is", data["user_code"])
-		browser.OpenURL(data["verification_uri_complete"])
+		fmt.Println("Your verification code is", data.UserCode)
+		browser.OpenURL(data.VerificationURIComplete)
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Printf("Finish verification in your web browser then press ENTER to continue.")
 		_, _ = reader.ReadString('\n')
-		userInfo, err := auth.LoginComplete(data["device_code"])
+		userInfo, err := auth.LoginComplete(data.DeviceCode)
 		checkErr(err)
 		printSuccess(fmt.Sprintf("Logged in as %s", aurora.Bold(userInfo.Email)))
 	},

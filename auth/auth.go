@@ -39,6 +39,15 @@ type Tokens struct {
 	TokenType    string `json:"token_type"`
 }
 
+type DeviceCodeResp struct {
+	DeviceCode              string `json:"device_code"`
+	ExpiresIn               int    `json:"expires_in"`
+	UserCode                string `json:"user_code"`
+	VerificationURI         string `json:"verification_uri"`
+	Interval                int    `json:"interval"`
+	VerificationURIComplete string `json:"verification_uri_complete"`
+}
+
 type UserInfo struct {
 	Email    string            `json:"email"`
 	AwsRoles map[string]string `json:"https://paaws.lloop.us/aws_roles"`
@@ -241,7 +250,7 @@ func refreshTokens() (*Tokens, error) {
 }
 
 // LoginInit start login process with Auth0
-func LoginInit() (*map[string]string, error) {
+func LoginInit() (*DeviceCodeResp, error) {
 	reqBody, err := json.Marshal(map[string]string{
 		"client_id": clientID, "scope": scope, "audience": audience,
 	})
@@ -256,7 +265,7 @@ func LoginInit() (*map[string]string, error) {
 		text, _ := ioutil.ReadAll(resp.Body)
 		return nil, fmt.Errorf("%s", text)
 	}
-	var data map[string]string
+	var data DeviceCodeResp
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil, err
