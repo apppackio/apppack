@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/lincolnloop/apppack/auth"
+	"github.com/logrusorgru/aurora"
 	. "github.com/logrusorgru/aurora"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
@@ -58,16 +59,24 @@ var loginCmd = &cobra.Command{
 // logoutCmd represents the logout command
 var logoutCmd = &cobra.Command{
 	Use:   "logout",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Logout from AppPack.io on this device",
+	Long:  `Logout from AppPack.io on this device`,
 	Run: func(cmd *cobra.Command, args []string) {
-		auth.Logout()
-		fmt.Println(Green(fmt.Sprintf("Logged out.")))
+		err := auth.Logout()
+		checkErr(err)
+		printSuccess("Logged out.")
+	},
+}
+
+// whoAmICmd represents the whoami command
+var whoAmICmd = &cobra.Command{
+	Use:   "whoami",
+	Short: "Print login information for the current user",
+	Long:  `Print login information for the current user`,
+	Run: func(cmd *cobra.Command, args []string) {
+		email, err := auth.WhoAmI()
+		checkErr(err)
+		printSuccess(fmt.Sprintf("You are currently logged in as %s", aurora.Bold(*email)))
 	},
 }
 
@@ -75,4 +84,5 @@ func init() {
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(loginCmd)
 	authCmd.AddCommand(logoutCmd)
+	authCmd.AddCommand(whoAmICmd)
 }
