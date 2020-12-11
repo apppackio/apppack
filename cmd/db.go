@@ -17,12 +17,59 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/lincolnloop/apppack/app"
+	"github.com/lincolnloop/apppack/auth"
+	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
+
+func dbDumplocation(prefix string) (*s3.GetObjectInput, error) {
+	currentTime := time.Now()
+	username, err := auth.WhoAmI()
+	if err != nil {
+		return nil, err
+	}
+	app, err := app.Init(AppName)
+	app.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	return &s3.GetObjectInput{
+		Key:    aws.String(fmt.Sprintf("%s%s-%s.dump", prefix, currentTime.Format("20060102150405"), *username)),
+		Bucket: &app.Settings.DBUtils.S3Bucket,
+	}, nil
+}
+
+func downloadFile(sess *session.Session, objInput *s3.GetObjectInput, outputFile string) error {
+	Spinner.Suffix = fmt.Sprintf(" downloading %s", outputFile)
+	downloader := s3manager.NewDownloader(sess)
+	file, err := os.Create(outputFile)
+	if err != nil {
+		return err
+	}
+	_, err = downloader.Download(file, objInput)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func uploadFile(sess *session.Session, uploadInput *s3manager.UploadInput) error {
+	uploader := s3manager.NewUploader(sess)
+	_, err := uploader.Upload(uploadInput)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // dbCmd represents the db command
 var dbCmd = &cobra.Command{
@@ -55,20 +102,51 @@ to quickly create a Cobra application.`,
 		checkErr(err)
 		err = app.LoadSettings()
 		checkErr(err)
-		taskOutput, err := app.StartShellTask(&app.Settings.DBUtils.ShellTaskFamily)
+		taskOutput, err := app.StartTask(&app.Settings.DBUtils.ShellTaskFamily, []string{}, false)
 		checkErr(err)
 		shellTask := taskOutput.Tasks[0]
 		checkErr(err)
 		Spinner.Suffix = fmt.Sprintf(" starting task %s", *shellTask.TaskArn)
-		ecsSvc := ecs.New(app.Session)
-		err = ecsSvc.WaitUntilTasksRunning(&ecs.DescribeTasksInput{
-			Cluster: shellTask.ClusterArn,
-			Tasks:   []*string{shellTask.TaskArn},
-		})
+		err = app.WaitForTaskRunning(shellTask)
 		checkErr(err)
 		Spinner.Stop()
 		err = app.ConnectToTask(shellTask, aws.String("entrypoint.sh psql"))
 		checkErr(err)
+	},
+}
+
+// dbDumpCmd represents the db load command
+var dbDumpCmd = &cobra.Command{
+	Use:   "dump",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		Spinner.Start()
+		getObjectInput, err := dbDumplocation("dumps/")
+		checkErr(err)
+		app, err := app.Init(AppName)
+		checkErr(err)
+		err = app.LoadSettings()
+		checkErr(err)
+		ecsTaskOutput, err := app.StartTask(
+			&app.Settings.DBUtils.DumpLoadTaskFamily,
+			[]string{"dump-to-s3.sh", fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)},
+			true,
+		)
+		checkErr(err)
+		Spinner.Suffix = fmt.Sprintf(" dumping database %s", aurora.Faint(*ecsTaskOutput.Tasks[0].TaskArn))
+		err = app.WaitForTaskStopped(ecsTaskOutput.Tasks[0])
+		checkErr(err)
+		localFile := fmt.Sprintf("%s.dump", app.Name)
+		err = downloadFile(app.Session, getObjectInput, localFile)
+		checkErr(err)
+		Spinner.Stop()
+		printSuccess(fmt.Sprintf("Dumped database to %s", localFile))
 	},
 }
 
@@ -82,8 +160,39 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("load called")
+		var remoteFile string
+		Spinner.Start()
+		app, err := app.Init(AppName)
+		checkErr(err)
+		if strings.HasPrefix(args[0], "s3://") {
+			remoteFile = args[0]
+		} else {
+			file, err := os.Open(args[0])
+			checkErr(err)
+			getObjectInput, err := dbDumplocation("uploads/")
+			checkErr(err)
+			remoteFile = fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)
+			Spinner.Suffix = fmt.Sprintf(" uploading %s", args[0])
+			err = uploadFile(app.Session, &s3manager.UploadInput{
+				Bucket: getObjectInput.Bucket,
+				Key:    getObjectInput.Key,
+				Body:   file,
+			})
+		}
+		app.LoadSettings()
+		ecsTaskOutput, err := app.StartTask(
+			&app.Settings.DBUtils.DumpLoadTaskFamily,
+			[]string{"load-from-s3.sh", remoteFile},
+			true,
+		)
+		Spinner.Suffix = fmt.Sprintf(" loading database %s", aurora.Faint(*ecsTaskOutput.Tasks[0].TaskArn))
+		checkErr(err)
+		err = app.WaitForTaskStopped(ecsTaskOutput.Tasks[0])
+		checkErr(err)
+		Spinner.Stop()
+		printSuccess(fmt.Sprintf("Loaded database dump from %s", args[0]))
 	},
 }
 
@@ -93,6 +202,8 @@ func init() {
 	dbCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
 	dbCmd.MarkPersistentFlagRequired("app-name")
 	dbCmd.AddCommand(dbShellCmd)
+
+	dbCmd.AddCommand(dbDumpCmd)
 
 	dbCmd.AddCommand(dbLoadCmd)
 

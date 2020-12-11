@@ -21,7 +21,7 @@ import (
 var maxLifetime = 12 * 60 * 60
 var waitForConnect = 60
 
-var shellBackgroundCommand = []string{
+var ShellBackgroundCommand = []string{
 	"/bin/sh",
 	"-c",
 	strings.Join([]string{
@@ -61,7 +61,9 @@ type Settings struct {
 		TaskFamily string `json:"task_family"`
 	} `json:"shell"`
 	DBUtils struct {
-		ShellTaskFamily string `json:"shell_task_family"`
+		ShellTaskFamily    string `json:"shell_task_family"`
+		S3Bucket           string `json:"s3_bucket"`
+		DumpLoadTaskFamily string `json:"dumpload_task_family"`
 	} `json:"dbutils"`
 }
 
@@ -80,7 +82,8 @@ type ecsConfigItem struct {
 }
 
 type ECSConfig struct {
-	RunTaskArgs ecs.RunTaskInput `locationName:"run_task_args"`
+	RunTaskArgs        ecs.RunTaskInput `locationName:"run_task_args"`
+	RunTaskArgsFargate ecs.RunTaskInput `locationName:"run_task_args_fargate"`
 }
 
 func ddbItem(sess *session.Session, primaryID string, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
@@ -148,8 +151,8 @@ func (a *App) LoadSettings() error {
 	return nil
 }
 
-// StartShellTask start a new shell task on ECS
-func (a *App) StartShellTask(taskFamily *string) (*ecs.RunTaskOutput, error) {
+// StartTask start a new task on ECS
+func (a *App) StartTask(taskFamily *string, command []string, fargate bool) (*ecs.RunTaskOutput, error) {
 	ecsSvc := ecs.New(a.Session)
 	err := a.LoadSettings()
 	if err != nil {
@@ -165,10 +168,16 @@ func (a *App) StartShellTask(taskFamily *string) (*ecs.RunTaskOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-	runTaskArgs := a.ECSConfig.RunTaskArgs
-	command := []*string{}
-	for i := range shellBackgroundCommand {
-		command = append(command, &shellBackgroundCommand[i])
+	var runTaskArgs ecs.RunTaskInput
+	if fargate {
+		runTaskArgs = a.ECSConfig.RunTaskArgsFargate
+	} else {
+		runTaskArgs = a.ECSConfig.RunTaskArgs
+	}
+
+	cmd := []*string{}
+	for i := range command {
+		cmd = append(cmd, &command[i])
 	}
 	email, err := auth.WhoAmI()
 	if err != nil {
@@ -181,11 +190,45 @@ func (a *App) StartShellTask(taskFamily *string) (*ecs.RunTaskOutput, error) {
 		ContainerOverrides: []*ecs.ContainerOverride{
 			{
 				Name:    taskDefn.TaskDefinition.ContainerDefinitions[0].Name,
-				Command: command,
+				Command: cmd,
 			},
 		},
 	}
 	return ecsSvc.RunTask(&runTaskArgs)
+}
+
+// WaitForTaskRunning waits for a task to be running or complete
+func (a *App) WaitForTaskRunning(task *ecs.Task) error {
+	ecsSvc := ecs.New(a.Session)
+	return ecsSvc.WaitUntilTasksRunning(&ecs.DescribeTasksInput{
+		Cluster: task.ClusterArn,
+		Tasks:   []*string{task.TaskArn},
+	})
+}
+
+// WaitForTaskStopped waits for a task to be running or complete
+func (a *App) WaitForTaskStopped(task *ecs.Task) error {
+	ecsSvc := ecs.New(a.Session)
+	input := ecs.DescribeTasksInput{
+		Cluster: task.ClusterArn,
+		Tasks:   []*string{task.TaskArn},
+	}
+	err := ecsSvc.WaitUntilTasksStopped(&input)
+	if err != nil {
+		return err
+	}
+	taskDesc, err := ecsSvc.DescribeTasks(&input)
+	if err != nil {
+		return err
+	}
+	task = taskDesc.Tasks[0]
+	if *task.StopCode != "EssentialContainerExited" {
+		return fmt.Errorf("task %s failed %s: %s", *task.TaskArn, *task.StopCode, *task.StoppedReason)
+	}
+	if *task.Containers[0].ExitCode > 0 {
+		return fmt.Errorf("task %s failed with exit code %d", *task.TaskArn, *task.Containers[0].ExitCode)
+	}
+	return nil
 }
 
 // ConnectToTask open a SSM Session to the Docker host and exec into container

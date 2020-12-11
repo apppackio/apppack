@@ -20,7 +20,6 @@ import (
 
 	"github.com/lincolnloop/apppack/app"
 
-	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/spf13/cobra"
 )
 
@@ -36,23 +35,23 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Spinner.Start()
-		app, err := app.Init(AppName)
+		a, err := app.Init(AppName)
 		checkErr(err)
-		err = app.LoadSettings()
+		err = a.LoadSettings()
 		checkErr(err)
-		taskOutput, err := app.StartShellTask(&app.Settings.Shell.TaskFamily)
+		taskOutput, err := a.StartTask(
+			&a.Settings.Shell.TaskFamily,
+			app.ShellBackgroundCommand,
+			false,
+		)
 		checkErr(err)
 		shellTask := taskOutput.Tasks[0]
 		checkErr(err)
 		Spinner.Suffix = fmt.Sprintf(" starting task %s", *shellTask.TaskArn)
-		ecsSvc := ecs.New(app.Session)
-		err = ecsSvc.WaitUntilTasksRunning(&ecs.DescribeTasksInput{
-			Cluster: shellTask.ClusterArn,
-			Tasks:   []*string{shellTask.TaskArn},
-		})
+		err = a.WaitForTaskRunning(shellTask)
 		checkErr(err)
 		Spinner.Stop()
-		err = app.ConnectToTask(shellTask, &app.Settings.Shell.Command)
+		err = a.ConnectToTask(shellTask, &a.Settings.Shell.Command)
 		checkErr(err)
 	},
 }
