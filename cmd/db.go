@@ -74,28 +74,15 @@ func uploadFile(sess *session.Session, uploadInput *s3manager.UploadInput) error
 // dbCmd represents the db command
 var dbCmd = &cobra.Command{
 	Use:   "db",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("db called")
-	},
+	Short: "Tools to manage your database on AppPack",
+	Long:  `Tools to manage your database on AppPack`,
 }
 
 // dbShellCmd represents the db shell command
 var dbShellCmd = &cobra.Command{
 	Use:   "shell",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Open an interactive shell prompt to the app database",
+	Long:  `Open an interactive shell prompt to the app database`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Spinner.Start()
 		app, err := app.Init(AppName)
@@ -118,13 +105,8 @@ to quickly create a Cobra application.`,
 // dbDumpCmd represents the db load command
 var dbDumpCmd = &cobra.Command{
 	Use:   "dump",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Dump the database to a local file",
+	Long:  `Dump the database to a local file`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Spinner.Start()
 		getObjectInput, err := dbDumplocation("dumps/")
@@ -153,13 +135,11 @@ to quickly create a Cobra application.`,
 // dbLoadCmd represents the db load command
 var dbLoadCmd = &cobra.Command{
 	Use:   "load",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Load a dump file into the remote database",
+	Long: `The dump file can either be local (in which case it will first be uploaded to S3. Or you can specify a file already on S3 by using "s3://..." as the first argument.
+	
+WARNING: This is a destructive action which will delete the contents of your remote database in order to load the dump in.
+	`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		var remoteFile string
@@ -206,14 +186,4 @@ func init() {
 	dbCmd.AddCommand(dbDumpCmd)
 
 	dbCmd.AddCommand(dbLoadCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// dbCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// dbCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

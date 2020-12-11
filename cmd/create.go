@@ -374,28 +374,18 @@ func enabledString(val bool) string {
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("create called")
-	},
+	Short: "Create AppPack resources in your AWS account",
+	Long: `Use these commands to create AppPack resources in your account.
+	
+These currently require AWS authentication credentials to operate unlike app-specific commands which use AppPack for authentication.
+`,
 }
 
 // accountCmd represents the create command
 var accountCmd = &cobra.Command{
 	Use:   "account",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Setup resources for your AppPack account",
+	Long:  `Setup resources for your AppPack account`,
 	Run: func(cmd *cobra.Command, args []string) {
 		answers, err := askForMissingArgs(cmd, nil)
 		checkErr(err)
@@ -478,13 +468,8 @@ to quickly create a Cobra application.`,
 // appCmd represents the create command
 var appCmd = &cobra.Command{
 	Use:   "app",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Create an AppPack application",
+	Long:  `Create an AppPack application`,
 	Run: func(cmd *cobra.Command, args []string) {
 		questions := []*survey.Question{}
 		addQuestionFromFlag(cmd.Flags().Lookup("name"), &questions, nil)
@@ -714,14 +699,4 @@ func init() {
 	appCmd.Flags().Bool("addon-ses", false, "Setup SES (Email) add-on (requires manual approval of domain at SES)")
 	appCmd.Flags().String("addon-ses-domain", "*", "Domain approved for sending via SES add-on. Use '*' for all domains.")
 	appCmd.Flags().StringSliceP("users", "u", []string{}, "Email addresses for users who can manage the app (comma separated)")
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// createCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// createCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
