@@ -4,6 +4,8 @@ go 1.15
 
 require (
 	github.com/AlecAivazis/survey/v2 v2.2.4
+	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2 // indirect
+	github.com/TylerBrock/saw v0.2.2
 	github.com/aws/aws-sdk-go v1.35.35
 	github.com/briandowns/spinner v1.12.0
 	github.com/google/uuid v1.1.2

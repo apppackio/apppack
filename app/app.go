@@ -3,6 +3,8 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -65,6 +67,9 @@ type Settings struct {
 		S3Bucket           string `json:"s3_bucket"`
 		DumpLoadTaskFamily string `json:"dumpload_task_family"`
 	} `json:"dbutils"`
+	LogGroup struct {
+		Name string `json:"name"`
+	} `json:"log_group"`
 }
 
 type appItem struct {
