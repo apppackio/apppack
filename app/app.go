@@ -12,9 +12,11 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/lincolnloop/apppack/auth"
 	"github.com/logrusorgru/aurora"
@@ -67,6 +69,9 @@ type Settings struct {
 		S3Bucket           string `json:"s3_bucket"`
 		DumpLoadTaskFamily string `json:"dumpload_task_family"`
 	} `json:"dbutils"`
+	CodebuildProject struct {
+		Name string `json:"name"`
+	} `json:"codebuild_project"`
 	LogGroup struct {
 		Name string `json:"name"`
 	} `json:"log_group"`
@@ -281,6 +286,109 @@ func (a *App) ConnectToTask(task *ecs.Task, cmd *string) error {
 		return err
 	}
 	return nil
+}
+
+// StartBuild starts a new CodeBuild run
+func (a *App) StartBuild() (*codebuild.Build, error) {
+	codebuildSvc := codebuild.New(a.Session)
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	build, err := codebuildSvc.StartBuild(&codebuild.StartBuildInput{
+		ProjectName: &a.Settings.CodebuildProject.Name,
+	})
+	return build.Build, err
+}
+
+// ListBuilds lists recent CodeBuild runs
+func (a *App) ListBuilds() ([]*codebuild.Build, error) {
+	codebuildSvc := codebuild.New(a.Session)
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	buildList, err := codebuildSvc.ListBuildsForProject(&codebuild.ListBuildsForProjectInput{
+		ProjectName: &a.Settings.CodebuildProject.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	builds, err := codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
+		Ids: buildList.Ids,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return builds.Builds, nil
+}
+
+// GetBuildArtifact retrieves an artifact stored in S3
+func (a *App) GetBuildArtifact(build *codebuild.Build, name string) ([]byte, error) {
+	artifactArn := build.Artifacts.Location
+	if artifactArn == nil {
+		return []byte{}, nil
+	}
+	s3Path := strings.Join(strings.Split(*artifactArn, ":")[5:], ":")
+	pathParts := strings.Split(s3Path, "/")
+	s3Svc := s3.New(a.Session)
+	obj, err := s3Svc.GetObject(&s3.GetObjectInput{
+		Bucket: &pathParts[0],
+		Key:    aws.String(strings.Join(append(pathParts[1:], name), "/")),
+	})
+	if err != nil {
+		return []byte{}, err
+	}
+	return ioutil.ReadAll(obj.Body)
+}
+
+// GetConsoleURL generate a URL which will sign the user in to the AWS console and redirect to the desinationURL
+func (a *App) GetConsoleURL(destinationURL string) (*string, error) {
+	credentials, err := a.Session.Config.Credentials.Get()
+	if err != nil {
+		return nil, err
+	}
+	sessionJSON, err := json.Marshal(map[string]string{
+		"sessionId":    credentials.AccessKeyID,
+		"sessionKey":   credentials.SecretAccessKey,
+		"sessionToken": credentials.SessionToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{}
+	signinURL := "https://signin.aws.amazon.com/federation"
+	req, err := http.NewRequest("GET", signinURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	q := req.URL.Query()
+	q.Add("Action", "getSigninToken")
+	q.Add("SessionDuration", "3600")
+	q.Add("Session", fmt.Sprintf("%s", sessionJSON))
+	req.URL.RawQuery = q.Encode()
+	resp, err := client.Do(req)
+	signinResp := struct {
+		SigninToken string `json:"SigninToken"`
+	}{}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(body, &signinResp); err != nil {
+		return nil, err
+	}
+	req, err = http.NewRequest("GET", signinURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	q = req.URL.Query()
+	q.Add("Action", "login")
+	q.Add("Issuer", "AppPack.io")
+	q.Add("SigninToken", signinResp.SigninToken)
+	q.Add("Destination", destinationURL)
+	req.URL.RawQuery = q.Encode()
+	return aws.String(req.URL.String()), nil
 }
 
 // Init will pull in app settings from DyanmoDB and provide helper
