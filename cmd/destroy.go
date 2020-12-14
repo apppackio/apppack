@@ -94,28 +94,39 @@ var destroyClusterCmd = &cobra.Command{
 		clusterName := args[0]
 		startSpinner()
 		sess := session.Must(session.NewSession())
-		stackOutput, err := stackOutputFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
-		checkErr(err)
-		stackID := (*stackOutput)["stack_id"]
+		stackName := fmt.Sprintf("apppack-cluster-%s", clusterName)
 		cfnSvc := cloudformation.New(sess)
-		_, err = cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: stackID,
+		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+			StackName: &stackName,
 		})
+		stackID := *stackOutput.Stacks[0].StackId
 		checkErr(err)
 		Spinner.Stop()
 		var confirm string
-		fmt.Printf("Are you sure you want to delete your AppPack Cluster %s\n%s? yes/[%s]\n", clusterName, aurora.Faint(*stackID), aurora.Bold("no"))
+		fmt.Printf("Are you sure you want to delete your AppPack Cluster %s\n%s? yes/[%s]\n", clusterName, aurora.Faint(stackID), aurora.Bold("no"))
 		fmt.Scanln(&confirm)
 		if confirm != "yes" {
 			checkErr(fmt.Errorf("aborting due to user input"))
 		}
 		startSpinner()
 		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
-			StackName: stackID,
+			StackName: &stackID,
 		})
 		checkErr(err)
 		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
-			StackName: stackID,
+			StackName: &stackID,
+		})
+		// EC2 instances don't get removed in time to delete the ECS cluster
+		if err != nil {
+			printWarning("cluster deletion did not complete successfully, retrying...")
+		}
+		startSpinner()
+		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+			StackName: &stackID,
+		})
+		checkErr(err)
+		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
+			StackName: &stackID,
 		})
 		checkErr(err)
 		Spinner.Stop()

@@ -67,6 +67,7 @@ func checkErr(err error) {
 	if err == nil {
 		return
 	}
+	Spinner.Stop()
 	printError(fmt.Sprintf("%v", err))
 	os.Exit(1)
 }
@@ -77,4 +78,8 @@ func printError(text string) {
 
 func printSuccess(text string) {
 	fmt.Println(aurora.Green(fmt.Sprintf("✔ %s", text)))
+}
+
+func printWarning(text string) {
+	fmt.Println(aurora.Yellow(fmt.Sprintf("⚠ %s", text)))
 }
