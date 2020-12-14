@@ -1,7 +1,8 @@
 name: functional-tests
 
 on:
-  push:
+  schedule:
+    - cron: '0 1 * * *'
 
 jobs:
   functional-tests:
