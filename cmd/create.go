@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -300,7 +299,13 @@ func askForMissingArgs(cmd *cobra.Command, overrideQuestions *map[string]*survey
 	var questions []*survey.Question
 	cmd.LocalFlags().VisitAll(func(flag *pflag.Flag) {
 		if flag.Name != "help" {
-			addQuestionFromFlag(flag, &questions, (*overrideQuestions)[flag.Name])
+			var override *survey.Question
+			if overrideQuestions != nil {
+				override = (*overrideQuestions)[flag.Name]
+			} else {
+				override = nil
+			}
+			addQuestionFromFlag(flag, &questions, override)
 		}
 	})
 	answers := make(map[string]interface{})
@@ -396,8 +401,7 @@ var accountCmd = &cobra.Command{
 		})
 
 		if err == nil {
-			printError("Account already exists")
-			os.Exit(1)
+			checkErr(fmt.Errorf("account already exists"))
 		}
 		if createChangeSet {
 			fmt.Println("Creating Cloudformation Change Set for account-level resources...")
@@ -409,13 +413,6 @@ var accountCmd = &cobra.Command{
 			{Key: aws.String("paaws:account"), Value: aws.String("true")},
 			{Key: aws.String("paaws"), Value: aws.String("true")},
 		}
-		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-			Name:  aws.String("/paaws/account/dockerhub-username"),
-			Value: getArgValue(cmd, answers, "dockerhub-username"),
-			Type:  aws.String("SecureString"),
-			Tags:  tags,
-		})
-		checkErr(err)
 		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 			Name:  aws.String("/paaws/account/dockerhub-access-token"),
 			Value: getArgValue(cmd, answers, "dockerhub-access-token"),
@@ -435,6 +432,10 @@ var accountCmd = &cobra.Command{
 				{
 					ParameterKey:   aws.String("PaawsRoleExternalId"),
 					ParameterValue: aws.String(strings.Replace(uuid.New().String(), "-", "", -1)),
+				},
+				{
+					ParameterKey:   aws.String("DockerhubUsername"),
+					ParameterValue: getArgValue(cmd, answers, "dockerhub-username"),
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
@@ -459,6 +460,8 @@ var accountCmd = &cobra.Command{
 			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.Stacks[0].StackId))
 			if *stack.Stacks[0].StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
+			} else {
+				printSuccess("AppPack account created")
 			}
 		}
 
