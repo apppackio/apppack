@@ -46,7 +46,7 @@ var getCmd = &cobra.Command{
 	Long:  `Read the value of a single config variable`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		Spinner.Start()
+		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
 		svc := ssm.New(a.Session)
@@ -70,7 +70,7 @@ var listCmd = &cobra.Command{
 		w := new(tabwriter.Writer)
 		// minwidth, tabwidth, padding, padchar, flags
 		w.Init(os.Stdout, 8, 8, 0, '\t', 0)
-		Spinner.Start()
+		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
 		checkErr(err)

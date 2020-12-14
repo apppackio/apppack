@@ -44,7 +44,7 @@ var destroyAccountCmd = &cobra.Command{
 	Short: "Destroy AWS resources used by your AppPack account",
 	Long:  `Destroy AWS resources used by your AppPack account`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Spinner.Start()
+		startSpinner()
 		sess := session.Must(session.NewSession())
 		ssmSvc := ssm.New(sess)
 		paramOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
@@ -66,7 +66,7 @@ var destroyAccountCmd = &cobra.Command{
 		if confirm != "yes" {
 			checkErr(fmt.Errorf("aborting due to user input"))
 		}
-		Spinner.Start()
+		startSpinner()
 		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
 			StackName: &account.StackID,
 		})
@@ -92,7 +92,7 @@ var destroyClusterCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clusterName := args[0]
-		Spinner.Start()
+		startSpinner()
 		sess := session.Must(session.NewSession())
 		stackOutput, err := stackOutputFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
 		checkErr(err)
@@ -109,7 +109,7 @@ var destroyClusterCmd = &cobra.Command{
 		if confirm != "yes" {
 			checkErr(fmt.Errorf("aborting due to user input"))
 		}
-		Spinner.Start()
+		startSpinner()
 		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
 			StackName: stackID,
 		})

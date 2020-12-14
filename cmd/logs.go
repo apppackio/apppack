@@ -60,7 +60,7 @@ var logsViewCmd = &cobra.Command{
 	Short: "Print application logs to terminal",
 	Long:  `Print application logs to terminal`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Spinner.Start()
+		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
 		a.LoadSettings()

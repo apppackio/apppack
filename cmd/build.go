@@ -81,7 +81,7 @@ var buildStartCmd = &cobra.Command{
 	Short: "Start a new build from the latest commit on the branch defined in AppPack",
 	Long:  `Start a new build from the latest commit on the branch defined in AppPack`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Spinner.Start()
+		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
 		build, err := a.StartBuild()
@@ -99,7 +99,7 @@ var buildListCmd = &cobra.Command{
 	Short: "List recent builds",
 	Long:  `List recent builds`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Spinner.Start()
+		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
 		builds, err := a.ListBuilds()

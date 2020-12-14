@@ -84,7 +84,7 @@ var dbShellCmd = &cobra.Command{
 	Short: "Open an interactive shell prompt to the app database",
 	Long:  `Open an interactive shell prompt to the app database`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Spinner.Start()
+		startSpinner()
 		app, err := app.Init(AppName)
 		checkErr(err)
 		err = app.LoadSettings()
@@ -108,7 +108,7 @@ var dbDumpCmd = &cobra.Command{
 	Short: "Dump the database to a local file",
 	Long:  `Dump the database to a local file`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Spinner.Start()
+		startSpinner()
 		getObjectInput, err := dbDumplocation("dumps/")
 		checkErr(err)
 		app, err := app.Init(AppName)
@@ -143,7 +143,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		var remoteFile string
-		Spinner.Start()
+		startSpinner()
 		app, err := app.Init(AppName)
 		checkErr(err)
 		if strings.HasPrefix(args[0], "s3://") {

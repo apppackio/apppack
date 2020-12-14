@@ -408,7 +408,7 @@ var accountCmd = &cobra.Command{
 		} else {
 			fmt.Println("Creating account-level resources...")
 		}
-		Spinner.Start()
+		startSpinner()
 		tags := []*ssm.Tag{
 			{Key: aws.String("paaws:account"), Value: aws.String("true")},
 			{Key: aws.String("paaws"), Value: aws.String("true")},
@@ -511,7 +511,7 @@ var appCmd = &cobra.Command{
 		if err := survey.Ask(questions, &answers); err != nil {
 			checkErr(err)
 		}
-		Spinner.Start()
+		startSpinner()
 		name := getArgValue(cmd, &answers, "name")
 		cluster := getArgValue(cmd, &answers, "cluster")
 		cfnTags := []*cloudformation.Tag{
