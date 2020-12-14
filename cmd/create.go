@@ -76,10 +76,11 @@ func createChangeSetAndWait(sess *session.Session, stackInput *cloudformation.Cr
 
 func createStackAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeStacksOutput, error) {
 	cfnSvc := cloudformation.New(sess)
-	_, err := cfnSvc.CreateStack(stackInput)
+	stackOutput, err := cfnSvc.CreateStack(stackInput)
 	if err != nil {
 		return nil, err
 	}
+	Spinner.Suffix = fmt.Sprintf(" creating %s", aurora.Faint(stackOutput.StackId))
 	describeStacksInput := cloudformation.DescribeStacksInput{StackName: stackInput.StackName}
 	err = cfnSvc.WaitUntilStackCreateComplete(&describeStacksInput)
 	if err != nil {

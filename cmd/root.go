@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/logrusorgru/aurora"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/briandowns/spinner"
@@ -30,16 +31,11 @@ const ()
 
 var cfgFile string
 
-func isTty() bool {
-	fileInfo, _ := os.Stdout.Stat()
-	return (fileInfo.Mode() & os.ModeCharDevice) != 0
-}
-
 // Spinner is the loading animation to use for all commands
 var Spinner *spinner.Spinner = spinner.New(spinner.CharSets[14], 50*time.Millisecond)
 
 func startSpinner() {
-	if isTty() {
+	if isatty.IsTerminal(os.Stdout.Fd()) {
 		Spinner.Start()
 	}
 }
