@@ -479,9 +479,9 @@ var accountCmd = &cobra.Command{
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
 				printSuccess("AppPack account created")
-				fmt.Println("Send the following information to pete@lincolnloop.com for account approval:")
+				fmt.Println(aurora.Bold("Send the following information to pete@lincolnloop.com for account approval:"))
 				for _, output := range stack.Outputs {
-					fmt.Println(aurora.Faint(fmt.Sprintf("%s: %s", *output.OutputKey, *output.OutputValue)))
+					fmt.Println(fmt.Sprintf("%s: %s", *output.OutputKey, *output.OutputValue))
 				}
 
 			}
