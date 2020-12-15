@@ -43,6 +43,7 @@ const (
 )
 
 var createChangeSet bool
+var nonInteractive bool
 
 func createChangeSetAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeChangeSetOutput, error) {
 	cfnSvc := cloudformation.New(sess)
@@ -80,7 +81,7 @@ func createStackAndWait(sess *session.Session, stackInput *cloudformation.Create
 	if err != nil {
 		return nil, err
 	}
-	Spinner.Suffix = fmt.Sprintf(" creating %s", aurora.Faint(stackOutput.StackId))
+	fmt.Println(aurora.Faint(fmt.Sprintf("creating %s", *stackOutput.StackId)))
 	describeStacksInput := cloudformation.DescribeStacksInput{StackName: stackInput.StackName}
 	err = cfnSvc.WaitUntilStackCreateComplete(&describeStacksInput)
 	if err != nil {
@@ -276,24 +277,38 @@ func addQuestionFromFlag(flag *pflag.Flag, questions *[]*survey.Question, overri
 	}
 }
 
-func getArgValue(cmd *cobra.Command, answers *map[string]interface{}, name string) *string {
+func getArgValue(cmd *cobra.Command, answers *map[string]interface{}, name string, required bool) *string {
 	var val string
-	if cmd.Flags().Lookup(name).Changed {
-		val = cmd.Flags().Lookup(name).Value.String()
+	flag := cmd.Flags().Lookup(name)
+	// if the flag is set, use that value
+	if flag.Changed {
+		val = flag.Value.String()
 		return &val
 	}
-	switch v := (*answers)[name].(type) {
-	case *string:
-		return (*answers)[name].(*string)
-	case string:
-		val, _ = (*answers)[name].(string)
-		return &val
-	case survey.OptionAnswer:
-		return aws.String((*answers)[name].(survey.OptionAnswer).Value)
-	default:
-		fmt.Printf("Unexpected type, %T\n", v)
-		return nil
+	// otherwise, check if there is a matching answer
+	answer, ok := (*answers)[name]
+	if ok {
+		switch v := answer.(type) {
+		case *string:
+			return answer.(*string)
+		case string:
+			val, _ = answer.(string)
+			return &val
+		case survey.OptionAnswer:
+			return aws.String(answer.(survey.OptionAnswer).Value)
+		default:
+			fmt.Printf("Unexpected type, %T\n", v)
+			return nil
+		}
 	}
+	// finally, if it is required and a value was not supplied, raise an error
+	if required {
+		if len(flag.DefValue) > 0 {
+			return &flag.DefValue
+		}
+		checkErr(fmt.Errorf("'--%s' is required", name))
+	}
+	return &flag.DefValue
 }
 
 func askForMissingArgs(cmd *cobra.Command, overrideQuestions *map[string]*survey.Question) (*map[string]interface{}, error) {
@@ -416,7 +431,7 @@ var accountCmd = &cobra.Command{
 		}
 		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 			Name:  aws.String("/paaws/account/dockerhub-access-token"),
-			Value: getArgValue(cmd, answers, "dockerhub-access-token"),
+			Value: getArgValue(cmd, answers, "dockerhub-access-token", true),
 			Type:  aws.String("SecureString"),
 			Tags:  tags,
 		})
@@ -436,7 +451,7 @@ var accountCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("DockerhubUsername"),
-					ParameterValue: getArgValue(cmd, answers, "dockerhub-username"),
+					ParameterValue: getArgValue(cmd, answers, "dockerhub-username", true),
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
@@ -517,11 +532,11 @@ var createClusterCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("Domain"),
-					ParameterValue: getArgValue(cmd, answers, "domain"),
+					ParameterValue: getArgValue(cmd, answers, "domain", true),
 				},
 				{
 					ParameterKey:   aws.String("HostedZone"),
-					ParameterValue: getArgValue(cmd, answers, "hosted-zone-id"),
+					ParameterValue: getArgValue(cmd, answers, "hosted-zone-id", true),
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
@@ -543,8 +558,8 @@ var createClusterCmd = &cobra.Command{
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.Stacks[0].StackId))
-			if *stack.Stacks[0].StackStatus != "CREATE_COMPLETE" {
+			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
 				printSuccess(fmt.Sprintf("AppPack cluster %s created", clusterName))
@@ -560,46 +575,49 @@ var appCmd = &cobra.Command{
 	Short: "Create an AppPack application",
 	Long:  `Create an AppPack application`,
 	Run: func(cmd *cobra.Command, args []string) {
-		questions := []*survey.Question{}
-		addQuestionFromFlag(cmd.Flags().Lookup("name"), &questions, nil)
-		sess := session.Must(session.NewSession())
-		clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for app"))
-		checkErr(err)
-		questions = append(questions, clusterQuestion)
-		addQuestionFromFlag(cmd.Flags().Lookup("repository"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("branch"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("healthcheck-path"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-private-s3"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-public-s3"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-database"), &questions, nil)
 		answers := make(map[string]interface{})
-		if err := survey.Ask(questions, &answers); err != nil {
+		var databaseAddonEnabled bool
+		sess := session.Must(session.NewSession())
+		if !nonInteractive {
+			questions := []*survey.Question{}
+			addQuestionFromFlag(cmd.Flags().Lookup("name"), &questions, nil)
+			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for app"))
 			checkErr(err)
-		}
-		questions = []*survey.Question{}
-		databaseAddonEnabled := isTruthy(getArgValue(cmd, &answers, "addon-database"))
-		if databaseAddonEnabled {
-			databaseClusterQuestion, err := makeDatabaseQuestion(sess, getArgValue(cmd, &answers, "cluster"))
-			checkErr(err)
-			questions = append(questions, databaseClusterQuestion)
-		}
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-sqs"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-ses"), &questions, nil)
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
-		}
-		questions = []*survey.Question{}
-		if isTruthy(getArgValue(cmd, &answers, "addon-ses")) {
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-ses-domain"), &questions, nil)
-		}
-		addQuestionFromFlag(cmd.Flags().Lookup("users"), &questions, nil)
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
+			questions = append(questions, clusterQuestion)
+			addQuestionFromFlag(cmd.Flags().Lookup("repository"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("branch"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("healthcheck-path"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("addon-private-s3"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("addon-public-s3"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("addon-database"), &questions, nil)
+			if err := survey.Ask(questions, &answers); err != nil {
+				checkErr(err)
+			}
+			questions = []*survey.Question{}
+			databaseAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-database", false))
+			if databaseAddonEnabled {
+				databaseClusterQuestion, err := makeDatabaseQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
+				checkErr(err)
+				questions = append(questions, databaseClusterQuestion)
+			}
+			addQuestionFromFlag(cmd.Flags().Lookup("addon-sqs"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("addon-ses"), &questions, nil)
+			if err := survey.Ask(questions, &answers); err != nil {
+				checkErr(err)
+			}
+			questions = []*survey.Question{}
+			if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
+				addQuestionFromFlag(cmd.Flags().Lookup("addon-ses-domain"), &questions, nil)
+			}
+			addQuestionFromFlag(cmd.Flags().Lookup("users"), &questions, nil)
+			if err := survey.Ask(questions, &answers); err != nil {
+				checkErr(err)
+			}
 		}
 		startSpinner()
-		name := getArgValue(cmd, &answers, "name")
-		cluster := getArgValue(cmd, &answers, "cluster")
+		name := getArgValue(cmd, &answers, "name", true)
+		cluster := getArgValue(cmd, &answers, "cluster", true)
 		cfnTags := []*cloudformation.Tag{
 			{Key: aws.String("paaws:appName"), Value: name},
 			{Key: aws.String("paaws:cluster"), Value: cluster},
@@ -609,22 +627,22 @@ var appCmd = &cobra.Command{
 		clusterStackOutput, err := stackOutputFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
 		checkErr(err)
 		domains := fmt.Sprintf("%s.%s", *name, *(*clusterStackOutput)["Domain"])
-		domainArg := *getArgValue(cmd, &answers, "domain")
+		domainArg := *getArgValue(cmd, &answers, "domain", false)
 		if len(domainArg) > 0 {
 			domains = fmt.Sprintf("%s,%s", domainArg, domains)
 		}
 		sesDomain := ""
-		if isTruthy(getArgValue(cmd, &answers, "addon-ses")) {
-			sesDomain = *getArgValue(cmd, &answers, "addon-ses-domain")
+		if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
+			sesDomain = *getArgValue(cmd, &answers, "addon-ses-domain", false)
 		}
 		databaseManagementLambdaArn := ""
-		if databaseAddonEnabled {
-			database := getArgValue(cmd, &answers, "addon-database-name")
+		if isTruthy(getArgValue(cmd, &answers, "addon-database", false)) {
+			database := getArgValue(cmd, &answers, "addon-database-name", false)
 			databaseStack, err := getDDBDatabaseItem(sess, cluster, database)
 			checkErr(err)
 			databaseManagementLambdaArn = databaseStack.ManagementLambdaArn
 		}
-		repositoryURL := getArgValue(cmd, &answers, "repository")
+		repositoryURL := getArgValue(cmd, &answers, "repository", true)
 		var repositoryType string
 		if strings.Contains(*repositoryURL, "github.com") {
 			repositoryType = "GITHUB"
@@ -633,13 +651,14 @@ var appCmd = &cobra.Command{
 		} else {
 			checkErr(fmt.Errorf("unknown repository source"))
 		}
+		rand.Seed(time.Now().UnixNano())
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf("apppack-app-%s", *name)),
 			TemplateURL: aws.String(appFormationURL),
 			Parameters: []*cloudformation.Parameter{
 				{
 					ParameterKey:   aws.String("Branch"),
-					ParameterValue: getArgValue(cmd, &answers, "branch"),
+					ParameterValue: getArgValue(cmd, &answers, "branch", true),
 				},
 				{
 					ParameterKey:   aws.String("Domains"),
@@ -647,7 +666,7 @@ var appCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("HealthCheckPath"),
-					ParameterValue: getArgValue(cmd, &answers, "healthcheck-path"),
+					ParameterValue: getArgValue(cmd, &answers, "healthcheck-path", true),
 				},
 				{
 					ParameterKey:   aws.String("LoadBalancerRulePriority"),
@@ -667,11 +686,11 @@ var appCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("PrivateS3BucketEnabled"),
-					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-private-s3")))),
+					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-private-s3", false)))),
 				},
 				{
 					ParameterKey:   aws.String("PublicS3BucketEnabled"),
-					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-public-s3")))),
+					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-public-s3", false)))),
 				},
 				{
 					ParameterKey:   aws.String("SesDomain"),
@@ -683,7 +702,7 @@ var appCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("SQSQueueEnabled"),
-					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-sqs")))),
+					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-sqs", false)))),
 				},
 				{
 					ParameterKey:   aws.String("RepositoryType"),
@@ -699,7 +718,7 @@ var appCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("AllowedUsers"),
-					ParameterValue: getArgValue(cmd, &answers, "users"),
+					ParameterValue: getArgValue(cmd, &answers, "users", true),
 				},
 				{
 					ParameterKey:   aws.String("CapacityProviderName"),
@@ -753,10 +772,13 @@ var appCmd = &cobra.Command{
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.Stacks[0].StackId))
-			if *stack.Stacks[0].StackStatus != "CREATE_COMPLETE" {
+			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			}
+			printSuccess(
+				fmt.Sprintf("%s app created.\nPush to your git repository to trigger a build or run `apppack -a %s build start`", *name, *name),
+			)
 		}
 
 	},
@@ -766,6 +788,7 @@ func init() {
 
 	rootCmd.AddCommand(createCmd)
 	createCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "Check stack in Cloudformation before creating")
+	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")
 
 	createCmd.AddCommand(accountCmd)
 	appCmd.Flags().SortFlags = false

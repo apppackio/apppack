@@ -36,6 +36,27 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
       -
+        name: Create app
+        run:  |
+            ./apppack create app --non-interactive \
+                                 --name app-test \
+                                 --cluster apppack \
+                                 --repository https://github.com/lincolnloop/lincolnloop.git \
+                                 --branch main \
+                                 --addon-private-s3 \
+                                 --users user@apppack.io
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+      -
+        name: Destroy app
+        run: yes yes | ./apppack destroy app app-test
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+      -
         name: Destroy cluster
         run: yes yes | ./apppack destroy cluster apppack
         env:

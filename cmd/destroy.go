@@ -84,7 +84,7 @@ var destroyAccountCmd = &cobra.Command{
 	},
 }
 
-// destroyAccountCmd represents the destroy command
+// destroyClusterCmd represents the destroy command
 var destroyClusterCmd = &cobra.Command{
 	Use:   "cluster",
 	Short: "Destroy AWS resources used by the AppPack cluster",
@@ -103,7 +103,7 @@ var destroyClusterCmd = &cobra.Command{
 		checkErr(err)
 		Spinner.Stop()
 		var confirm string
-		fmt.Printf("Are you sure you want to delete your AppPack Cluster %s\n%s? yes/[%s]\n", clusterName, aurora.Faint(stackID), aurora.Bold("no"))
+		fmt.Printf("Are you sure you want to delete your AppPack cluster %s\n%s? yes/[%s]\n", clusterName, aurora.Faint(stackID), aurora.Bold("no"))
 		fmt.Scanln(&confirm)
 		if confirm != "yes" {
 			checkErr(fmt.Errorf("aborting due to user input"))
@@ -134,9 +134,48 @@ var destroyClusterCmd = &cobra.Command{
 	},
 }
 
+// destroyAppCmd represents the destroy command
+var destroyAppCmd = &cobra.Command{
+	Use:   "app",
+	Short: "Destroy AWS resources used by the AppPack app",
+	Long:  `Destroy AWS resources used by the AppPack app`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		appName := args[0]
+		startSpinner()
+		sess := session.Must(session.NewSession())
+		stackName := fmt.Sprintf("apppack-app-%s", appName)
+		cfnSvc := cloudformation.New(sess)
+		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+			StackName: &stackName,
+		})
+		checkErr(err)
+		stackID := *stackOutput.Stacks[0].StackId
+		Spinner.Stop()
+		var confirm string
+		fmt.Printf("Are you sure you want to delete your AppPack app %s\n%s? yes/[%s]\n", appName, aurora.Faint(stackID), aurora.Bold("no"))
+		fmt.Scanln(&confirm)
+		if confirm != "yes" {
+			checkErr(fmt.Errorf("aborting due to user input"))
+		}
+		startSpinner()
+		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+			StackName: &stackID,
+		})
+		checkErr(err)
+		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
+			StackName: &stackID,
+		})
+		Spinner.Stop()
+		checkErr(err)
+		printSuccess(fmt.Sprintf("AppPack app %s destroyed", appName))
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(destroyCmd)
 
 	destroyCmd.AddCommand(destroyAccountCmd)
 	destroyCmd.AddCommand(destroyClusterCmd)
+	destroyCmd.AddCommand(destroyAppCmd)
 }
