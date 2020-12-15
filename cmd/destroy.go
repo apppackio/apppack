@@ -116,19 +116,22 @@ var destroyClusterCmd = &cobra.Command{
 		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
 			StackName: &stackID,
 		})
-		// EC2 instances don't get removed in time to delete the ECS cluster
+		// Weird circular dependency causes this https://github.com/aws/containers-roadmap/issues/631
+		// Cluster depends on ASG for creation, but ASG must be deleted before the Cluster
+		// retrying works around this for now
 		if err != nil {
+			Spinner.Stop()
 			printWarning("cluster deletion did not complete successfully, retrying...")
+			startSpinner()
+			_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+				StackName: &stackID,
+			})
+			checkErr(err)
+			err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
+				StackName: &stackID,
+			})
+			checkErr(err)
 		}
-		startSpinner()
-		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
-			StackName: &stackID,
-		})
-		checkErr(err)
-		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
-			StackName: &stackID,
-		})
-		checkErr(err)
 		Spinner.Stop()
 		printSuccess(fmt.Sprintf("AppPack cluster %s destroyed", clusterName))
 	},
