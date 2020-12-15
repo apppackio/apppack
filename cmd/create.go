@@ -75,7 +75,7 @@ func createChangeSetAndWait(sess *session.Session, stackInput *cloudformation.Cr
 	return changeSet, nil
 }
 
-func createStackAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeStacksOutput, error) {
+func createStackAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
 	stackOutput, err := cfnSvc.CreateStack(stackInput)
 	if err != nil {
@@ -91,7 +91,7 @@ func createStackAndWait(sess *session.Session, stackInput *cloudformation.Create
 	if err != nil {
 		return nil, err
 	}
-	return stack, nil
+	return stack.Stacks[0], nil
 }
 
 type stackItem struct {
@@ -468,16 +468,22 @@ var accountCmd = &cobra.Command{
 			} else {
 				fmt.Println("View ChangeSet at:")
 				fmt.Println(aurora.White(statusURL))
+				fmt.Println("Once your stack is created send the 'Outputs' to pete@lincolnloop.com for account approval.")
 			}
 		} else {
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.Stacks[0].StackId))
-			if *stack.Stacks[0].StackStatus != "CREATE_COMPLETE" {
+			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
 				printSuccess("AppPack account created")
+				fmt.Println("Send the following information to pete@lincolnloop.com for account approval:")
+				for _, output := range stack.Outputs {
+					fmt.Println(aurora.Faint(fmt.Sprintf("%s: %s", *output.OutputKey, *output.OutputValue)))
+				}
+
 			}
 		}
 

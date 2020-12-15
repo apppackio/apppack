@@ -22,12 +22,26 @@ jobs:
         run: go build 
       -
         name: Create account
-        run: ./apppack create account --dockerhub-username $DOCKERHUB_USERNAME --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
+        run: ./apppack create account --dockerhub-username $DOCKERHUB_USERNAME --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN | tee account_create_output.txt
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+      -
+        name: Approve account
+        run: |
+          aws dynamodb put-item --table-name paaws --item '{
+            "primary_id": {"S": "ACCT#'$(grep AppPackRoleArn account_create_output.txt | awk '{print $2}' | cut -d: -f5)'"},
+            "secondary_id": {"S": "-"},
+            "external_id": {"S": "'$(grep ExternalId account_create_output.txt | awk '{print $2}')'"},
+            "region": {"S": "us-east-1"},
+            "role_arn": {"S": "'$(grep AppPackRoleArn account_create_output.txt | awk '{print $2}')'"}
+          }'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.APPPACK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
       -
         name: Create cluster
@@ -53,6 +67,7 @@ jobs:
       -
         name: Destroy app
         run: yes yes | ./apppack destroy app app-test
+        if: always()
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -60,6 +75,7 @@ jobs:
       -
         name: Destroy cluster
         run: yes yes | ./apppack destroy cluster apppack
+        if: always()
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -67,7 +83,20 @@ jobs:
       -
         name: Destroy account
         run: yes yes | ./apppack destroy account
+        if: always()
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+      -
+        name: Disable account
+        if: always()
+        run: |
+          aws dynamodb delete-item --table-name paaws --key '{
+            "primary_id": {"S": "ACCT#'$(grep AppPackRoleArn account_create_output.txt | awk '{print $2}' | cut -d: -f5)'"},
+            "secondary_id": {"S": "-"}
+          }'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.APPPACK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
