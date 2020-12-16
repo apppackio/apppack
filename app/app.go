@@ -47,10 +47,12 @@ var ShellBackgroundCommand = []string{
 
 // App is a representation of a AppPack app
 type App struct {
-	Name      string
-	Session   *session.Session
-	Settings  *Settings
-	ECSConfig *ECSConfig
+	Name                  string
+	Session               *session.Session
+	Settings              *Settings
+	ECSConfig             *ECSConfig
+	DeployStatus          *DeployStatus
+	PendingDeployStatuses []*DeployStatus
 }
 type settingsItem struct {
 	PrimaryID   string   `json:"primary_id"`
@@ -59,6 +61,10 @@ type settingsItem struct {
 }
 
 type Settings struct {
+	Cluster struct {
+		ARN  string `json:"arn"`
+		Name string `json:"name"`
+	} `json:"cluster"`
 	Shell struct {
 		Command    string `json:"command"`
 		TaskFamily string `json:"task_family"`
@@ -74,6 +80,31 @@ type Settings struct {
 	LogGroup struct {
 		Name string `json:"name"`
 	} `json:"log_group"`
+}
+
+type deployStatusItem struct {
+	PrimaryID    string       `json:"primary_id"`
+	SecondaryID  string       `json:"secondary_id"`
+	DeployStatus DeployStatus `json:"value"`
+}
+
+type DeployStatus struct {
+	Phase       string             `json:"phase"`
+	Processes   map[string]Process `json:"processes"`
+	BuildID     string             `json:"build_id"`
+	LastUpdate  int64              `json:"last_update"`
+	Commit      string             `json:"commit"`
+	BuildNumber int                `json:"build_number"`
+	Failed      bool               `json:"failed"`
+}
+
+type Process struct {
+	CPU          string `json:"cpu"`
+	Memory       string `json:"memory"`
+	MinProcesses int    `json:"min_processes"`
+	MaxProcesses int    `json:"max_processes"`
+	State        string `json:"state"`
+	Command      string `json:"command"`
 }
 
 type appItem struct {
@@ -138,6 +169,25 @@ func (a *App) LoadECSConfig() error {
 		return err
 	}
 	a.ECSConfig = &i.ECSConfig
+	return nil
+}
+
+// LoadDeployStatus will set the app.DeployStatus value from DDB
+func (a *App) LoadDeployStatus() error {
+	if a.DeployStatus != nil {
+		return nil
+	}
+	Item, err := a.ddbItem("DEPLOYSTATUS")
+	if err != nil {
+		return err
+	}
+	i := deployStatusItem{}
+
+	err = dynamodbattribute.UnmarshalMap(*Item, &i)
+	if err != nil {
+		return err
+	}
+	a.DeployStatus = &i.DeployStatus
 	return nil
 }
 
