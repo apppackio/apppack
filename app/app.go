@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -344,51 +343,133 @@ func (a *App) GetBuildArtifact(build *codebuild.Build, name string) ([]byte, err
 
 // GetConsoleURL generate a URL which will sign the user in to the AWS console and redirect to the desinationURL
 func (a *App) GetConsoleURL(destinationURL string) (*string, error) {
-	credentials, err := a.Session.Config.Credentials.Get()
+	creds, err := a.Session.Config.Credentials.Get()
 	if err != nil {
 		return nil, err
 	}
-	sessionJSON, err := json.Marshal(map[string]string{
-		"sessionId":    credentials.AccessKeyID,
-		"sessionKey":   credentials.SecretAccessKey,
-		"sessionToken": credentials.SessionToken,
+	return auth.GetConsoleURL(&creds, destinationURL)
+}
+
+// DescribeTasks generate a URL which will sign the user in to the AWS console and redirect to the desinationURL
+func (a *App) DescribeTasks() ([]*ecs.Task, error) {
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	err = a.LoadDeployStatus()
+	if err != nil {
+		return nil, err
+	}
+	ecsSvc := ecs.New(a.Session)
+	taskARNs := []*string{}
+	for proc := range a.DeployStatus.Processes {
+		listTaskOutput, err := ecsSvc.ListTasks(&ecs.ListTasksInput{
+			Family:  aws.String(fmt.Sprintf("%s-%s", a.Name, proc)),
+			Cluster: &a.Settings.Cluster.ARN,
+		})
+		if err != nil {
+			return nil, err
+		}
+		taskARNs = append(taskARNs, listTaskOutput.TaskArns...)
+	}
+	describeTasksOutput, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+		Tasks:   taskARNs,
+		Cluster: &a.Settings.Cluster.ARN,
+		Include: []*string{aws.String("TAGS")},
 	})
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{}
-	signinURL := "https://signin.aws.amazon.com/federation"
-	req, err := http.NewRequest("GET", signinURL, nil)
+	return describeTasksOutput.Tasks, nil
+}
+
+type Scaling struct {
+	CPU          int `json:"cpu"`
+	Memory       int `json:"memory"`
+	MinProcesses int `json:"min_processes"`
+	MaxProcesses int `json:"max_processes"`
+}
+
+func (a *App) ResizeProcess(processType string, cpu int, memory int) error {
+	ssmSvc := ssm.New(a.Session)
+	parameterName := fmt.Sprintf("/paaws/apps/%s/scaling", a.Name)
+	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
+		Name: &parameterName,
+	})
+	var scaling map[string]*Scaling
 	if err != nil {
-		return nil, err
+		scaling = map[string]*Scaling{}
+	} else {
+		if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &scaling); err != nil {
+			return err
+		}
 	}
-	q := req.URL.Query()
-	q.Add("Action", "getSigninToken")
-	q.Add("SessionDuration", "3600")
-	q.Add("Session", fmt.Sprintf("%s", sessionJSON))
-	req.URL.RawQuery = q.Encode()
-	resp, err := client.Do(req)
-	signinResp := struct {
-		SigninToken string `json:"SigninToken"`
-	}{}
-	body, err := ioutil.ReadAll(resp.Body)
+	_, ok := scaling[processType]
+	if !ok {
+		scaling[processType] = &Scaling{
+			CPU:          1024,
+			Memory:       2048,
+			MinProcesses: 1,
+			MaxProcesses: 1,
+		}
+	}
+	scaling[processType].CPU = cpu
+	scaling[processType].Memory = memory
+	scalingJSON, err := json.Marshal(scaling)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err = json.Unmarshal(body, &signinResp); err != nil {
-		return nil, err
-	}
-	req, err = http.NewRequest("GET", signinURL, nil)
+	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
+		Name:      &parameterName,
+		Type:      aws.String("String"),
+		Value:     aws.String(fmt.Sprintf("%s", scalingJSON)),
+		Overwrite: aws.Bool(true),
+	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	q = req.URL.Query()
-	q.Add("Action", "login")
-	q.Add("Issuer", "AppPack.io")
-	q.Add("SigninToken", signinResp.SigninToken)
-	q.Add("Destination", destinationURL)
-	req.URL.RawQuery = q.Encode()
-	return aws.String(req.URL.String()), nil
+	return nil
+}
+
+func (a *App) ScaleProcess(processType string, processCount int) error {
+	ssmSvc := ssm.New(a.Session)
+	parameterName := fmt.Sprintf("/paaws/apps/%s/scaling", a.Name)
+	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
+		Name: &parameterName,
+	})
+	var scaling map[string]*Scaling
+	if err != nil {
+		scaling = map[string]*Scaling{}
+	} else {
+		if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &scaling); err != nil {
+			return err
+		}
+	}
+	_, ok := scaling[processType]
+	if !ok {
+		scaling[processType] = &Scaling{
+			CPU:          1024,
+			Memory:       2048,
+			MinProcesses: 1,
+			MaxProcesses: 1,
+		}
+	}
+	scaling[processType].MinProcesses = processCount
+	scaling[processType].MaxProcesses = processCount
+	scalingJSON, err := json.Marshal(scaling)
+	if err != nil {
+		return err
+	}
+	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
+		Name:      &parameterName,
+		Type:      aws.String("String"),
+		Value:     aws.String(fmt.Sprintf("%s", scalingJSON)),
+		Overwrite: aws.Bool(true),
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Init will pull in app settings from DyanmoDB and provide helper

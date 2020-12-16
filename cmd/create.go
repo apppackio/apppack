@@ -16,9 +16,11 @@ limitations under the License.
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"math/rand"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -26,11 +28,15 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/google/uuid"
+	"github.com/lincolnloop/apppack/auth"
 	"github.com/logrusorgru/aurora"
+	"github.com/mattn/go-isatty"
+	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -575,6 +581,61 @@ var createClusterCmd = &cobra.Command{
 	},
 }
 
+func verifySourceCredentials(sess *session.Session, repositoryType string, interactive bool) error {
+	codebuildSvc := codebuild.New(sess)
+	sourceCredentialsOutput, err := codebuildSvc.ListSourceCredentials(&codebuild.ListSourceCredentialsInput{})
+	if err != nil {
+		return err
+	}
+	hasCredentials := false
+	for _, cred := range sourceCredentialsOutput.SourceCredentialsInfos {
+		if *cred.ServerType == repositoryType {
+			hasCredentials = true
+		}
+	}
+	if !hasCredentials {
+		var friendlySourceName string
+		if repositoryType == "BITBUCKET" {
+			friendlySourceName = "Bitbucket"
+		} else {
+			friendlySourceName = "GitHub"
+		}
+		Spinner.Stop()
+		printWarning(fmt.Sprintf("CodeBuild needs to be authenticated to access your repository at %s", friendlySourceName))
+		fmt.Println("On the CodeBuild new project page:")
+		fmt.Printf("    1. Scroll to the %s section\n", aurora.Bold("Source"))
+		fmt.Printf("    2. Select %s for the %s\n", aurora.Bold(friendlySourceName), aurora.Bold("Source provider"))
+		fmt.Printf("    3. Keep the default %s\n", aurora.Bold("Connect using OAuth"))
+		fmt.Printf("    4. Click %s\n", aurora.Bold(fmt.Sprintf("Connect to %s", friendlySourceName)))
+		fmt.Printf("    5. Click %s in the popup window\n\n", aurora.Bold("Confirm"))
+		newProjectURL := "https://console.aws.amazon.com/codesuite/codebuild/project/new"
+		if !interactive {
+			fmt.Printf("Visit %s to complete the authentication\n", newProjectURL)
+			fmt.Println("No further steps are necessary. After you've completed the authentication, re-run this command.")
+			os.Exit(1)
+		}
+		creds, err := sess.Config.Credentials.Get()
+		if err != nil {
+			return err
+		}
+		url, err := auth.GetConsoleURL(&creds, newProjectURL)
+		if err != nil {
+			return err
+		}
+		if isatty.IsTerminal(os.Stdin.Fd()) {
+			fmt.Println("Opening the CodeBuild new project page now...")
+			browser.OpenURL(*url)
+		} else {
+			fmt.Printf("Visit the following URL to authenticate: %s", *url)
+		}
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Finish authentication in your web browser then press ENTER to continue.")
+		_, _ = reader.ReadString('\n')
+		return verifySourceCredentials(sess, repositoryType, interactive)
+	}
+	return nil
+}
+
 // appCmd represents the create command
 var appCmd = &cobra.Command{
 	Use:   "app",
@@ -657,6 +718,8 @@ var appCmd = &cobra.Command{
 		} else {
 			checkErr(fmt.Errorf("unknown repository source"))
 		}
+		err = verifySourceCredentials(sess, repositoryType, !nonInteractive)
+		checkErr(err)
 		rand.Seed(time.Now().UnixNano())
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf("apppack-app-%s", *name)),

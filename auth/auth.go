@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
+	awsconsoleurl "github.com/jkueh/go-aws-console-url"
 )
 
 const (
@@ -351,4 +353,14 @@ func WhoAmI() (*string, error) {
 		return nil, err
 	}
 	return &userInfo.Email, nil
+}
+
+// GetConsoleURL - Returns the sign-in URL
+func GetConsoleURL(creds *credentials.Value, destinationURL string) (*string, error) {
+	token, err := awsconsoleurl.GetSignInToken(creds)
+	return aws.String(fmt.Sprintf(
+		"https://signin.aws.amazon.com/federation?Action=login&Destination=%s&SigninToken=%s",
+		url.QueryEscape(destinationURL),
+		token.Token,
+	)), err
 }
