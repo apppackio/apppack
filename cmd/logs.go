@@ -52,18 +52,12 @@ var logsCmd = &cobra.Command{
 	Use:   "logs",
 	Short: "Access application logs from Cloudwatch Logs",
 	Long:  `Access application logs from Cloudwatch Logs`,
-}
-
-// logsCmd represents the logs command
-var logsViewCmd = &cobra.Command{
-	Use:   "view",
-	Short: "Print application logs to terminal",
-	Long:  `Print application logs to terminal`,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
-		a.LoadSettings()
+		err = a.LoadSettings()
+		checkErr(err)
 		sawConfig.Group = a.Settings.LogGroup.Name
 		sawOutputConfig.Pretty = !sawOutputConfig.Raw
 		// convert to format saw eexpects
@@ -89,10 +83,10 @@ var logsViewCmd = &cobra.Command{
 }
 
 // logsCmd represents the logs command
-var logsConsoleCmd = &cobra.Command{
-	Use:   "console",
-	Short: "View logs in the AWS web console",
-	Long:  `View logs in the AWS web console`,
+var logsOpenCmd = &cobra.Command{
+	Use:   "open",
+	Short: "Open logs in the AWS web console",
+	Long:  `Open logs in the AWS web console`,
 	Run: func(cmd *cobra.Command, args []string) {
 		a, err := app.Init(AppName)
 		a.LoadSettings()
@@ -113,11 +107,10 @@ func init() {
 	logsCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
 	logsCmd.MarkPersistentFlagRequired("app-name")
 
-	logsCmd.AddCommand(logsConsoleCmd)
-	logsCmd.AddCommand(logsViewCmd)
-	logsViewCmd.Flags().StringVar(&sawConfig.Prefix, "prefix", "", `log group prefix filter
+	logsCmd.AddCommand(logsOpenCmd)
+	logsCmd.Flags().StringVar(&sawConfig.Prefix, "prefix", "", `log group prefix filter
 Use this to filter logs for specific services, e.g. "web", "worker"`)
-	logsViewCmd.Flags().StringVar(
+	logsCmd.Flags().StringVar(
 		&sawConfig.Start,
 		"start",
 		"5m",
@@ -125,7 +118,7 @@ Use this to filter logs for specific services, e.g. "web", "worker"`)
 Takes an absolute timestamp in RFC3339 format, or a relative time (eg. 2h).
 Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`,
 	)
-	logsViewCmd.Flags().StringVar(
+	logsCmd.Flags().StringVar(
 		&sawConfig.End,
 		"stop",
 		"now",
@@ -133,10 +126,10 @@ Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`,
 Takes an absolute timestamp in RFC3339 format, or a relative time (eg. 2h).
 Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`,
 	)
-	logsViewCmd.Flags().StringVar(&sawConfig.Filter, "filter", "", "event filter pattern")
-	logsViewCmd.Flags().BoolVar(&sawOutputConfig.Raw, "raw", false, "No timestamp, log group or colors")
-	logsViewCmd.Flags().BoolVar(&sawOutputConfig.Expand, "expand", false, "indent JSON log messages")
-	logsViewCmd.Flags().BoolVar(&sawOutputConfig.Invert, "invert", false, "invert colors for light terminal themes")
-	logsViewCmd.Flags().BoolVar(&sawOutputConfig.RawString, "rawString", false, "print JSON strings without escaping")
-	logsViewCmd.Flags().BoolP("follow", "f", false, "Stream logs to console")
+	logsCmd.Flags().StringVar(&sawConfig.Filter, "filter", "", "event filter pattern")
+	logsCmd.Flags().BoolVar(&sawOutputConfig.Raw, "raw", false, "No timestamp, log group or colors")
+	logsCmd.Flags().BoolVar(&sawOutputConfig.Expand, "expand", false, "indent JSON log messages")
+	logsCmd.Flags().BoolVar(&sawOutputConfig.Invert, "invert", false, "invert colors for light terminal themes")
+	logsCmd.Flags().BoolVar(&sawOutputConfig.RawString, "rawString", false, "print JSON strings without escaping")
+	logsCmd.Flags().BoolP("follow", "f", false, "Stream logs to console")
 }
