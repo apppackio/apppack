@@ -56,9 +56,8 @@ jobs:
             ./apppack create app --non-interactive \
                                  --name app-test \
                                  --cluster apppack \
-                                 --repository https://github.com/lincolnloop/lincolnloop.git \
+                                 --repository https://github.com/lincolnloop/apppack-demo-python.git \
                                  --branch main \
-                                 --addon-private-s3 \
                                  --users user@apppack.io
         timeout-minutes: 5
         env:
