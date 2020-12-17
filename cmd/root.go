@@ -31,6 +31,8 @@ const ()
 
 var cfgFile string
 
+const timeFmt = "Jan 02, 2006 15:04:05 -0700"
+
 // Spinner is the loading animation to use for all commands
 var Spinner *spinner.Spinner = spinner.New(spinner.CharSets[14], 50*time.Millisecond)
 

@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/codebuild"
@@ -60,11 +61,56 @@ func printBuild(build *codebuild.Build, commitLog []byte) error {
 	fmt.Print(" ", aurora.Blue(*build.SourceVersion), icon[*build.BuildStatus])
 	fmt.Println()
 	if build.EndTime != nil {
-		fmt.Println(aurora.Faint(fmt.Sprintf("%s%s ~ %s", indentStr, build.EndTime.Local().Format("Jan 02, 2006 15:04:05 MST"), humanize.Time(*build.EndTime))))
+		fmt.Println(aurora.Faint(fmt.Sprintf("%s%s ~ %s", indentStr, build.EndTime.Local().Format(timeFmt), humanize.Time(*build.EndTime))))
 	} else {
-		fmt.Println(aurora.Faint(fmt.Sprintf("%sstarted %s ~ %s", indentStr, build.StartTime.Local().Format("Jan 02, 2006 15:04:05 MST"), humanize.Time(*build.EndTime))))
+		fmt.Println(aurora.Faint(fmt.Sprintf("%sstarted %s ~ %s", indentStr, build.StartTime.Local().Format(timeFmt), humanize.Time(*build.StartTime))))
 	}
 	fmt.Println(indent(fmt.Sprintf("%s", commitLog), indentStr))
+	return nil
+}
+
+func watchBuild(a *app.App, build *codebuild.Build) error {
+	var lastPhase string
+	var lastUpdate time.Time
+	var status string
+	startSpinner()
+	retries := 10
+	for {
+		// retry a few times for the initial status to show up
+		// once it does, stop retrying
+		deployStatus, err := a.BuildStatus(build)
+		if err != nil {
+			if retries > 0 {
+				retries--
+				time.Sleep(3 * time.Second)
+				continue
+			} else {
+				return err
+			}
+		}
+		retries = 0
+		lastUpdate = time.Unix(deployStatus.LastUpdate, 0)
+		if lastPhase != deployStatus.Phase {
+			Spinner.Stop()
+			if deployStatus.Phase == "running" {
+				status = "Deploy phase complete"
+			} else {
+				status = fmt.Sprintf("%s phase started", strings.Title(deployStatus.Phase))
+			}
+			fmt.Printf("%s\t%s\n", aurora.Yellow(status), aurora.Faint(lastUpdate.Local().Format(timeFmt)))
+			lastPhase = deployStatus.Phase
+			startSpinner()
+			// sleep for a second so the spinner doesn't show "X running for now"
+			time.Sleep(500 * time.Millisecond)
+		}
+		Spinner.Suffix = fmt.Sprintf(" %s running for %s", deployStatus.Phase, strings.Replace(humanize.Time(lastUpdate), " ago", "", 1))
+		if deployStatus.Phase == "running" {
+			Spinner.Stop()
+			printSuccess(fmt.Sprintf("build #%d deployed successfully", *build.BuildNumber))
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
 	return nil
 }
 
@@ -87,8 +133,32 @@ var buildStartCmd = &cobra.Command{
 		build, err := a.StartBuild()
 		checkErr(err)
 		Spinner.Stop()
-		printSuccess("Build started")
+		printSuccess("build started")
 		err = printBuild(build, []byte{})
+		checkErr(err)
+		if watchBuildFlag {
+			err = watchBuild(a, build)
+			checkErr(err)
+		}
+	},
+}
+
+// buildWaitCmd represents the start command
+var buildWaitCmd = &cobra.Command{
+	Use:   "wait",
+	Short: "wait for the most recent build to be deployed",
+	Long:  `Bait for the most recent build to be deployed`,
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		a, err := app.Init(AppName)
+		checkErr(err)
+		build, err := a.LastBuild()
+		checkErr(err)
+		Spinner.Stop()
+		commitLog, _ := a.GetBuildArtifact(build, "commit.txt")
+		err = printBuild(build, commitLog)
+		checkErr(err)
+		err = watchBuild(a, build)
 		checkErr(err)
 	},
 }
@@ -113,11 +183,16 @@ var buildListCmd = &cobra.Command{
 	},
 }
 
+var watchBuildFlag bool
+
 func init() {
 	rootCmd.AddCommand(buildCmd)
 	buildCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
 	buildCmd.MarkPersistentFlagRequired("app-name")
 
 	buildCmd.AddCommand(buildStartCmd)
+	buildStartCmd.Flags().BoolVarP(&watchBuildFlag, "wait", "w", false, "wait for build to complete")
 	buildCmd.AddCommand(buildListCmd)
+
+	buildCmd.AddCommand(buildWaitCmd)
 }

@@ -172,22 +172,35 @@ func (a *App) LoadECSConfig() error {
 	return nil
 }
 
-// LoadDeployStatus will set the app.DeployStatus value from DDB
-func (a *App) LoadDeployStatus() error {
-	if a.DeployStatus != nil {
-		return nil
+// GetDeployStatus will get a DeployStatus value from DDB
+func (a *App) GetDeployStatus(buildARN string) (*DeployStatus, error) {
+	key := "DEPLOYSTATUS"
+	if buildARN != "" {
+		key = strings.Join([]string{key, buildARN}, "#")
 	}
-	Item, err := a.ddbItem("DEPLOYSTATUS")
+	Item, err := a.ddbItem(key)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	i := deployStatusItem{}
 
 	err = dynamodbattribute.UnmarshalMap(*Item, &i)
 	if err != nil {
+		return nil, err
+	}
+	return &i.DeployStatus, nil
+}
+
+// LoadDeployStatus will set the app.DeployStatus value from DDB
+func (a *App) LoadDeployStatus() error {
+	if a.DeployStatus != nil {
+		return nil
+	}
+	deployStatus, err := a.GetDeployStatus("")
+	if err != nil {
 		return err
 	}
-	a.DeployStatus = &i.DeployStatus
+	a.DeployStatus = deployStatus
 	return nil
 }
 
@@ -350,6 +363,21 @@ func (a *App) StartBuild() (*codebuild.Build, error) {
 	return build.Build, err
 }
 
+// BuildStatus checks the status of a CodeBuild run
+func (a *App) BuildStatus(build *codebuild.Build) (*DeployStatus, error) {
+	deployStatus, err := a.GetDeployStatus(*build.Arn)
+	if err != nil {
+		deployStatus, err = a.GetDeployStatus("")
+		if err != nil || deployStatus.BuildID != *build.Arn {
+			return nil, fmt.Errorf("no status found for build #%d", *build.BuildNumber)
+		}
+	}
+	if deployStatus.Failed {
+		return nil, fmt.Errorf("build #%d failed in phase %s", *build.BuildNumber, deployStatus.Phase)
+	}
+	return deployStatus, nil
+}
+
 // ListBuilds lists recent CodeBuild runs
 func (a *App) ListBuilds() ([]*codebuild.Build, error) {
 	codebuildSvc := codebuild.New(a.Session)
@@ -370,6 +398,32 @@ func (a *App) ListBuilds() ([]*codebuild.Build, error) {
 		return nil, err
 	}
 	return builds.Builds, nil
+}
+
+// LastBuild retrieves the most recent build
+func (a *App) LastBuild() (*codebuild.Build, error) {
+	codebuildSvc := codebuild.New(a.Session)
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	buildList, err := codebuildSvc.ListBuildsForProject(&codebuild.ListBuildsForProjectInput{
+		ProjectName: &a.Settings.CodebuildProject.Name,
+		SortOrder:   aws.String("DESCENDING"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(buildList.Ids) == 0 {
+		return nil, fmt.Errorf("no builds have started for %s", a.Name)
+	}
+	builds, err := codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
+		Ids: buildList.Ids[0:1],
+	})
+	if err != nil {
+		return nil, err
+	}
+	return builds.Builds[0], nil
 }
 
 // GetBuildArtifact retrieves an artifact stored in S3
