@@ -107,8 +107,9 @@ type stackItem struct {
 }
 
 type Stack struct {
-	StackID string `json:"stack_id"`
-	Name    string `json:"name"`
+	StackID   string `json:"stack_id"`
+	StackName string `json:"stack_name"`
+	Name      string `json:"name"`
 }
 
 type databaseStackItem struct {
@@ -337,7 +338,7 @@ func askForMissingArgs(cmd *cobra.Command, overrideQuestions *map[string]*survey
 	return &answers, nil
 }
 
-func stackOutputFromDDBItem(sess *session.Session, secondaryID string) (*map[string]*string, error) {
+func stackFromDDBItem(sess *session.Session, secondaryID string) (*cloudformation.Stack, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("paaws"),
@@ -369,13 +370,9 @@ func stackOutputFromDDBItem(sess *session.Session, secondaryID string) (*map[str
 		return nil, err
 	}
 	if len(stacks.Stacks) == 0 {
-		return nil, fmt.Errorf("no stackes found with ID %s", i.Stack.StackID)
+		return nil, fmt.Errorf("no stacks found with ID %s", i.Stack.StackID)
 	}
-	outputs := map[string]*string{}
-	for i := range stacks.Stacks[0].Outputs {
-		outputs[*stacks.Stacks[0].Outputs[i].OutputKey] = stacks.Stacks[0].Outputs[i].OutputValue
-	}
-	return &outputs, nil
+	return stacks.Stacks[0], nil
 }
 
 func contains(arr []string, str string) bool {
@@ -512,7 +509,7 @@ var createClusterCmd = &cobra.Command{
 		}
 		checkErr(err)
 		sess := session.Must(session.NewSession())
-		_, err = stackOutputFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
+		_, err = stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
 		if err == nil {
 			checkErr(fmt.Errorf("cluster %s already exists", clusterName))
 		}
@@ -691,23 +688,20 @@ var appCmd = &cobra.Command{
 			{Key: aws.String("paaws"), Value: aws.String("true")},
 		}
 
-		clusterStackOutput, err := stackOutputFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
+		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
 		checkErr(err)
-		domains := fmt.Sprintf("%s.%s", *name, *(*clusterStackOutput)["Domain"])
-		domainArg := *getArgValue(cmd, &answers, "domain", false)
-		if len(domainArg) > 0 {
-			domains = fmt.Sprintf("%s,%s", domainArg, domains)
-		}
 		sesDomain := ""
 		if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
 			sesDomain = *getArgValue(cmd, &answers, "addon-ses-domain", false)
 		}
-		databaseManagementLambdaArn := ""
+		var databaseStackName string
 		if isTruthy(getArgValue(cmd, &answers, "addon-database", false)) {
 			database := getArgValue(cmd, &answers, "addon-database-name", false)
 			databaseStack, err := getDDBDatabaseItem(sess, cluster, database)
 			checkErr(err)
-			databaseManagementLambdaArn = databaseStack.ManagementLambdaArn
+			databaseStackName = strings.Split(databaseStack.StackID, "/")[1]
+		} else {
+			databaseStackName = ""
 		}
 		repositoryURL := getArgValue(cmd, &answers, "repository", true)
 		var repositoryType string
@@ -731,7 +725,7 @@ var appCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("Domains"),
-					ParameterValue: &domains,
+					ParameterValue: getArgValue(cmd, &answers, "domain", false),
 				},
 				{
 					ParameterKey:   aws.String("HealthCheckPath"),
@@ -746,8 +740,8 @@ var appCmd = &cobra.Command{
 					ParameterValue: name,
 				},
 				{
-					ParameterKey:   aws.String("ClusterName"),
-					ParameterValue: cluster,
+					ParameterKey:   aws.String("ClusterStackName"),
+					ParameterValue: clusterStack.StackName,
 				},
 				{
 					ParameterKey:   aws.String("PaawsRoleExternalId"),
@@ -766,8 +760,8 @@ var appCmd = &cobra.Command{
 					ParameterValue: &sesDomain,
 				},
 				{
-					ParameterKey:   aws.String("DatabaseManagementLambdaArn"),
-					ParameterValue: &databaseManagementLambdaArn,
+					ParameterKey:   aws.String("DatabaseStackName"),
+					ParameterValue: &databaseStackName,
 				},
 				{
 					ParameterKey:   aws.String("SQSQueueEnabled"),
@@ -788,38 +782,6 @@ var appCmd = &cobra.Command{
 				{
 					ParameterKey:   aws.String("AllowedUsers"),
 					ParameterValue: getArgValue(cmd, &answers, "users", true),
-				},
-				{
-					ParameterKey:   aws.String("CapacityProviderName"),
-					ParameterValue: (*clusterStackOutput)["CapacityProviderName"],
-				},
-				{
-					ParameterKey:   aws.String("EcsClusterArn"),
-					ParameterValue: (*clusterStackOutput)["EcsClusterArn"],
-				},
-				{
-					ParameterKey:   aws.String("EcsClusterName"),
-					ParameterValue: (*clusterStackOutput)["EcsClusterName"],
-				},
-				{
-					ParameterKey:   aws.String("LoadBalancerArn"),
-					ParameterValue: (*clusterStackOutput)["LoadBalancerArn"],
-				},
-				{
-					ParameterKey:   aws.String("LoadBalancerListenerArn"),
-					ParameterValue: (*clusterStackOutput)["LoadBalancerListenerArn"],
-				},
-				{
-					ParameterKey:   aws.String("LoadBalancerSuffix"),
-					ParameterValue: (*clusterStackOutput)["LoadBalancerSuffix"],
-				},
-				{
-					ParameterKey:   aws.String("PublicSubnetIds"),
-					ParameterValue: (*clusterStackOutput)["PublicSubnetIds"],
-				},
-				{
-					ParameterKey:   aws.String("VpcId"),
-					ParameterValue: (*clusterStackOutput)["VpcId"],
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},

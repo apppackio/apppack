@@ -535,7 +535,7 @@ func (a *App) ResizeProcess(processType string, cpu int, memory int) error {
 	return nil
 }
 
-func (a *App) ScaleProcess(processType string, processCount int) error {
+func (a *App) ScaleProcess(processType string, minProcessCount int, maxProcessCount int) error {
 	ssmSvc := ssm.New(a.Session)
 	parameterName := fmt.Sprintf("/paaws/apps/%s/scaling", a.Name)
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
@@ -558,8 +558,8 @@ func (a *App) ScaleProcess(processType string, processCount int) error {
 			MaxProcesses: 1,
 		}
 	}
-	scaling[processType].MinProcesses = processCount
-	scaling[processType].MaxProcesses = processCount
+	scaling[processType].MinProcesses = minProcessCount
+	scaling[processType].MaxProcesses = maxProcessCount
 	scalingJSON, err := json.Marshal(scaling)
 	if err != nil {
 		return err
