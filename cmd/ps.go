@@ -124,26 +124,37 @@ to quickly create a Cobra application.`,
 	},
 }
 
-// psResizeCmd represents the resize command
+// psScaleCmd represents the scale command
 var psScaleCmd = &cobra.Command{
-	Use:   "scale",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Use:   "scale [PROCESS_TYPE] [PROCESS_COUNT]",
+	Short: "scale the number of processes that run for a specific process type",
+	Long: `Scale the number of processes that run for a specific process type.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+[PROCESS_COUNT] can either be a single number, e.g. 2 or a range, e.g. 1-5. When
+a range is provided, the process will autoscale within that range based on CPU usage.`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		processType := args[0]
-		processCount, err := strconv.Atoi(args[1])
+		var minProcesses int
+		var maxProcesses int
+		var out string
+		minMaxProcs := strings.Split(args[1], "-")
+		minProcesses, err := strconv.Atoi(minMaxProcs[0])
 		checkErr(err)
+		if len(minMaxProcs) > 1 {
+			maxProcesses, err = strconv.Atoi(minMaxProcs[1])
+			out = fmt.Sprintf("%s will autoscale from %d to %d processes", processType, minProcesses, maxProcesses)
+		} else {
+			maxProcesses = minProcesses
+			out = fmt.Sprintf("%s will scale to %d processes", processType, minProcesses)
+		}
 		a, err := app.Init(AppName)
 		checkErr(err)
-		err = a.ScaleProcess(processType, processCount)
+		startSpinner()
+		err = a.ScaleProcess(processType, minProcesses, maxProcesses)
 		checkErr(err)
-		printSuccess(fmt.Sprintf("scaling %s", processType))
+		Spinner.Stop()
+		printSuccess(out)
 	},
 }
 
