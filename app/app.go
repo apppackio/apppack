@@ -15,8 +15,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/aws/aws-sdk-go/service/eventbridge"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/google/uuid"
 	"github.com/lincolnloop/apppack/auth"
 	"github.com/logrusorgru/aurora"
 )
@@ -574,6 +576,100 @@ func (a *App) ScaleProcess(processType string, minProcessCount int, maxProcessCo
 		return err
 	}
 	return nil
+}
+
+type ScheduledTask struct {
+	Schedule string `json:"schedule"`
+	Command  string `json:"command"`
+}
+
+// ScheduledTasks lists scheduled tasks for the app
+func (a *App) ScheduledTasks() ([]*ScheduledTask, error) {
+	ssmSvc := ssm.New(a.Session)
+	parameterName := fmt.Sprintf("/paaws/apps/%s/scheduled-tasks", a.Name)
+	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
+		Name: &parameterName,
+	})
+	var tasks []*ScheduledTask
+	if err != nil {
+		tasks = []*ScheduledTask{}
+	} else {
+		if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &tasks); err != nil {
+			return nil, err
+		}
+	}
+	return tasks, nil
+}
+
+// CreateScheduledTask adds a scheduled task for the app
+func (a *App) CreateScheduledTask(schedule string, command string) ([]*ScheduledTask, error) {
+	if err := a.ValidateCronString(schedule); err != nil {
+		return nil, err
+	}
+	ssmSvc := ssm.New(a.Session)
+	tasks, err := a.ScheduledTasks()
+	if err != nil {
+		return nil, err
+	}
+	tasks = append(tasks, &ScheduledTask{
+		Schedule: schedule,
+		Command:  command,
+	})
+	tasksBytes, err := json.Marshal(tasks)
+	if err != nil {
+		return nil, err
+	}
+	parameterName := fmt.Sprintf("/paaws/apps/%s/scheduled-tasks", a.Name)
+	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
+		Name:      &parameterName,
+		Value:     aws.String(fmt.Sprintf("%s", tasksBytes)),
+		Overwrite: aws.Bool(true),
+		Type:      aws.String("String"),
+	})
+	return tasks, nil
+}
+
+// DeleteScheduledTask deletes the scheduled task at the given index
+func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
+	ssmSvc := ssm.New(a.Session)
+	tasks, err := a.ScheduledTasks()
+	if err != nil {
+		return nil, err
+	}
+	if idx > len(tasks) || idx < 0 {
+		return nil, fmt.Errorf("invalid index for task to delete")
+	}
+	taskToDelete := tasks[idx]
+	tasks = append(tasks[:idx], tasks[idx+1:]...)
+	tasksBytes, err := json.Marshal(tasks)
+	if err != nil {
+		return nil, err
+	}
+	parameterName := fmt.Sprintf("/paaws/apps/%s/scheduled-tasks", a.Name)
+	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
+		Name:      &parameterName,
+		Value:     aws.String(fmt.Sprintf("%s", tasksBytes)),
+		Overwrite: aws.Bool(true),
+		Type:      aws.String("String"),
+	})
+	return taskToDelete, nil
+}
+
+// ValidateCronString validates a cron schedule rule
+func (a *App) ValidateCronString(rule string) error {
+	eventSvc := eventbridge.New(a.Session)
+	ruleName := fmt.Sprintf("apppack-validate-%s", uuid.New().String())
+	_, err := eventSvc.PutRule(&eventbridge.PutRuleInput{
+		Name:               &ruleName,
+		ScheduleExpression: aws.String(fmt.Sprintf("cron(%s)", rule)),
+		State:              aws.String("DISABLED"),
+	})
+	if err == nil {
+		eventSvc.DeleteRule(&eventbridge.DeleteRuleInput{
+			Name: &ruleName,
+		})
+	}
+	return err
 }
 
 // Init will pull in app settings from DyanmoDB and provide helper
