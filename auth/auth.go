@@ -25,6 +25,7 @@ const (
 	deviceCodeURL = "https://auth.apppack.io/oauth/device/code"
 	oauthTokenURL = "https://auth.apppack.io/oauth/token"
 	userInfoURL   = "https://auth.apppack.io/userinfo"
+	appListURL    = "https://api.apppack.io/apps"
 	clientID      = "x15zAd2hgdbugNWSZz2mP2k5jcZfNFk3"
 	scope         = "openid profile email offline_access"
 	audience      = "https://paaws.lloop.us"
@@ -51,35 +52,48 @@ type DeviceCodeResp struct {
 }
 
 type UserInfo struct {
-	Email    string            `json:"email"`
-	AwsRoles map[string]string `json:"https://paaws.lloop.us/aws_roles"`
+	Email string    `json:"email"`
+	Apps  []AppRole `json:"https://apppack.io/apps"`
 }
 
-func getCredentials(appName string) (*sts.Credentials, error) {
+type AppRole struct {
+	RoleARN   string `json:"role_arn"`
+	AccountID string `json:"account_id"`
+	AppName   string `json:"name"`
+	Region    string `json:"region"`
+}
+
+func getAppRole(IDToken string, name string) (*AppRole, error) {
+	appList, err := getAppListWithIDToken(IDToken)
+	if err != nil {
+		tokens, err := refreshTokens()
+		appList, err = getAppListWithIDToken(tokens.IDToken)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, appRole := range appList {
+		if appRole.AppName == name {
+			return appRole, nil
+		}
+	}
+	return nil, fmt.Errorf("app not found in user info")
+}
+
+func getCredentials(appName string) (*sts.Credentials, *string, error) {
 	tokens, userInfo, err := verifyAuth()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	roleArn, ok := (*userInfo).AwsRoles[appName]
-	if !ok {
-		tokens, err = refreshTokens()
-		if err != nil {
-			return nil, err
-		}
-		userInfo, err := getUserInfoWithAccessToken(tokens.AccessToken)
-		if err != nil {
-			return nil, err
-		}
-		roleArn, ok = (*userInfo).AwsRoles[appName]
-		if !ok {
-			return nil, fmt.Errorf("You don't have access to the app %s", appName)
-		}
+	appRole, err := getAppRole(tokens.IDToken, appName)
+	if err != nil {
+		return nil, nil, err
 	}
 	sess := session.Must(session.NewSession())
 	svc := sts.New(sess)
 	duration := int64(900)
 	resp, err := svc.AssumeRoleWithWebIdentity(&sts.AssumeRoleWithWebIdentityInput{
-		RoleArn:          &roleArn,
+		RoleArn:          &appRole.RoleARN,
 		WebIdentityToken: &tokens.IDToken,
 		RoleSessionName:  &userInfo.Email,
 		DurationSeconds:  &duration,
@@ -89,25 +103,23 @@ func getCredentials(appName string) (*sts.Credentials, error) {
 			if aerr.Code() == sts.ErrCodeExpiredTokenException {
 				tokens, err = refreshTokens()
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				resp, err = svc.AssumeRoleWithWebIdentity(&sts.AssumeRoleWithWebIdentityInput{
-					RoleArn:          &roleArn,
+					RoleArn:          &appRole.RoleARN,
 					WebIdentityToken: &tokens.IDToken,
 					RoleSessionName:  &userInfo.Email,
 					DurationSeconds:  &duration,
 				})
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			}
-		} else {
-			if err != nil {
-				return nil, err
-			}
+			return nil, nil, err
 		}
+		return nil, nil, err
 	}
-	return resp.Credentials, nil
+	return resp.Credentials, &appRole.Region, nil
 }
 
 func writeToUserCache(name string, data []byte) error {
@@ -221,6 +233,35 @@ func getUserInfoWithAccessToken(accessToken string) (*UserInfo, error) {
 	return &userInfo, nil
 }
 
+func getAppListWithIDToken(IDToken string) ([]*AppRole, error) {
+	req, err := http.NewRequest("GET", appListURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", IDToken))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("Unable to retrieve app list. Status code %d", resp.StatusCode)
+	}
+	//err = writeToUserCache("apps", contents)
+	//if err != nil {
+	//	return err
+	//}
+	var appList []*AppRole
+
+	if err = json.Unmarshal(contents, &appList); err != nil {
+		return nil, err
+	}
+	return appList, nil
+}
+
 func verifyAuth() (*Tokens, *UserInfo, error) {
 	tokens, err := readTokensFromUserCache()
 	if err != nil {
@@ -328,7 +369,7 @@ func Logout() error {
 }
 
 func AwsSession(appName string) (*session.Session, error) {
-	creds, err := getCredentials(appName)
+	creds, region, err := getCredentials(appName)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +382,7 @@ func AwsSession(appName string) (*session.Session, error) {
 						*creds.SecretAccessKey,
 						*creds.SessionToken,
 					),
-				).WithRegion("us-east-1"), // TODO: configure region
+				).WithRegion(*region),
 			},
 		),
 	), nil

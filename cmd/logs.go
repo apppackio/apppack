@@ -93,8 +93,7 @@ var logsOpenCmd = &cobra.Command{
 		checkErr(err)
 		logGroupParam := strings.ReplaceAll(url.QueryEscape(a.Settings.LogGroup.Name), "%", "*")
 		queryParam := strings.ReplaceAll(url.QueryEscape("fields @timestamp, @message\n| sort @timestamp desc\n| limit 200"), "%", "*")
-		// TODO remove hard-coded region
-		region := "us-east-1"
+		region := *a.Session.Config.Region
 		destinationURL := fmt.Sprintf("https://console.aws.amazon.com/cloudwatch/home?region=%s#logsV2:logs-insights$3FqueryDetail$3D~(editorString~'%s~source~(~'%s))", region, queryParam, logGroupParam)
 		signinURL, err := a.GetConsoleURL(destinationURL)
 		checkErr(err)
