@@ -112,18 +112,6 @@ type Stack struct {
 	Name      string `json:"name"`
 }
 
-type databaseStackItem struct {
-	PrimaryID     string        `json:"primary_id"`
-	SecondaryID   string        `json:"secondary_id"`
-	DatabaseStack DatabaseStack `json:"value"`
-}
-
-type DatabaseStack struct {
-	StackID             string `json:"stack_id"`
-	Name                string `json:"name"`
-	ManagementLambdaArn string `json:"management_lambda_arn"`
-}
-
 func listClusters(sess *session.Session) ([]string, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.Query(&dynamodb.QueryInput{
@@ -177,9 +165,9 @@ func makeClusterQuestion(sess *session.Session, message *string) (*survey.Questi
 	}, err
 }
 
-func getDDBDatabaseItem(sess *session.Session, cluster *string, name *string) (*DatabaseStack, error) {
+func getDDBClusterItem(sess *session.Session, cluster *string, addon string, name *string) (*Stack, error) {
 	ddbSvc := dynamodb.New(sess)
-	secondaryID := fmt.Sprintf("%s#DATABASE#%s", *cluster, *name)
+	secondaryID := fmt.Sprintf("%s#%s#%s", *cluster, addon, *name)
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("paaws"),
 		Key: map[string]*dynamodb.AttributeValue{
@@ -195,37 +183,37 @@ func getDDBDatabaseItem(sess *session.Session, cluster *string, name *string) (*
 		return nil, err
 	}
 	if result.Item == nil {
-		return nil, fmt.Errorf("Could not find CLUSTERS/%s", secondaryID)
+		return nil, fmt.Errorf("could not find CLUSTERS/%s", secondaryID)
 	}
-	i := databaseStackItem{}
+	i := stackItem{}
 	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
 	if err != nil {
 		return nil, err
 	}
-	return &i.DatabaseStack, nil
+	return &i.Stack, nil
 }
 
-func ddbDatabaseQuery(sess *session.Session, cluster *string) (*[]map[string]*dynamodb.AttributeValue, error) {
+func ddbClusterQuery(sess *session.Session, cluster *string, addon *string) (*[]map[string]*dynamodb.AttributeValue, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.Query(&dynamodb.QueryInput{
 		TableName:              aws.String("paaws"),
 		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":id1": {S: aws.String("CLUSTERS")},
-			":id2": {S: aws.String(fmt.Sprintf("%s#DATABASE#", *cluster))},
+			":id2": {S: aws.String(fmt.Sprintf("%s#%s#", *cluster, *addon))},
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 	if result.Items == nil {
-		return nil, fmt.Errorf("could not find any AppPack databases on %s cluster", *cluster)
+		return nil, fmt.Errorf("could not find any AppPack %s stacks on %s cluster", strings.ToLower(*addon), *cluster)
 	}
 	return &result.Items, nil
 }
 
-func listDatabases(sess *session.Session, cluster *string) ([]string, error) {
-	items, err := ddbDatabaseQuery(sess, cluster)
+func listStacks(sess *session.Session, cluster *string, addon string) ([]string, error) {
+	items, err := ddbClusterQuery(sess, cluster, &addon)
 	if err != nil {
 		return nil, err
 	}
@@ -234,16 +222,15 @@ func listDatabases(sess *session.Session, cluster *string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	databases := []string{}
+	stacks := []string{}
 	for idx := range i {
-		databases = append(databases, i[idx].Stack.Name)
+		stacks = append(stacks, i[idx].Stack.Name)
 	}
-
-	return databases, nil
+	return stacks, nil
 }
 
 func makeDatabaseQuestion(sess *session.Session, cluster *string) (*survey.Question, error) {
-	databases, err := listDatabases(sess, cluster)
+	databases, err := listStacks(sess, cluster, "DATABASE")
 	if err != nil {
 		return nil, err
 	}
@@ -252,11 +239,30 @@ func makeDatabaseQuestion(sess *session.Session, cluster *string) (*survey.Quest
 	}
 	defaultDatabase := databases[0]
 	return &survey.Question{
-		Name: "addons-database-name",
+		Name: "addon-database-name",
 		Prompt: &survey.Select{
 			Message: "Select a database cluster",
 			Options: databases,
 			Default: defaultDatabase,
+		},
+	}, err
+}
+
+func makeRedisQuestion(sess *session.Session, cluster *string) (*survey.Question, error) {
+	instances, err := listStacks(sess, cluster, "REDIS")
+	if err != nil {
+		return nil, err
+	}
+	if len(instances) == 0 {
+		return nil, fmt.Errorf("no AppPack Redis instances are setup on %s cluster", *cluster)
+	}
+	defaultInstance := instances[0]
+	return &survey.Question{
+		Name: "addon-redis-name",
+		Prompt: &survey.Select{
+			Message: "Select a Redis instance",
+			Options: instances,
+			Default: defaultInstance,
 		},
 	}, err
 }
@@ -641,6 +647,7 @@ var appCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		answers := make(map[string]interface{})
 		var databaseAddonEnabled bool
+		var redisAddonEnabled bool
 		sess := session.Must(session.NewSession())
 		if !nonInteractive {
 			questions := []*survey.Question{}
@@ -655,6 +662,7 @@ var appCmd = &cobra.Command{
 			addQuestionFromFlag(cmd.Flags().Lookup("addon-private-s3"), &questions, nil)
 			addQuestionFromFlag(cmd.Flags().Lookup("addon-public-s3"), &questions, nil)
 			addQuestionFromFlag(cmd.Flags().Lookup("addon-database"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("addon-redis"), &questions, nil)
 			if err := survey.Ask(questions, &answers); err != nil {
 				checkErr(err)
 			}
@@ -664,6 +672,12 @@ var appCmd = &cobra.Command{
 				databaseClusterQuestion, err := makeDatabaseQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
 				checkErr(err)
 				questions = append(questions, databaseClusterQuestion)
+			}
+			redisAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-redis", false))
+			if redisAddonEnabled {
+				redisInstanceQuestion, err := makeRedisQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
+				checkErr(err)
+				questions = append(questions, redisInstanceQuestion)
 			}
 			addQuestionFromFlag(cmd.Flags().Lookup("addon-sqs"), &questions, nil)
 			addQuestionFromFlag(cmd.Flags().Lookup("addon-ses"), &questions, nil)
@@ -697,11 +711,20 @@ var appCmd = &cobra.Command{
 		var databaseStackName string
 		if isTruthy(getArgValue(cmd, &answers, "addon-database", false)) {
 			database := getArgValue(cmd, &answers, "addon-database-name", false)
-			databaseStack, err := getDDBDatabaseItem(sess, cluster, database)
+			databaseStack, err := getDDBClusterItem(sess, cluster, "DATABASE", database)
 			checkErr(err)
 			databaseStackName = strings.Split(databaseStack.StackID, "/")[1]
 		} else {
 			databaseStackName = ""
+		}
+		var redisStackName string
+		if isTruthy(getArgValue(cmd, &answers, "addon-redis", false)) {
+			redis := getArgValue(cmd, &answers, "addon-redis-name", false)
+			redisStack, err := getDDBClusterItem(sess, cluster, "REDIS", redis)
+			checkErr(err)
+			redisStackName = strings.Split(redisStack.StackID, "/")[1]
+		} else {
+			redisStackName = ""
 		}
 		repositoryURL := getArgValue(cmd, &answers, "repository", true)
 		var repositoryType string
@@ -762,6 +785,10 @@ var appCmd = &cobra.Command{
 				{
 					ParameterKey:   aws.String("DatabaseStackName"),
 					ParameterValue: &databaseStackName,
+				},
+				{
+					ParameterKey:   aws.String("RedisStackName"),
+					ParameterValue: &redisStackName,
 				},
 				{
 					ParameterKey:   aws.String("SQSQueueEnabled"),
@@ -837,7 +864,9 @@ func init() {
 	appCmd.Flags().Bool("addon-private-s3", false, "Setup private S3 bucket add-on")
 	appCmd.Flags().Bool("addon-public-s3", false, "Setup public S3 bucket add-on")
 	appCmd.Flags().Bool("addon-database", false, "Setup database add-on")
-	appCmd.Flags().String("addon-database-cluster", "", "Database cluster to install add-on")
+	appCmd.Flags().String("addon-database-name", "", "Database instance to install add-on")
+	appCmd.Flags().Bool("addon-redis", false, "Setup Redis add-on")
+	appCmd.Flags().String("addon-redis-name", "", "Redis instance to install add-on")
 	appCmd.Flags().Bool("addon-sqs", false, "Setup SQS Queue add-on")
 	appCmd.Flags().Bool("addon-ses", false, "Setup SES (Email) add-on (requires manual approval of domain at SES)")
 	appCmd.Flags().String("addon-ses-domain", "*", "Domain approved for sending via SES add-on. Use '*' for all domains.")

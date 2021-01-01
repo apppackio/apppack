@@ -348,6 +348,7 @@ func LoginComplete(deviceCode string) (*UserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	userInfo, err := getUserInfoWithAccessToken((*tokens).AccessToken)
 	if err != nil {
 		return nil, err
