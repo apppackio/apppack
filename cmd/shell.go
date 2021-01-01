@@ -42,7 +42,9 @@ var shellCmd = &cobra.Command{
 		checkErr(err)
 		shellTask := taskOutput.Tasks[0]
 		checkErr(err)
-		Spinner.Suffix = fmt.Sprintf(" starting task %s", *shellTask.TaskArn)
+		Spinner.Stop()
+		fmt.Printf("starting %s\n", *shellTask.TaskArn)
+		startSpinner()
 		err = a.WaitForTaskRunning(shellTask)
 		checkErr(err)
 		Spinner.Stop()
