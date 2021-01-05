@@ -73,16 +73,16 @@ func uploadFile(sess *session.Session, uploadInput *s3manager.UploadInput) error
 
 // dbCmd represents the db command
 var dbCmd = &cobra.Command{
-	Use:   "db",
-	Short: "Tools to manage your database on AppPack",
-	Long:  `Tools to manage your database on AppPack`,
+	Use:                   "db",
+	Short:                 "tools to manage your database on AppPack",
+	DisableFlagsInUseLine: true,
 }
 
 // dbShellCmd represents the db shell command
 var dbShellCmd = &cobra.Command{
-	Use:   "shell",
-	Short: "Open an interactive shell prompt to the app database",
-	Long:  `Open an interactive shell prompt to the app database`,
+	Use:                   "shell",
+	Short:                 "open an interactive shell prompt to the app database",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		app, err := app.Init(AppName)
@@ -105,8 +105,8 @@ var dbShellCmd = &cobra.Command{
 // dbDumpCmd represents the db load command
 var dbDumpCmd = &cobra.Command{
 	Use:   "dump",
-	Short: "Dump the database to a local file",
-	Long:  `Dump the database to a local file`,
+	Short: "dump the database to a local file",
+	Long:  "Dump the database to `<app-name>.dump` in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		getObjectInput, err := dbDumplocation("dumps/")
@@ -134,8 +134,8 @@ var dbDumpCmd = &cobra.Command{
 
 // dbLoadCmd represents the db load command
 var dbLoadCmd = &cobra.Command{
-	Use:   "load",
-	Short: "Load a dump file into the remote database",
+	Use:   "load <dumpfile>",
+	Short: "load a dump file into the remote database",
 	Long: `The dump file can either be local (in which case it will first be uploaded to S3. Or you can specify a file already on S3 by using "s3://..." as the first argument.
 	
 WARNING: This is a destructive action which will delete the contents of your remote database in order to load the dump in.

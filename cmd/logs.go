@@ -49,9 +49,9 @@ func newBlade(session *session.Session) *blade.Blade {
 
 // logsCmd represents the logs command
 var logsCmd = &cobra.Command{
-	Use:   "logs",
-	Short: "Access application logs from Cloudwatch Logs",
-	Long:  `Access application logs from Cloudwatch Logs`,
+	Use:                   "logs",
+	Short:                 "access application logs from Cloudwatch Logs",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)
@@ -84,9 +84,10 @@ var logsCmd = &cobra.Command{
 
 // logsCmd represents the logs command
 var logsOpenCmd = &cobra.Command{
-	Use:   "open",
-	Short: "Open logs in the AWS web console",
-	Long:  `Open logs in the AWS web console`,
+	Use:                   "open",
+	Short:                 "open logs in the AWS web console",
+	Long:                  `Generates a presigned URL and opens a web browser to Cloudwatch Insights in the AWS web console`,
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		a, err := app.Init(AppName)
 		a.LoadSettings()

@@ -39,14 +39,9 @@ func getTag(tags []*ecs.Tag, key string) (*string, error) {
 
 // psCmd represents the ps command
 var psCmd = &cobra.Command{
-	Use:   "ps",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Use:                   "ps",
+	Short:                 "show running processes",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)
@@ -105,15 +100,11 @@ to quickly create a Cobra application.`,
 
 // psResizeCmd represents the resize command
 var psResizeCmd = &cobra.Command{
-	Use:   "resize",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Args: cobra.ExactArgs(1),
+	Use:                   "resize <process_type>",
+	Short:                 "resize (CPU/memory) the process for a given type",
+	DisableFlagsInUseLine: true,
+	Example:               "apppack resize web --cpu 2048 --memory 4096",
+	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		processType := args[0]
 		a, err := app.Init(AppName)
@@ -126,13 +117,16 @@ to quickly create a Cobra application.`,
 
 // psScaleCmd represents the scale command
 var psScaleCmd = &cobra.Command{
-	Use:   "scale [PROCESS_TYPE] [PROCESS_COUNT]",
+	Use:   "scale <process_type> <process_count>",
 	Short: "scale the number of processes that run for a specific process type",
 	Long: `Scale the number of processes that run for a specific process type.
 
-[PROCESS_COUNT] can either be a single number, e.g. 2 or a range, e.g. 1-5. When
+` + "`<process_count>`" + ` can either be a single number, e.g. 2 or a range, e.g. 1-5. When
 a range is provided, the process will autoscale within that range based on CPU usage.`,
-	Args: cobra.ExactArgs(2),
+	Example: `apppack ps scale web 3  # run 3 web processes
+apppack ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		processType := args[0]
 		var minProcesses int
@@ -171,13 +165,4 @@ func init() {
 	psResizeCmd.Flags().IntVarP(&scaleMemory, "memory", "m", 2048, "Memory in megabytes")
 
 	psCmd.AddCommand(psScaleCmd)
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// psCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// psCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

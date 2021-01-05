@@ -34,15 +34,14 @@ type accountDetails struct {
 // destroyCmd represents the destroy command
 var destroyCmd = &cobra.Command{
 	Use:   "destroy",
-	Short: "Destroy AWS resources used by AppPack",
-	Long:  `Destroy AWS resources used by AppPack`,
+	Short: "destroy AWS resources used by AppPack",
 }
 
 // destroyAccountCmd represents the destroy command
 var destroyAccountCmd = &cobra.Command{
-	Use:   "account",
-	Short: "Destroy AWS resources used by your AppPack account",
-	Long:  `Destroy AWS resources used by your AppPack account`,
+	Use:                   "account",
+	Short:                 "destroy AWS resources used by your AppPack account",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		sess := session.Must(session.NewSession())
@@ -86,10 +85,10 @@ var destroyAccountCmd = &cobra.Command{
 
 // destroyClusterCmd represents the destroy command
 var destroyClusterCmd = &cobra.Command{
-	Use:   "cluster",
-	Short: "Destroy AWS resources used by the AppPack cluster",
-	Long:  `Destroy AWS resources used by the AppPack cluster`,
-	Args:  cobra.ExactArgs(1),
+	Use:                   "cluster <name>",
+	Short:                 "destroy AWS resources used by the AppPack Cluster",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clusterName := args[0]
 		startSpinner()
@@ -139,10 +138,10 @@ var destroyClusterCmd = &cobra.Command{
 
 // destroyAppCmd represents the destroy command
 var destroyAppCmd = &cobra.Command{
-	Use:   "app",
-	Short: "Destroy AWS resources used by the AppPack app",
-	Long:  `Destroy AWS resources used by the AppPack app`,
-	Args:  cobra.ExactArgs(1),
+	Use:                   "app <name>",
+	Short:                 "destroy AWS resources used by the AppPack app",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		appName := args[0]
 		startSpinner()

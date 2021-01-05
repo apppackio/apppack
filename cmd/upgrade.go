@@ -77,17 +77,17 @@ func updateStackAndWait(sess *session.Session, stackInput *cloudformation.Update
 
 // upgradeCmd represents the upgrade command
 var upgradeCmd = &cobra.Command{
-	Use:   "upgrade",
-	Short: "upgrade AppPack stacks",
-	Long:  `Upgrade AppPack stacks`,
+	Use:                   "upgrade",
+	Short:                 "upgrade AppPack stacks",
+	DisableFlagsInUseLine: true,
 }
 
 // upgradeCmd represents the upgrade command
 var upgradeAppCmd = &cobra.Command{
-	Use:   "app [NAME]",
-	Short: "upgrade the AppPack stack for a given application",
-	Long:  `Upgrade the AppPack stack for a given application`,
-	Args:  cobra.ExactArgs(1),
+	Use:                   "app <name>",
+	Short:                 "upgrade an application AppPack stack",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		sess := session.Must(session.NewSession())

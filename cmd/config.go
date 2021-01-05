@@ -30,21 +30,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var AppName string
-
 // configCmd represents the config command
 var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Manage app configuration (environment variables/secrets)",
-	Long:  `Configuration is stored in SSM Parameter Store and injected into the application containers at runtime.`,
+	Use:                   "config",
+	Short:                 "manage app configuration (environment variables/secrets)",
+	Long:                  `Configuration is stored in SSM Parameter Store and injected into the application containers at runtime.`,
+	DisableFlagsInUseLine: true,
 }
 
 // getCmd represents the get command
 var getCmd = &cobra.Command{
-	Use:   "get",
-	Short: "Read the value of a single config variable",
-	Long:  `Read the value of a single config variable`,
-	Args:  cobra.ExactArgs(1),
+	Use:                   "get <variable>",
+	Short:                 "show the value of a single config variable",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)
@@ -62,10 +61,10 @@ var getCmd = &cobra.Command{
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all config variables and values",
-	Long:  `List all config variables and values`,
-	Args:  cobra.ExactArgs(0),
+	Use:                   "list",
+	Short:                 "list all config variables and values",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
 		w := new(tabwriter.Writer)
 		// minwidth, tabwidth, padding, padchar, flags
