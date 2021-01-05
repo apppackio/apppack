@@ -40,14 +40,9 @@ func printTasks(tasks []*app.ScheduledTask) {
 
 // scheduledTasksCmd represents the scheduledTasks command
 var scheduledTasksCmd = &cobra.Command{
-	Use:   "scheduled-tasks",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Use:                   "scheduled-tasks",
+	Short:                 "list scheduled tasks",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)
@@ -63,15 +58,13 @@ var schedule string
 
 // scheduledTasksCreateCmd represents the create command
 var scheduledTasksCreateCmd = &cobra.Command{
-	Use:   "create --schedule \"...\" \"COMMAND\"",
+	Use:   "create --schedule \"<min> <hr> <day-mon> <mon> <day-wk> <yr>\" \"<command>\"",
 	Args:  cobra.ExactArgs(1),
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "schedule a task",
+	Long: `Schedule a command to run on a recurring schedule in the future.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+Be sure to wrap your command and schedule in quotes to ensure they are read as a single arguement. The schedule flag should use the AWS cron-like format as described at https://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions"`,
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(strings.Split(schedule, " ")) != 6 {
 			checkErr(fmt.Errorf("schedule string should contain 6 space separated values\nhttps://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions"))
@@ -88,17 +81,15 @@ to quickly create a Cobra application.`,
 	},
 }
 
-// scheduledTasksCreateCmd represents the create command
+// scheduledTasksDeleteCmd represents the delete command
 var scheduledTasksDeleteCmd = &cobra.Command{
-	Use:   "delete [INDEX]",
+	Use:   "delete [<index>]",
 	Args:  cobra.MaximumNArgs(1),
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "delete an existing scheduled task",
+	Long: `Delete the scheduled task at the provided index.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+If no index is provided, an interactive prompt will be provided to choose the task to delete.`,
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)

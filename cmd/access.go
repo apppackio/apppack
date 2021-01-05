@@ -70,9 +70,9 @@ func indexOf(arr []string, item string) int {
 
 // accessCmd represents the access command
 var accessCmd = &cobra.Command{
-	Use:   "access",
-	Short: "list of users with access to the app",
-	Long:  `A llist of uses with access to the app.`,
+	Use:                   "access",
+	Short:                 "list users with access to the app",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		sess := session.Must(session.NewSession())
@@ -95,10 +95,10 @@ var accessCmd = &cobra.Command{
 
 // accessAddCmd represents the access command
 var accessAddCmd = &cobra.Command{
-	Use:   "add [EMAIL]",
-	Short: "add access for a user to the app",
-	Long:  `Add access for a user to the app.`,
-	Args:  cobra.ExactArgs(1),
+	Use:                   "add <email>",
+	Short:                 "add access for a user to the app",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		email := args[0]
 		if !validateEmail(email) {
@@ -132,10 +132,10 @@ var accessAddCmd = &cobra.Command{
 
 // accessRemoveCmd represents the access command
 var accessRemoveCmd = &cobra.Command{
-	Use:   "remove [EMAIL]",
-	Short: "remove access for a user to the app",
-	Long:  `Remove access for a user to the app.`,
-	Args:  cobra.ExactArgs(1),
+	Use:                   "remove <email>",
+	Short:                 "remove access for a user to the app",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		email := args[0]
 		startSpinner()

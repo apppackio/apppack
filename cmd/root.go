@@ -36,6 +36,9 @@ const (
 	appStackName = "apppack-app-%s"
 )
 
+// AppName is used to hold the `--app-name` flag
+var AppName string
+
 // Spinner is the loading animation to use for all commands
 var Spinner *spinner.Spinner = spinner.New(spinner.CharSets[14], 50*time.Millisecond)
 
@@ -47,9 +50,11 @@ func startSpinner() {
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "apppack",
-	Short: "A CLI interface to AppPack.io",
-	Long:  `AppPack is a tool to manage applications deployed on AWS via AppPack.io`,
+	Use:                   "apppack",
+	Short:                 "the CLI interface to AppPack.io",
+	Long:                  `AppPack is a tool to manage applications deployed on AWS via AppPack.io`,
+	DisableAutoGenTag:     true,
+	DisableFlagsInUseLine: true,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

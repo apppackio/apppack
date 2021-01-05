@@ -29,17 +29,18 @@ import (
 // authCmd represents the auth command
 var authCmd = &cobra.Command{
 	Use:   "auth",
-	Short: "Authenticate with AppPack.io",
+	Short: "authenticate with AppPack.io",
 	Long: `This will open a web browser and/or provide a URL to visit to verify this device.
 	
 Your credentials are cached locally for your user, so these commands should not be used on a shared device account.`,
+	DisableFlagsInUseLine: true,
 }
 
 // loginCmd represents the login command
 var loginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Login to AppPack.io on this device",
-	Long:  `Login to AppPack.io on this device`,
+	Use:                   "login",
+	Short:                 "login to AppPack.io on this device",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataPtr, err := auth.LoginInit()
 		checkErr(err)
@@ -57,9 +58,9 @@ var loginCmd = &cobra.Command{
 
 // logoutCmd represents the logout command
 var logoutCmd = &cobra.Command{
-	Use:   "logout",
-	Short: "Logout from AppPack.io on this device",
-	Long:  `Logout from AppPack.io on this device`,
+	Use:                   "logout",
+	Short:                 "logout of AppPack.io on this device",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		err := auth.Logout()
 		checkErr(err)
@@ -69,9 +70,9 @@ var logoutCmd = &cobra.Command{
 
 // whoAmICmd represents the whoami command
 var whoAmICmd = &cobra.Command{
-	Use:   "whoami",
-	Short: "Print login information for the current user",
-	Long:  `Print login information for the current user`,
+	Use:                   "whoami",
+	Short:                 "show login information for the current user",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		email, err := auth.WhoAmI()
 		checkErr(err)

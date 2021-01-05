@@ -26,8 +26,11 @@ import (
 // shellCmd represents the shell command
 var shellCmd = &cobra.Command{
 	Use:   "shell",
-	Short: "Open an interactive shell in the remote environment",
-	Long:  `Open an interactive shell in the remote environment`,
+	Short: "open an interactive shell in the remote environment",
+	Long: `Open an interactive shell in the remote environment
+
+Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html`,
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)

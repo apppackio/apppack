@@ -404,18 +404,19 @@ func enabledString(val bool) string {
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create AppPack resources in your AWS account",
-	Long: `Use these commands to create AppPack resources in your account.
+	Short: "create AppPack resources in your AWS account",
+	Long: `Use subcommands to create AppPack resources in your account.
 	
 These currently require AWS authentication credentials to operate unlike app-specific commands which use AppPack for authentication.
 `,
+	DisableFlagsInUseLine: true,
 }
 
 // accountCmd represents the create command
 var accountCmd = &cobra.Command{
-	Use:   "account",
-	Short: "Setup resources for your AppPack account",
-	Long:  `Setup resources for your AppPack account`,
+	Use:                   "account",
+	Short:                 "setup resources for your AppPack account",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		answers, err := askForMissingArgs(cmd, nil)
 		checkErr(err)
@@ -501,10 +502,11 @@ var accountCmd = &cobra.Command{
 
 // createClusterCmd represents the create command
 var createClusterCmd = &cobra.Command{
-	Use:   "cluster",
-	Short: "Setup resources for an AppPack cluster",
-	Long:  `Setup resources for an AppPack cluster`,
-	Args:  cobra.MaximumNArgs(1),
+	Use:                   "cluster [<name>]",
+	Short:                 "setup resources for an AppPack Cluster",
+	Long:                  "Creates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		answers, err := askForMissingArgs(cmd, nil)
 		var clusterName string
@@ -641,9 +643,9 @@ func verifySourceCredentials(sess *session.Session, repositoryType string, inter
 
 // appCmd represents the create command
 var appCmd = &cobra.Command{
-	Use:   "app",
-	Short: "Create an AppPack application",
-	Long:  `Create an AppPack application`,
+	Use:                   "app",
+	Short:                 "create an AppPack application",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		answers := make(map[string]interface{})
 		var databaseAddonEnabled bool

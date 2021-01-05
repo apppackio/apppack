@@ -116,16 +116,17 @@ func watchBuild(a *app.App, build *codebuild.Build) error {
 
 // buildCmd represents the build command
 var buildCmd = &cobra.Command{
-	Use:   "build",
-	Short: "Work with AppPack builds",
-	Long:  `Use to view, list, and trigger code builds.`,
+	Use:                   "build",
+	Short:                 "work with AppPack builds",
+	Long:                  `Use subcommands to view, list, and trigger code builds.`,
+	DisableFlagsInUseLine: true,
 }
 
 // buildStartCmd represents the start command
 var buildStartCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start a new build from the latest commit on the branch defined in AppPack",
-	Long:  `Start a new build from the latest commit on the branch defined in AppPack`,
+	Use:                   "start",
+	Short:                 "start a new build from the latest commit on the branch defined in AppPack",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)
@@ -145,9 +146,9 @@ var buildStartCmd = &cobra.Command{
 
 // buildWaitCmd represents the start command
 var buildWaitCmd = &cobra.Command{
-	Use:   "wait",
-	Short: "wait for the most recent build to be deployed",
-	Long:  `Bait for the most recent build to be deployed`,
+	Use:                   "wait",
+	Short:                 "wait for the most recent build to be deployed",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)
@@ -165,9 +166,9 @@ var buildWaitCmd = &cobra.Command{
 
 // buildListCmd represents the list command
 var buildListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List recent builds",
-	Long:  `List recent builds`,
+	Use:                   "list",
+	Short:                 "list recent builds",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		a, err := app.Init(AppName)
