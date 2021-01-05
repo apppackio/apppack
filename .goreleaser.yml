@@ -35,7 +35,7 @@ brews:
     description: CLI for AppPack.io
     license: Apache-2.0
     test: |
-      system "#{bin}/program --version"
+      system "#{bin}/apppack version"
 checksum:
   name_template: 'checksums.txt'
 snapshot:
