@@ -20,6 +20,17 @@ archives:
       windows: Windows
       386: i386
       amd64: x86_64
+brews:
+  - tap:
+      owner: lincolnloop
+      name: homebrew-apppack
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    folder: Formula
+    homepage: https://apppack.io
+    description: CLI for AppPack.io
+    license: Apache-2.0
+    test: |
+      system "#{bin}/program --version"
 checksum:
   name_template: 'checksums.txt'
 snapshot:
