@@ -60,5 +60,5 @@ var docgenCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(docgenCmd)
-	docgenCmd.Flags().StringVarP(&directory, "directory", "d", "./docs/src/command-line-reference", "output directory")
+	docgenCmd.Flags().StringVarP(&directory, "directory", "d", "./docs", "output directory")
 }
