@@ -389,6 +389,14 @@ func AwsSession(appName string) (*session.Session, error) {
 	), nil
 }
 
+func AppList() ([]*AppRole, error) {
+	tokens, _, err := verifyAuth()
+	if err != nil {
+		return nil, err
+	}
+	return getAppListWithIDToken(tokens.IDToken)
+}
+
 func WhoAmI() (*string, error) {
 	userInfo, err := readUserInfoFromUserCache()
 	if err != nil {

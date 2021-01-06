@@ -80,9 +80,24 @@ var whoAmICmd = &cobra.Command{
 	},
 }
 
+// appsCmd represents the apps command
+var appsCmd = &cobra.Command{
+	Use:                   "apps",
+	Short:                 "list the apps you have access to",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		apps, err := auth.AppList()
+		checkErr(err)
+		for _, app := range apps {
+			fmt.Printf("%s\t%s\n", app.AppName, aurora.Faint(fmt.Sprintf("%s account:%s", app.Region, app.AccountID)))
+		}
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(loginCmd)
 	authCmd.AddCommand(logoutCmd)
 	authCmd.AddCommand(whoAmICmd)
+	authCmd.AddCommand(appsCmd)
 }
