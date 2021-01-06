@@ -59,6 +59,57 @@ var getCmd = &cobra.Command{
 	},
 }
 
+// setCmd represents the config set command
+var setCmd = &cobra.Command{
+	Use:                   "set <variable>=<value>",
+	Short:                 "set the value of a single config variable",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Example:               "apppack -a my-app config set ENVIRONMENT=production",
+	Run: func(cmd *cobra.Command, args []string) {
+		if !strings.Contains(args[0], "=") {
+			checkErr(fmt.Errorf("argument should be in the form <variable>=<value>"))
+		}
+		parts := strings.SplitN(args[0], "=", 2)
+		name := parts[0]
+		value := parts[1]
+		startSpinner()
+		a, err := app.Init(AppName)
+		checkErr(err)
+		svc := ssm.New(a.Session)
+		_, err = svc.PutParameter(&ssm.PutParameterInput{
+			Name:      aws.String(fmt.Sprintf("/paaws/apps/%s/config/%s", AppName, name)),
+			Type:      aws.String("SecureString"),
+			Overwrite: aws.Bool(true),
+			Value:     &value,
+		})
+		Spinner.Stop()
+		checkErr(err)
+		printSuccess(fmt.Sprintf("stored config variable %s", name))
+	},
+}
+
+// unsetCmd represents the get command
+var unsetCmd = &cobra.Command{
+	Use:                   "unset <variable>",
+	Short:                 "remove a config variable",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		name := args[0]
+		a, err := app.Init(AppName)
+		checkErr(err)
+		svc := ssm.New(a.Session)
+		_, err = svc.DeleteParameter(&ssm.DeleteParameterInput{
+			Name: aws.String(fmt.Sprintf("/paaws/apps/%s/config/%s", AppName, args[0])),
+		})
+		Spinner.Stop()
+		checkErr(err)
+		printSuccess(fmt.Sprintf("removed config variable %s", name))
+	},
+}
+
 // listCmd represents the list command
 var listCmd = &cobra.Command{
 	Use:                   "list",
@@ -98,5 +149,7 @@ func init() {
 	configCmd.MarkPersistentFlagRequired("app-name")
 
 	configCmd.AddCommand(getCmd)
+	configCmd.AddCommand(setCmd)
+	configCmd.AddCommand(unsetCmd)
 	configCmd.AddCommand(listCmd)
 }
