@@ -3,11 +3,11 @@ module github.com/lincolnloop/apppack
 go 1.15
 
 require (
-	github.com/AlecAivazis/survey/v2 v2.2.5
+	github.com/AlecAivazis/survey/v2 v2.2.7
 	github.com/Netflix/go-expect v0.0.0-20201125194554-85d881c3777e // indirect
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2 // indirect
 	github.com/TylerBrock/saw v0.2.2
-	github.com/aws/aws-sdk-go v1.36.8
+	github.com/aws/aws-sdk-go v1.36.22
 	github.com/briandowns/spinner v1.12.0
 	github.com/creack/pty v1.1.11 // indirect
 	github.com/dustin/go-humanize v1.0.0
