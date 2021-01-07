@@ -42,10 +42,14 @@ import (
 )
 
 const (
-	appFormationURL      = "https://s3.amazonaws.com/paaws-cloudformations/latest/app.json"
-	clusterFormationURL  = "https://s3.amazonaws.com/paaws-cloudformations/latest/cluster.json"
-	accountFormationURL  = "https://s3.amazonaws.com/paaws-cloudformations/latest/account.json"
-	databaseFormationURL = "https://s3.amazonaws.com/paaws-cloudformations/latest/database.json"
+	appFormationURL             = "https://s3.amazonaws.com/paaws-cloudformations/latest/app.json"
+	clusterFormationURL         = "https://s3.amazonaws.com/paaws-cloudformations/latest/cluster.json"
+	accountFormationURL         = "https://s3.amazonaws.com/paaws-cloudformations/latest/account.json"
+	databaseFormationURL        = "https://s3.amazonaws.com/paaws-cloudformations/latest/database.json"
+	redisFormationURL           = "https://s3.amazonaws.com/paaws-cloudformations/latest/redis.json"
+	redisStackNameTmpl          = "apppack-redis-%s"
+	redisAuthTokenParameterTmpl = "/paaws/redis/%s/auth-token"
+	databaseStackNameTmpl       = "apppack-database-%s"
 )
 
 var createChangeSet bool
@@ -87,7 +91,9 @@ func createStackAndWait(sess *session.Session, stackInput *cloudformation.Create
 	if err != nil {
 		return nil, err
 	}
+	Spinner.Stop()
 	fmt.Println(aurora.Faint(fmt.Sprintf("creating %s", *stackOutput.StackId)))
+	startSpinner()
 	describeStacksInput := cloudformation.DescribeStacksInput{StackName: stackInput.StackName}
 	err = cfnSvc.WaitUntilStackCreateComplete(&describeStacksInput)
 	if err != nil {
@@ -401,6 +407,17 @@ func enabledString(val bool) string {
 	return "disabled"
 }
 
+func generatePassword() string {
+	rand.Seed(time.Now().UnixNano())
+	chars := []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+	length := 30
+	var b strings.Builder
+	for i := 0; i < length; i++ {
+		b.WriteRune(chars[rand.Intn(len(chars))])
+	}
+	return b.String()
+}
+
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create",
@@ -580,6 +597,230 @@ var createClusterCmd = &cobra.Command{
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
 				printSuccess(fmt.Sprintf("AppPack cluster %s created", clusterName))
+			}
+		}
+
+	},
+}
+
+// createDatabaseCmd represents the create database command
+var createDatabaseCmd = &cobra.Command{
+	Use:                   "database [<name>]",
+	Short:                 "setup resources for an AppPack Database",
+	Long:                  "Creates an AppPack Database. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		var name string
+		if len(args) == 0 {
+			name = "apppack"
+		} else {
+			name = args[0]
+		}
+		sess := session.Must(session.NewSession())
+		answers := make(map[string]interface{})
+		if !nonInteractive {
+			questions := []*survey.Question{}
+			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for database"))
+			checkErr(err)
+			questions = append(questions, clusterQuestion)
+			addQuestionFromFlag(cmd.Flags().Lookup("multi-az"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, nil)
+			if err := survey.Ask(questions, &answers); err != nil {
+				checkErr(err)
+			}
+		}
+		cluster := getArgValue(cmd, &answers, "cluster", true)
+		// check if a database already exists on the cluster
+		_, err := getDDBClusterItem(sess, cluster, "DATABASE", &name)
+		if err == nil {
+			checkErr(fmt.Errorf(fmt.Sprintf("a database named %s already exists on the cluster %s", name, *cluster)))
+		}
+		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
+		checkErr(err)
+		var multiAZParameter string
+		if *(getArgValue(cmd, &answers, "multi-az", false)) == "true" {
+			multiAZParameter = "yes"
+		} else {
+			multiAZParameter = "no"
+		}
+		if createChangeSet {
+			fmt.Println("Creating Cloudformation Change Set for database resources...")
+		} else {
+			fmt.Println("Creating database resources, this may take a few minutes...")
+		}
+		startSpinner()
+		cfnTags := []*cloudformation.Tag{
+			{Key: aws.String("paaws:database"), Value: &name},
+			{Key: aws.String("paaws:cluster"), Value: cluster},
+			{Key: aws.String("paaws"), Value: aws.String("true")},
+		}
+
+		input := cloudformation.CreateStackInput{
+			StackName:   aws.String(fmt.Sprintf(databaseStackNameTmpl, name)),
+			TemplateURL: aws.String(databaseFormationURL),
+			Parameters: []*cloudformation.Parameter{
+				{
+					ParameterKey:   aws.String("Name"),
+					ParameterValue: &name,
+				},
+				{
+					ParameterKey:   aws.String("ClusterStackName"),
+					ParameterValue: clusterStack.StackName,
+				},
+				{
+					ParameterKey:   aws.String("OneTimePassword"),
+					ParameterValue: aws.String(generatePassword()),
+				},
+				{
+					ParameterKey:   aws.String("InstanceClass"),
+					ParameterValue: getArgValue(cmd, &answers, "instance-class", true),
+				},
+				{
+					ParameterKey:   aws.String("MultiAZ"),
+					ParameterValue: &multiAZParameter,
+				},
+			},
+			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+			Tags:         cfnTags,
+		}
+		var statusURL string
+		if createChangeSet {
+			changeSet, err := createChangeSetAndWait(sess, &input)
+			Spinner.Stop()
+			checkErr(err)
+			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			if *changeSet.Status != "CREATE_COMPLETE" {
+				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
+			} else {
+				fmt.Println("View ChangeSet at:")
+				fmt.Println(aurora.White(statusURL))
+			}
+		} else {
+			stack, err := createStackAndWait(sess, &input)
+			Spinner.Stop()
+			checkErr(err)
+			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			if *stack.StackStatus != "CREATE_COMPLETE" {
+				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
+			} else {
+				printSuccess(fmt.Sprintf("AppPack database %s created", name))
+			}
+		}
+
+	},
+}
+
+// createRedisCmd represents the create redis command
+var createRedisCmd = &cobra.Command{
+	Use:                   "redis [<name>]",
+	Short:                 "setup resources for an AppPack Redis instance",
+	Long:                  "Creates an AppPack Redis instance. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		var name string
+		if len(args) == 0 {
+			name = "apppack"
+		} else {
+			name = args[0]
+		}
+		sess := session.Must(session.NewSession())
+		answers := make(map[string]interface{})
+		if !nonInteractive {
+			questions := []*survey.Question{}
+			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for Redis"))
+			checkErr(err)
+			questions = append(questions, clusterQuestion)
+			addQuestionFromFlag(cmd.Flags().Lookup("multi-az"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, nil)
+			if err := survey.Ask(questions, &answers); err != nil {
+				checkErr(err)
+			}
+		}
+		cluster := getArgValue(cmd, &answers, "cluster", true)
+		// check if a redis already exists on the cluster
+		_, err := getDDBClusterItem(sess, cluster, "REDIS", &name)
+		if err == nil {
+			checkErr(fmt.Errorf(fmt.Sprintf("a Redis instance named %s already exists on the cluster %s", name, *cluster)))
+		}
+		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
+		checkErr(err)
+		var multiAZParameter string
+		if *(getArgValue(cmd, &answers, "multi-az", false)) == "true" {
+			multiAZParameter = "yes"
+		} else {
+			multiAZParameter = "no"
+		}
+		if createChangeSet {
+			fmt.Println("Creating Cloudformation Change Set for Redis resources...")
+		} else {
+			fmt.Println("Creating Redis resources, this may take a few minutes...")
+		}
+		startSpinner()
+		authToken := fmt.Sprintf(redisAuthTokenParameterTmpl, name)
+		ssmSvc := ssm.New(sess)
+		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
+			Name:  &authToken,
+			Value: aws.String(generatePassword()),
+			Type:  aws.String("SecureString"),
+		})
+		checkErr(err)
+		cfnTags := []*cloudformation.Tag{
+			{Key: aws.String("paaws:redis"), Value: &name},
+			{Key: aws.String("paaws:cluster"), Value: cluster},
+			{Key: aws.String("paaws"), Value: aws.String("true")},
+		}
+
+		input := cloudformation.CreateStackInput{
+			StackName:   aws.String(fmt.Sprintf(redisStackNameTmpl, name)),
+			TemplateURL: aws.String(redisFormationURL),
+			Parameters: []*cloudformation.Parameter{
+				{
+					ParameterKey:   aws.String("Name"),
+					ParameterValue: &name,
+				},
+				{
+					ParameterKey:   aws.String("ClusterStackName"),
+					ParameterValue: clusterStack.StackName,
+				},
+				{
+					ParameterKey:   aws.String("AuthTokenParameter"),
+					ParameterValue: &authToken,
+				},
+				{
+					ParameterKey:   aws.String("InstanceClass"),
+					ParameterValue: getArgValue(cmd, &answers, "instance-class", true),
+				},
+				{
+					ParameterKey:   aws.String("MultiAZ"),
+					ParameterValue: &multiAZParameter,
+				},
+			},
+			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+			Tags:         cfnTags,
+		}
+		var statusURL string
+		if createChangeSet {
+			changeSet, err := createChangeSetAndWait(sess, &input)
+			Spinner.Stop()
+			checkErr(err)
+			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			if *changeSet.Status != "CREATE_COMPLETE" {
+				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
+			} else {
+				fmt.Println("View ChangeSet at:")
+				fmt.Println(aurora.White(statusURL))
+			}
+		} else {
+			stack, err := createStackAndWait(sess, &input)
+			Spinner.Stop()
+			checkErr(err)
+			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			if *stack.StackStatus != "CREATE_COMPLETE" {
+				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
+			} else {
+				printSuccess(fmt.Sprintf("AppPack Redis instance %s created", name))
 			}
 		}
 
@@ -877,4 +1118,15 @@ func init() {
 	createCmd.AddCommand(createClusterCmd)
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
 	createClusterCmd.Flags().StringP("hosted-zone-id", "z", "", "AWS Route53 Hosted Zone ID for domain")
+
+	createCmd.AddCommand(createDatabaseCmd)
+	createDatabaseCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
+	createDatabaseCmd.Flags().StringP("instance-class", "i", "db.t3.medium", "instance class -- see https://aws.amazon.com/rds/postgresql/pricing/?pg=pr&loc=3")
+	createDatabaseCmd.Flags().Bool("multi-az", false, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html")
+
+	createCmd.AddCommand(createRedisCmd)
+	createRedisCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
+	createRedisCmd.Flags().StringP("instance-class", "i", "cache.t3.micro", "instance class -- see https://aws.amazon.com/elasticache/pricing/#On-Demand_Nodes")
+	createRedisCmd.Flags().Bool("multi-az", false, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html")
+
 }

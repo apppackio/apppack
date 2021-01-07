@@ -22,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/rds"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
@@ -29,6 +30,26 @@ import (
 
 type accountDetails struct {
 	StackID string `json:"stack_id"`
+}
+
+func disableDBDeletionProtection(sess *session.Session, stack *cloudformation.Stack) error {
+	rdsSvc := rds.New(sess)
+	clusterID := ""
+	for _, output := range stack.Outputs {
+		if *output.OutputKey == "DBClusterId" {
+			clusterID = *output.OutputValue
+			break
+		}
+	}
+	if clusterID == "" {
+		return fmt.Errorf("unable to retrieve DBClusterID from %s", *stack.StackId)
+	}
+	_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
+		DBClusterIdentifier: &clusterID,
+		DeletionProtection:  aws.Bool(false),
+		ApplyImmediately:    aws.Bool(true),
+	})
+	return err
 }
 
 // destroyCmd represents the destroy command
@@ -80,6 +101,85 @@ var destroyAccountCmd = &cobra.Command{
 		checkErr(err)
 		checkErr(err1)
 		printSuccess("AppPack account deleted")
+	},
+}
+
+// destroyRedisCmd represents the destroy redis command
+var destroyRedisCmd = &cobra.Command{
+	Use:                   "redis <name>",
+	Short:                 "destroy AWS resources used by an AppPack Redis instance",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		sess := session.Must(session.NewSession())
+		ssmSvc := ssm.New(sess)
+		cfnSvc := cloudformation.New(sess)
+		stackName := fmt.Sprintf(redisStackNameTmpl, args[0])
+		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+			StackName: &stackName,
+		})
+		checkErr(err)
+		stack := stackOutput.Stacks[0]
+		Spinner.Stop()
+		var confirm string
+		fmt.Printf("Are you sure you want to delete your AppPack Redis Stack\n%s? yes/[%s]\n", aurora.Faint(*stack.StackId), aurora.Bold("no"))
+		fmt.Scanln(&confirm)
+		if confirm != "yes" {
+			checkErr(fmt.Errorf("aborting due to user input"))
+		}
+		startSpinner()
+		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+			StackName: stack.StackId,
+		})
+		checkErr(err)
+		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
+			StackName: stack.StackId,
+		})
+		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
+			Name: aws.String(fmt.Sprintf(redisAuthTokenParameterTmpl, args[0])),
+		})
+		Spinner.Stop()
+		checkErr(err)
+		checkErr(err1)
+		printSuccess("AppPack Redis instance deleted")
+	},
+}
+
+// destroyDatabaseCmd represents the destroy database command
+var destroyDatabaseCmd = &cobra.Command{
+	Use:                   "database <name>",
+	Short:                 "destroy AWS resources used by an AppPack Database",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		sess := session.Must(session.NewSession())
+		cfnSvc := cloudformation.New(sess)
+		stackName := fmt.Sprintf(databaseStackNameTmpl, args[0])
+		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+			StackName: &stackName,
+		})
+		checkErr(err)
+		stack := stackOutput.Stacks[0]
+		Spinner.Stop()
+		var confirm string
+		fmt.Printf("Are you sure you want to delete your AppPack Database Stack\n%s? yes/[%s]\n", aurora.Faint(*stack.StackId), aurora.Bold("no"))
+		fmt.Scanln(&confirm)
+		if confirm != "yes" {
+			checkErr(fmt.Errorf("aborting due to user input"))
+		}
+		startSpinner()
+		err = disableDBDeletionProtection(sess, stack)
+		checkErr(err)
+		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+			StackName: stack.StackId,
+		})
+		checkErr(err)
+		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
+			StackName: stack.StackId,
+		})
+		checkErr(err)
+		Spinner.Stop()
+		printSuccess("AppPack Database deleted")
 	},
 }
 
@@ -180,4 +280,6 @@ func init() {
 	destroyCmd.AddCommand(destroyAccountCmd)
 	destroyCmd.AddCommand(destroyClusterCmd)
 	destroyCmd.AddCommand(destroyAppCmd)
+	destroyCmd.AddCommand(destroyRedisCmd)
+	destroyCmd.AddCommand(destroyDatabaseCmd)
 }
