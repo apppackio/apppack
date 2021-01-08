@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lincolnloop/apppack/auth"
+	"github.com/apppackio/apppack/auth"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"

@@ -24,9 +24,9 @@ import (
 
 	"github.com/TylerBrock/saw/blade"
 	sawconfig "github.com/TylerBrock/saw/config"
+	"github.com/apppackio/apppack/app"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
-	"github.com/lincolnloop/apppack/app"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 )

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/codebuild"
@@ -19,7 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/google/uuid"
-	"github.com/lincolnloop/apppack/auth"
 	"github.com/logrusorgru/aurora"
 )
 

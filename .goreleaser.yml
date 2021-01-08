@@ -14,10 +14,10 @@ builds:
       - windows
       - darwin
     ldflags:
-      - -X github.com/lincolnloop/apppack/version.BuildDate={{ .Date }}
-      - -X github.com/lincolnloop/apppack/version.Version={{ .Version }}
-      - -X github.com/lincolnloop/apppack/version.Commit={{ .ShortCommit }}
-      - -X github.com/lincolnloop/apppack/version.Environment=production
+      - -X github.com/apppackio/apppack/version.BuildDate={{ .Date }}
+      - -X github.com/apppackio/apppack/version.Version={{ .Version }}
+      - -X github.com/apppackio/apppack/version.Commit={{ .ShortCommit }}
+      - -X github.com/apppackio/apppack/version.Environment=production
 archives:
   - replacements:
       darwin: Darwin
@@ -27,7 +27,7 @@ archives:
       amd64: x86_64
 brews:
   - tap:
-      owner: lincolnloop
+      owner: apppackio
       name: homebrew-apppack
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     folder: Formula

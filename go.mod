@@ -1,4 +1,4 @@
-module github.com/lincolnloop/apppack
+module github.com/apppackio/apppack
 
 go 1.15
 

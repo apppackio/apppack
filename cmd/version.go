@@ -18,7 +18,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/lincolnloop/apppack/version"
+	"github.com/apppackio/apppack/version"
 	"github.com/spf13/cobra"
 )
 

@@ -56,7 +56,7 @@ jobs:
             ./apppack create app --non-interactive \
                                  --name app-test \
                                  --cluster apppack \
-                                 --repository https://github.com/lincolnloop/apppack-demo-python.git \
+                                 --repository https://github.com/apppackio/apppack-demo-python.git \
                                  --branch main \
                                  --users user@apppack.io
         timeout-minutes: 5

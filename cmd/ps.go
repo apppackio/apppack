@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/apppackio/apppack/app"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/dustin/go-humanize"
-	"github.com/lincolnloop/apppack/app"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
@@ -33,7 +34,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/google/uuid"
-	"github.com/lincolnloop/apppack/auth"
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/browser"
@@ -1100,7 +1100,7 @@ func init() {
 	appCmd.Flags().SortFlags = false
 	appCmd.Flags().StringP("name", "n", "", "Application name")
 	appCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
-	appCmd.Flags().StringP("repository", "r", "", "Repository URL, e.g. https://github.com/lincolnloop/lincolnloop.git")
+	appCmd.Flags().StringP("repository", "r", "", "Repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	appCmd.Flags().StringP("branch", "b", "", "Branch to setup for continuous deployment")
 	appCmd.Flags().StringP("domain", "d", "", "Custom domain to route to app (optional)")
 	appCmd.Flags().String("healthcheck-path", "/", "Path which will return a 200 status code for healthchecks")

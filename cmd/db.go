@@ -21,12 +21,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/lincolnloop/apppack/app"
-	"github.com/lincolnloop/apppack/auth"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
