@@ -18,6 +18,7 @@ builds:
       - -X github.com/apppackio/apppack/version.Version={{ .Version }}
       - -X github.com/apppackio/apppack/version.Commit={{ .ShortCommit }}
       - -X github.com/apppackio/apppack/version.Environment=production
+      - -X github.com/apppackio/apppack/main.SentryDSN={{ .Env.SENTRY_DSN }}
 archives:
   - replacements:
       darwin: Darwin

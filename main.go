@@ -15,8 +15,25 @@ limitations under the License.
 */
 package main
 
-import "github.com/apppackio/apppack/cmd"
+import (
+	"log"
+	"time"
+
+	"github.com/apppackio/apppack/cmd"
+	sentry "github.com/getsentry/sentry-go"
+)
+
+var SentryDSN = ""
 
 func main() {
+	if len(SentryDSN) > 0 {
+		err := sentry.Init(sentry.ClientOptions{Dsn: SentryDSN})
+		if err != nil {
+			log.Fatalf("sentry.Init: %s", err)
+		}
+		// Flush buffered events before the program terminates.
+		// Set the timeout to the maximum duration the program can afford to wait.
+		defer sentry.Flush(2 * time.Second)
+	}
 	cmd.Execute()
 }

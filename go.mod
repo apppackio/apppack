@@ -12,6 +12,7 @@ require (
 	github.com/creack/pty v1.1.11 // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.10.0 // indirect
+	github.com/getsentry/sentry-go v0.9.0
 	github.com/google/uuid v1.1.2
 	github.com/hinshun/vt10x v0.0.0-20180809195222-d55458df857c // indirect
 	github.com/hokaccha/go-prettyjson v0.0.0-20190818114111-108c894c2c0e // indirect
