@@ -68,7 +68,7 @@ var destroyAccountCmd = &cobra.Command{
 		sess := session.Must(session.NewSession())
 		ssmSvc := ssm.New(sess)
 		paramOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
-			Name: aws.String("/paaws/account"),
+			Name: aws.String("/apppack/account"),
 		})
 		checkErr(err)
 		var account accountDetails
@@ -95,7 +95,7 @@ var destroyAccountCmd = &cobra.Command{
 			StackName: &account.StackID,
 		})
 		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
-			Name: aws.String("/paaws/account/dockerhub-access-token"),
+			Name: aws.String("/apppack/account/dockerhub-access-token"),
 		})
 		Spinner.Stop()
 		checkErr(err)

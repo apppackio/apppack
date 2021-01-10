@@ -52,7 +52,7 @@ var psCmd = &cobra.Command{
 		// group tasks by process type
 		grouped := map[string][]*ecs.Task{}
 		for _, t := range tasks {
-			tag, err := getTag(t.Tags, "paaws:processType")
+			tag, err := getTag(t.Tags, "apppack:processType")
 			if err != nil {
 				continue
 			}
@@ -87,7 +87,7 @@ var psCmd = &cobra.Command{
 				cpu, err := strconv.ParseFloat(*t.Cpu, 32)
 				checkErr(err)
 				cpu = cpu / 1024.0
-				buildNumber, err := getTag(t.Tags, "paaws:buildNumber")
+				buildNumber, err := getTag(t.Tags, "apppack:buildNumber")
 				checkErr(err)
 				fmt.Printf("%s: %s (%s) %s %s\n", name, strings.ToLower(*t.LastStatus), aurora.Bold(aurora.Cyan(fmt.Sprintf("%.2fcpu/%smem", cpu, *t.Memory))), aurora.Yellow(fmt.Sprintf("build #%s", *buildNumber)), aurora.Faint(fmt.Sprintf("%s (~ %s)", t.StartedAt.Local().Format("Jan 02, 2006 15:04:05 MST"), humanize.Time(*t.StartedAt))))
 				indent := strings.Repeat(" ", len(name)+2)

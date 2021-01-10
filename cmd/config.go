@@ -50,7 +50,7 @@ var getCmd = &cobra.Command{
 		checkErr(err)
 		svc := ssm.New(a.Session)
 		resp, err := svc.GetParameter(&ssm.GetParameterInput{
-			Name:           aws.String(fmt.Sprintf("/paaws/apps/%s/config/%s", AppName, args[0])),
+			Name:           aws.String(fmt.Sprintf("/apppack/apps/%s/config/%s", AppName, args[0])),
 			WithDecryption: aws.Bool(true),
 		})
 		Spinner.Stop()
@@ -78,7 +78,7 @@ var setCmd = &cobra.Command{
 		checkErr(err)
 		svc := ssm.New(a.Session)
 		_, err = svc.PutParameter(&ssm.PutParameterInput{
-			Name:      aws.String(fmt.Sprintf("/paaws/apps/%s/config/%s", AppName, name)),
+			Name:      aws.String(fmt.Sprintf("/apppack/apps/%s/config/%s", AppName, name)),
 			Type:      aws.String("SecureString"),
 			Overwrite: aws.Bool(true),
 			Value:     &value,
@@ -102,7 +102,7 @@ var unsetCmd = &cobra.Command{
 		checkErr(err)
 		svc := ssm.New(a.Session)
 		_, err = svc.DeleteParameter(&ssm.DeleteParameterInput{
-			Name: aws.String(fmt.Sprintf("/paaws/apps/%s/config/%s", AppName, args[0])),
+			Name: aws.String(fmt.Sprintf("/apppack/apps/%s/config/%s", AppName, args[0])),
 		})
 		Spinner.Stop()
 		checkErr(err)
@@ -126,7 +126,7 @@ var listCmd = &cobra.Command{
 		checkErr(err)
 		svc := ssm.New(a.Session)
 		resp, err := svc.GetParametersByPath(&ssm.GetParametersByPathInput{
-			Path:           aws.String(fmt.Sprintf("/paaws/apps/%s/config/", AppName)),
+			Path:           aws.String(fmt.Sprintf("/apppack/apps/%s/config/", AppName)),
 			WithDecryption: aws.Bool(true),
 		})
 		Spinner.Stop()

@@ -42,13 +42,13 @@ import (
 )
 
 const (
-	appFormationURL             = "https://s3.amazonaws.com/paaws-cloudformations/latest/app.json"
-	clusterFormationURL         = "https://s3.amazonaws.com/paaws-cloudformations/latest/cluster.json"
-	accountFormationURL         = "https://s3.amazonaws.com/paaws-cloudformations/latest/account.json"
-	databaseFormationURL        = "https://s3.amazonaws.com/paaws-cloudformations/latest/database.json"
-	redisFormationURL           = "https://s3.amazonaws.com/paaws-cloudformations/latest/redis.json"
+	appFormationURL             = "https://s3.amazonaws.com/apppack-cloudformations/latest/app.json"
+	clusterFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/cluster.json"
+	accountFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/account.json"
+	databaseFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/database.json"
+	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
 	redisStackNameTmpl          = "apppack-redis-%s"
-	redisAuthTokenParameterTmpl = "/paaws/redis/%s/auth-token"
+	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token"
 	databaseStackNameTmpl       = "apppack-database-%s"
 )
 
@@ -121,7 +121,7 @@ type Stack struct {
 func listClusters(sess *session.Session) ([]string, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.Query(&dynamodb.QueryInput{
-		TableName:              aws.String("paaws"),
+		TableName:              aws.String("apppack"),
 		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":id1": {S: aws.String("CLUSTERS")},
@@ -175,7 +175,7 @@ func getDDBClusterItem(sess *session.Session, cluster *string, addon string, nam
 	ddbSvc := dynamodb.New(sess)
 	secondaryID := fmt.Sprintf("%s#%s#%s", *cluster, addon, *name)
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("paaws"),
+		TableName: aws.String("apppack"),
 		Key: map[string]*dynamodb.AttributeValue{
 			"primary_id": {
 				S: aws.String("CLUSTERS"),
@@ -202,7 +202,7 @@ func getDDBClusterItem(sess *session.Session, cluster *string, addon string, nam
 func ddbClusterQuery(sess *session.Session, cluster *string, addon *string) (*[]map[string]*dynamodb.AttributeValue, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.Query(&dynamodb.QueryInput{
-		TableName:              aws.String("paaws"),
+		TableName:              aws.String("apppack"),
 		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":id1": {S: aws.String("CLUSTERS")},
@@ -353,7 +353,7 @@ func askForMissingArgs(cmd *cobra.Command, overrideQuestions *map[string]*survey
 func stackFromDDBItem(sess *session.Session, secondaryID string) (*cloudformation.Stack, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("paaws"),
+		TableName: aws.String("apppack"),
 		Key: map[string]*dynamodb.AttributeValue{
 			"primary_id": {
 				S: aws.String("CLUSTERS"),
@@ -440,7 +440,7 @@ var accountCmd = &cobra.Command{
 		sess := session.Must(session.NewSession())
 		ssmSvc := ssm.New(sess)
 		_, err = ssmSvc.GetParameter(&ssm.GetParameterInput{
-			Name: aws.String("/paaws/account"),
+			Name: aws.String("/apppack/account"),
 		})
 
 		if err == nil {
@@ -453,27 +453,27 @@ var accountCmd = &cobra.Command{
 		}
 		startSpinner()
 		tags := []*ssm.Tag{
-			{Key: aws.String("paaws:account"), Value: aws.String("true")},
-			{Key: aws.String("paaws"), Value: aws.String("true")},
+			{Key: aws.String("apppack:account"), Value: aws.String("true")},
+			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
 		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-			Name:  aws.String("/paaws/account/dockerhub-access-token"),
+			Name:  aws.String("/apppack/account/dockerhub-access-token"),
 			Value: getArgValue(cmd, answers, "dockerhub-access-token", true),
 			Type:  aws.String("SecureString"),
 			Tags:  tags,
 		})
 		checkErr(err)
 		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("paaws:account"), Value: aws.String("true")},
-			{Key: aws.String("paaws"), Value: aws.String("true")},
+			{Key: aws.String("apppack:account"), Value: aws.String("true")},
+			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
 
 		input := cloudformation.CreateStackInput{
-			StackName:   aws.String("paaws-account"),
+			StackName:   aws.String("apppack-account"),
 			TemplateURL: aws.String(accountFormationURL),
 			Parameters: []*cloudformation.Parameter{
 				{
-					ParameterKey:   aws.String("PaawsRoleExternalId"),
+					ParameterKey:   aws.String("AppPackRoleExternalId"),
 					ParameterValue: aws.String(strings.Replace(uuid.New().String(), "-", "", -1)),
 				},
 				{
@@ -545,8 +545,8 @@ var createClusterCmd = &cobra.Command{
 		}
 		startSpinner()
 		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("paaws:cluster"), Value: &clusterName},
-			{Key: aws.String("paaws"), Value: aws.String("true")},
+			{Key: aws.String("apppack:cluster"), Value: &clusterName},
+			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
 
 		input := cloudformation.CreateStackInput{
@@ -651,9 +651,9 @@ var createDatabaseCmd = &cobra.Command{
 		}
 		startSpinner()
 		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("paaws:database"), Value: &name},
-			{Key: aws.String("paaws:cluster"), Value: cluster},
-			{Key: aws.String("paaws"), Value: aws.String("true")},
+			{Key: aws.String("apppack:database"), Value: &name},
+			{Key: aws.String("apppack:cluster"), Value: cluster},
+			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
 
 		input := cloudformation.CreateStackInput{
@@ -767,9 +767,9 @@ var createRedisCmd = &cobra.Command{
 		})
 		checkErr(err)
 		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("paaws:redis"), Value: &name},
-			{Key: aws.String("paaws:cluster"), Value: cluster},
-			{Key: aws.String("paaws"), Value: aws.String("true")},
+			{Key: aws.String("apppack:redis"), Value: &name},
+			{Key: aws.String("apppack:cluster"), Value: cluster},
+			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
 
 		input := cloudformation.CreateStackInput{
@@ -940,9 +940,9 @@ var appCmd = &cobra.Command{
 		name := getArgValue(cmd, &answers, "name", true)
 		cluster := getArgValue(cmd, &answers, "cluster", true)
 		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("paaws:appName"), Value: name},
-			{Key: aws.String("paaws:cluster"), Value: cluster},
-			{Key: aws.String("paaws"), Value: aws.String("true")},
+			{Key: aws.String("apppack:appName"), Value: name},
+			{Key: aws.String("apppack:cluster"), Value: cluster},
+			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
 
 		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
@@ -1010,7 +1010,7 @@ var appCmd = &cobra.Command{
 					ParameterValue: clusterStack.StackName,
 				},
 				{
-					ParameterKey:   aws.String("PaawsRoleExternalId"),
+					ParameterKey:   aws.String("AppPackRoleExternalId"),
 					ParameterValue: aws.String(strings.Replace(uuid.New().String(), "-", "", -1)),
 				},
 				{

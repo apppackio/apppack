@@ -131,7 +131,7 @@ type ECSConfig struct {
 func ddbItem(sess *session.Session, primaryID string, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("paaws"),
+		TableName: aws.String("apppack"),
 		Key: map[string]*dynamodb.AttributeValue{
 			"primary_id": {
 				S: aws.String(primaryID),
@@ -498,7 +498,7 @@ type Scaling struct {
 
 func (a *App) ResizeProcess(processType string, cpu int, memory int) error {
 	ssmSvc := ssm.New(a.Session)
-	parameterName := fmt.Sprintf("/paaws/apps/%s/scaling", a.Name)
+	parameterName := fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
 		Name: &parameterName,
 	})
@@ -539,7 +539,7 @@ func (a *App) ResizeProcess(processType string, cpu int, memory int) error {
 
 func (a *App) ScaleProcess(processType string, minProcessCount int, maxProcessCount int) error {
 	ssmSvc := ssm.New(a.Session)
-	parameterName := fmt.Sprintf("/paaws/apps/%s/scaling", a.Name)
+	parameterName := fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
 		Name: &parameterName,
 	})
@@ -586,7 +586,7 @@ type ScheduledTask struct {
 // ScheduledTasks lists scheduled tasks for the app
 func (a *App) ScheduledTasks() ([]*ScheduledTask, error) {
 	ssmSvc := ssm.New(a.Session)
-	parameterName := fmt.Sprintf("/paaws/apps/%s/scheduled-tasks", a.Name)
+	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
 		Name: &parameterName,
 	})
@@ -619,7 +619,7 @@ func (a *App) CreateScheduledTask(schedule string, command string) ([]*Scheduled
 	if err != nil {
 		return nil, err
 	}
-	parameterName := fmt.Sprintf("/paaws/apps/%s/scheduled-tasks", a.Name)
+	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
 	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Value:     aws.String(fmt.Sprintf("%s", tasksBytes)),
@@ -645,7 +645,7 @@ func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
 	if err != nil {
 		return nil, err
 	}
-	parameterName := fmt.Sprintf("/paaws/apps/%s/scheduled-tasks", a.Name)
+	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
 	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Value:     aws.String(fmt.Sprintf("%s", tasksBytes)),
