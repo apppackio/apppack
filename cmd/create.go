@@ -905,17 +905,18 @@ func verifySourceCredentials(sess *session.Session, repositoryType string, inter
 
 // appCmd represents the create command
 var appCmd = &cobra.Command{
-	Use:                   "app",
+	Use:                   "app <name>",
 	Short:                 "create an AppPack application",
+	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		answers := make(map[string]interface{})
 		var databaseAddonEnabled bool
 		var redisAddonEnabled bool
+		name := args[0]
 		sess := session.Must(session.NewSession())
 		if !nonInteractive {
 			questions := []*survey.Question{}
-			addQuestionFromFlag(cmd.Flags().Lookup("name"), &questions, nil)
 			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for app"))
 			checkErr(err)
 			questions = append(questions, clusterQuestion)
@@ -958,10 +959,9 @@ var appCmd = &cobra.Command{
 			}
 		}
 		startSpinner()
-		name := getArgValue(cmd, &answers, "name", true)
 		cluster := getArgValue(cmd, &answers, "cluster", true)
 		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:appName"), Value: name},
+			{Key: aws.String("apppack:appName"), Value: &name},
 			{Key: aws.String("apppack:cluster"), Value: cluster},
 			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
@@ -1005,7 +1005,7 @@ var appCmd = &cobra.Command{
 		checkErr(err)
 		rand.Seed(time.Now().UnixNano())
 		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf("apppack-app-%s", *name)),
+			StackName:   aws.String(fmt.Sprintf("apppack-app-%s", name)),
 			TemplateURL: aws.String(appFormationURL),
 			Parameters: []*cloudformation.Parameter{
 				{
@@ -1026,7 +1026,7 @@ var appCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("Name"),
-					ParameterValue: name,
+					ParameterValue: &name,
 				},
 				{
 					ParameterKey:   aws.String("ClusterStackName"),
@@ -1101,7 +1101,7 @@ var appCmd = &cobra.Command{
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			}
 			printSuccess(
-				fmt.Sprintf("%s app created.\nPush to your git repository to trigger a build or run `apppack -a %s build start`", *name, *name),
+				fmt.Sprintf("%s app created.\nPush to your git repository to trigger a build or run `apppack -a %s build start`", name, name),
 			)
 		}
 
@@ -1121,7 +1121,6 @@ func init() {
 
 	createCmd.AddCommand(appCmd)
 	appCmd.Flags().SortFlags = false
-	appCmd.Flags().StringP("name", "n", "", "Application name")
 	appCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
 	appCmd.Flags().StringP("repository", "r", "", "Repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	appCmd.Flags().StringP("branch", "b", "", "Branch to setup for continuous deployment")
