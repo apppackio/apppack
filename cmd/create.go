@@ -45,7 +45,8 @@ const (
 	appFormationURL             = "https://s3.amazonaws.com/apppack-cloudformations/latest/app.json"
 	clusterFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/cluster.json"
 	accountFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/account.json"
-	databaseFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/database.json"
+	postgresFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/postgres.json"
+	mysqlFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/mysql.json"
 	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
 	redisStackNameTmpl          = "apppack-redis-%s"
 	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token"
@@ -113,9 +114,10 @@ type stackItem struct {
 }
 
 type Stack struct {
-	StackID   string `json:"stack_id"`
-	StackName string `json:"stack_name"`
-	Name      string `json:"name"`
+	StackID        string `json:"stack_id"`
+	StackName      string `json:"stack_name"`
+	Name           string `json:"name"`
+	DatabaseEngine string `json:"engine"`
 }
 
 func listClusters(sess *session.Session) ([]string, error) {
@@ -229,8 +231,14 @@ func listStacks(sess *session.Session, cluster *string, addon string) ([]string,
 		return nil, err
 	}
 	stacks := []string{}
+	var stack Stack
 	for idx := range i {
-		stacks = append(stacks, i[idx].Stack.Name)
+		stack = i[idx].Stack
+		if len(stack.DatabaseEngine) > 0 {
+			stacks = append(stacks, fmt.Sprintf("%s (%s)", stack.Name, stack.DatabaseEngine))
+		} else {
+			stacks = append(stacks, stack.Name)
+		}
 	}
 	return stacks, nil
 }
@@ -624,6 +632,10 @@ var createDatabaseCmd = &cobra.Command{
 			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for database"))
 			checkErr(err)
 			questions = append(questions, clusterQuestion)
+			addQuestionFromFlag(cmd.Flags().Lookup("engine"), &questions, &survey.Question{
+				Name:   "engine",
+				Prompt: &survey.Select{Message: "select the database engine", Options: []string{"mysql", "postgres"}, FilterMessage: "", Default: "postgres"},
+			})
 			addQuestionFromFlag(cmd.Flags().Lookup("multi-az"), &questions, nil)
 			addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, nil)
 			if err := survey.Ask(questions, &answers); err != nil {
@@ -644,6 +656,15 @@ var createDatabaseCmd = &cobra.Command{
 		} else {
 			multiAZParameter = "no"
 		}
+		engine := getArgValue(cmd, &answers, "engine", false)
+		var formationURL string
+		if *engine == "mysql" {
+			formationURL = mysqlFormationURL
+		} else if *engine == "postgres" {
+			formationURL = postgresFormationURL
+		} else {
+			checkErr(fmt.Errorf("unrecognized databae engine. valid options are 'mysql' or 'postgres'"))
+		}
 		if createChangeSet {
 			fmt.Println("Creating Cloudformation Change Set for database resources...")
 		} else {
@@ -658,7 +679,7 @@ var createDatabaseCmd = &cobra.Command{
 
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf(databaseStackNameTmpl, name)),
-			TemplateURL: aws.String(databaseFormationURL),
+			TemplateURL: aws.String(formationURL),
 			Parameters: []*cloudformation.Parameter{
 				{
 					ParameterKey:   aws.String("Name"),
@@ -953,8 +974,10 @@ var appCmd = &cobra.Command{
 		}
 		var databaseStackName string
 		if isTruthy(getArgValue(cmd, &answers, "addon-database", false)) {
-			database := getArgValue(cmd, &answers, "addon-database-name", false)
-			databaseStack, err := getDDBClusterItem(sess, cluster, "DATABASE", database)
+			databaseDisplay := getArgValue(cmd, &answers, "addon-database-name", false)
+			// remove ' (engine)' from the database display text
+			database := strings.Split(*databaseDisplay, " ")[0]
+			databaseStack, err := getDDBClusterItem(sess, cluster, "DATABASE", &database)
 			checkErr(err)
 			databaseStackName = strings.Split(databaseStack.StackID, "/")[1]
 		} else {
@@ -1122,6 +1145,7 @@ func init() {
 	createCmd.AddCommand(createDatabaseCmd)
 	createDatabaseCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
 	createDatabaseCmd.Flags().StringP("instance-class", "i", "db.t3.medium", "instance class -- see https://aws.amazon.com/rds/postgresql/pricing/?pg=pr&loc=3")
+	createDatabaseCmd.Flags().StringP("engine", "e", "postgres", "engine [mysql,postgres]")
 	createDatabaseCmd.Flags().Bool("multi-az", false, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html")
 
 	createCmd.AddCommand(createRedisCmd)
