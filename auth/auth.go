@@ -114,6 +114,7 @@ func getCredentials(appName string) (*sts.Credentials, *string, error) {
 				if err != nil {
 					return nil, nil, err
 				}
+				return resp.Credentials, &appRole.Region, nil
 			}
 			return nil, nil, err
 		}
@@ -285,11 +286,7 @@ func refreshTokens() (*Tokens, error) {
 	if err != nil {
 		return nil, err
 	}
-	tokens, err = tokenRequest(oauthTokenURL, reqBody)
-	if err != nil {
-		return nil, err
-	}
-	return tokens, nil
+	return tokenRequest(oauthTokenURL, reqBody)
 }
 
 // LoginInit start login process with Auth0
