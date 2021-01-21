@@ -85,19 +85,19 @@ var dbShellCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		app, err := app.Init(AppName)
+		a, err := app.Init(AppName)
 		checkErr(err)
-		err = app.LoadSettings()
+		err = a.LoadSettings()
 		checkErr(err)
-		taskOutput, err := app.StartTask(&app.Settings.DBUtils.ShellTaskFamily, []string{}, false)
+		taskOutput, err := a.StartTask(&a.Settings.DBUtils.ShellTaskFamily, app.ShellBackgroundCommand, false)
 		checkErr(err)
 		shellTask := taskOutput.Tasks[0]
 		checkErr(err)
 		Spinner.Suffix = fmt.Sprintf(" starting task %s", *shellTask.TaskArn)
-		err = app.WaitForTaskRunning(shellTask)
+		err = a.WaitForTaskRunning(shellTask)
 		checkErr(err)
 		Spinner.Stop()
-		err = app.ConnectToTask(shellTask, aws.String("entrypoint.sh psql"))
+		err = a.ConnectToTask(shellTask, aws.String("entrypoint.sh psql"))
 		checkErr(err)
 	},
 }
