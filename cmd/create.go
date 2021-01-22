@@ -573,6 +573,10 @@ var createClusterCmd = &cobra.Command{
 					)),
 				},
 				{
+					ParameterKey:   aws.String("InstanceType"),
+					ParameterValue: getArgValue(cmd, answers, "instance-class", false),
+				},
+				{
 					ParameterKey:   aws.String("Domain"),
 					ParameterValue: getArgValue(cmd, answers, "domain", true),
 				},
@@ -1140,6 +1144,7 @@ func init() {
 	createCmd.AddCommand(createClusterCmd)
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
 	createClusterCmd.Flags().StringP("hosted-zone-id", "z", "", "AWS Route53 Hosted Zone ID for domain")
+	createClusterCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 
 	createCmd.AddCommand(createDatabaseCmd)
 	createDatabaseCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
