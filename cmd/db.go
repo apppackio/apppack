@@ -89,6 +89,14 @@ var dbShellCmd = &cobra.Command{
 		checkErr(err)
 		err = a.LoadSettings()
 		checkErr(err)
+		var exec string
+		if a.Settings.DBUtils.Engine == "mysql" {
+			exec = "mysql"
+		} else if a.Settings.DBUtils.Engine == "postgres" {
+			exec = "psql"
+		} else {
+			checkErr(fmt.Errorf("unknoown database engine %s", a.Settings.DBUtils.Engine))
+		}
 		taskOutput, err := a.StartTask(&a.Settings.DBUtils.ShellTaskFamily, app.ShellBackgroundCommand, false)
 		checkErr(err)
 		shellTask := taskOutput.Tasks[0]
@@ -97,7 +105,7 @@ var dbShellCmd = &cobra.Command{
 		err = a.WaitForTaskRunning(shellTask)
 		checkErr(err)
 		Spinner.Stop()
-		err = a.ConnectToTask(shellTask, aws.String("entrypoint.sh psql"))
+		err = a.ConnectToTask(shellTask, aws.String(fmt.Sprintf("entrypoint.sh %s", exec)))
 		checkErr(err)
 	},
 }

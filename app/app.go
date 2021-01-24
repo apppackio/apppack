@@ -75,6 +75,7 @@ type Settings struct {
 		ShellTaskFamily    string `json:"shell_task_family"`
 		S3Bucket           string `json:"s3_bucket"`
 		DumpLoadTaskFamily string `json:"dumpload_task_family"`
+		Engine             string `json:"engine"`
 	} `json:"dbutils"`
 	CodebuildProject struct {
 		Name string `json:"name"`
