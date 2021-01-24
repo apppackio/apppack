@@ -63,16 +63,35 @@ func updateStackAndWait(sess *session.Session, stackInput *cloudformation.Update
 	if err != nil {
 		return nil, err
 	}
-	describeStacksInput := cloudformation.DescribeStacksInput{StackName: stackInput.StackName}
-	err = cfnSvc.WaitUntilStackUpdateComplete(&describeStacksInput)
-	if err != nil {
-		return nil, err
+	return waitForCloudformationStack(cfnSvc, *stackInput.StackName)
+}
+
+func upgradeStack(stackName string, templateURL string) error {
+	startSpinner()
+	sess := session.Must(session.NewSession())
+	cfnSvc := cloudformation.New(sess)
+	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+		StackName: &stackName,
+	})
+	checkErr(err)
+	Spinner.Stop()
+	fmt.Println(aurora.Faint(fmt.Sprintf("upgrading %s", *stackOutput.Stacks[0].StackId)))
+	startSpinner()
+	updateStackInput := cloudformation.UpdateStackInput{
+		StackName:    &stackName,
+		TemplateURL:  &templateURL,
+		Parameters:   stackOutput.Stacks[0].Parameters,
+		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 	}
-	stack, err := cfnSvc.DescribeStacks(&describeStacksInput)
-	if err != nil {
-		return nil, err
+	if createChangeSet {
+		_, err = updateChangeSetAndWait(sess, &updateStackInput)
+	} else {
+		_, err = updateStackAndWait(sess, &updateStackInput)
 	}
-	return stack.Stacks[0], nil
+	checkErr(err)
+	Spinner.Stop()
+	printSuccess("stack upgraded")
+	return nil
 }
 
 // upgradeCmd represents the upgrade command
@@ -89,38 +108,80 @@ var upgradeAppCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		stackName := fmt.Sprintf("apppack-app-%s", args[0])
+		err := upgradeStack(stackName, appFormationURL)
+		checkErr(err)
+	},
+}
+
+// upgradeClusterCmd represents the upgrade command
+var upgradeClusterCmd = &cobra.Command{
+	Use:                   "cluster <name>",
+	Short:                 "upgrade a cluster AppPack stack",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		stackName := fmt.Sprintf("apppack-cluster-%s", args[0])
+		err := upgradeStack(stackName, clusterFormationURL)
+		checkErr(err)
+	},
+}
+
+// upgradeRedisCmd represents the upgrade command
+var upgradeRedisCmd = &cobra.Command{
+	Use:                   "redis <name>",
+	Short:                 "upgrade a Redis AppPack stack",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		stackName := fmt.Sprintf("apppack-redis-%s", args[0])
+		err := upgradeStack(stackName, redisFormationURL)
+		checkErr(err)
+	},
+}
+
+// upgradeDatabaseCmd represents the upgrade command
+var upgradeDatabaseCmd = &cobra.Command{
+	Use:                   "database <name>",
+	Short:                 "upgrade a database AppPack stack",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		stackName := fmt.Sprintf("apppack-database-%s", args[0])
 		startSpinner()
 		sess := session.Must(session.NewSession())
 		cfnSvc := cloudformation.New(sess)
-		appName := args[0]
-		stackName := fmt.Sprintf("apppack-app-%s", appName)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 			StackName: &stackName,
 		})
 		checkErr(err)
-		Spinner.Stop()
-		fmt.Println(aurora.Faint(fmt.Sprintf("upgrading %s", *stackOutput.Stacks[0].StackId)))
-		startSpinner()
-		updateStackInput := cloudformation.UpdateStackInput{
-			StackName:    &stackName,
-			TemplateURL:  aws.String(appFormationURL),
-			Parameters:   stackOutput.Stacks[0].Parameters,
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+		engine := aws.String("")
+		for _, out := range stackOutput.Stacks[0].Outputs {
+			if *out.OutputKey == "Engine" {
+				engine = out.OutputValue
+				break
+			}
 		}
-		if createChangeSet {
-			_, err = updateChangeSetAndWait(sess, &updateStackInput)
+		var formationURL string
+		if *engine == "mysql" {
+			formationURL = mysqlFormationURL
+		} else if *engine == "postgres" {
+			formationURL = postgresFormationURL
 		} else {
-			_, err = updateStackAndWait(sess, &updateStackInput)
+			Spinner.Stop()
+			checkErr(fmt.Errorf("unexpected database engine, %s", *engine))
 		}
-		checkErr(err)
-		Spinner.Stop()
-		printSuccess("stack upgraded")
 
+		err = upgradeStack(stackName, formationURL)
+		checkErr(err)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(upgradeCmd)
 	upgradeCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "Check stack in Cloudformation before creating")
+	upgradeCmd.AddCommand(upgradeClusterCmd)
+	upgradeCmd.AddCommand(upgradeDatabaseCmd)
+	upgradeCmd.AddCommand(upgradeRedisCmd)
 	upgradeCmd.AddCommand(upgradeAppCmd)
 }
