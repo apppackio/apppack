@@ -93,15 +93,16 @@ var destroyAccountCmd = &cobra.Command{
 			StackName: &account.StackID,
 		})
 		checkErr(err)
-		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
-			StackName: &account.StackID,
-		})
+		stack, err := waitForCloudformationStack(cfnSvc, account.StackID)
 		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String("/apppack/account/dockerhub-access-token"),
 		})
 		Spinner.Stop()
 		checkErr(err)
 		checkErr(err1)
+		if *stack.StackStatus != "DELETE_COMPLETE" {
+			checkErr(fmt.Errorf("Redis deletion failed. current state: %s", *stack.StackStatus))
+		}
 		printSuccess("AppPack account deleted")
 	},
 }
@@ -135,15 +136,16 @@ var destroyRedisCmd = &cobra.Command{
 			StackName: stack.StackId,
 		})
 		checkErr(err)
-		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
-			StackName: stack.StackId,
-		})
+		stack, err = waitForCloudformationStack(cfnSvc, stackName)
 		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String(fmt.Sprintf(redisAuthTokenParameterTmpl, args[0])),
 		})
 		Spinner.Stop()
 		checkErr(err)
 		checkErr(err1)
+		if *stack.StackStatus != "DELETE_COMPLETE" {
+			checkErr(fmt.Errorf("Redis deletion failed. current state: %s", *stack.StackStatus))
+		}
 		printSuccess("AppPack Redis instance deleted")
 	},
 }
@@ -178,10 +180,11 @@ var destroyDatabaseCmd = &cobra.Command{
 			StackName: stack.StackId,
 		})
 		checkErr(err)
-		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
-			StackName: stack.StackId,
-		})
+		stack, err = waitForCloudformationStack(cfnSvc, stackName)
 		checkErr(err)
+		if *stack.StackStatus != "DELETE_COMPLETE" {
+			checkErr(fmt.Errorf("database deletion failed. current state: %s", *stack.StackStatus))
+		}
 		Spinner.Stop()
 		printSuccess("AppPack Database deleted")
 	},
@@ -217,13 +220,11 @@ var destroyClusterCmd = &cobra.Command{
 			StackName: &stackID,
 		})
 		checkErr(err)
-		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
-			StackName: &stackID,
-		})
+		stack, err := waitForCloudformationStack(cfnSvc, stackID)
 		// Weird circular dependency causes this https://github.com/aws/containers-roadmap/issues/631
 		// Cluster depends on ASG for creation, but ASG must be deleted before the Cluster
 		// retrying works around this for now
-		if err != nil {
+		if *stack.StackStatus != "DELETE_COMPLETE" {
 			Spinner.Stop()
 			printWarning("cluster deletion did not complete successfully, retrying...")
 			startSpinner()
@@ -231,10 +232,11 @@ var destroyClusterCmd = &cobra.Command{
 				StackName: &stackID,
 			})
 			checkErr(err)
-			err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
-				StackName: &stackID,
-			})
+			stack, err := waitForCloudformationStack(cfnSvc, stackID)
 			checkErr(err)
+			if *stack.StackStatus != "DELETE_COMPLETE" {
+				checkErr(fmt.Errorf("cluster deletion failed. current state: %s", *stack.StackStatus))
+			}
 		}
 		Spinner.Stop()
 		printSuccess(fmt.Sprintf("AppPack cluster %s destroyed", clusterName))

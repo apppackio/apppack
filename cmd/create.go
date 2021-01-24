@@ -1115,6 +1115,7 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 	stack := stackDesc.Stacks[0]
 
 	if strings.HasSuffix(*stack.StackStatus, "_COMPLETE") || strings.HasSuffix(*stack.StackStatus, "_FAILED") {
+		Spinner.Stop()
 		return stack, nil
 	}
 	stackresources, err := cfnSvc.DescribeStackResources(&cloudformation.DescribeStackResourcesInput{
