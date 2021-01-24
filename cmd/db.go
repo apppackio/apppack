@@ -187,11 +187,9 @@ WARNING: This is a destructive action which will delete the contents of your rem
 func init() {
 	rootCmd.AddCommand(dbCmd)
 
-	dbCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
+	dbCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	dbCmd.MarkPersistentFlagRequired("app-name")
 	dbCmd.AddCommand(dbShellCmd)
-
 	dbCmd.AddCommand(dbDumpCmd)
-
 	dbCmd.AddCommand(dbLoadCmd)
 }

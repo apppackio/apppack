@@ -124,7 +124,7 @@ func listClusters(sess *session.Session) ([]string, error) {
 		return nil, err
 	}
 	if result.Items == nil {
-		return nil, fmt.Errorf("Could not find any AppPack clusters")
+		return nil, fmt.Errorf("could not find any AppPack clusters")
 	}
 	i := []stackItem{}
 	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &i)
@@ -365,7 +365,7 @@ func stackFromDDBItem(sess *session.Session, secondaryID string) (*cloudformatio
 		return nil, err
 	}
 	if result.Item == nil {
-		return nil, fmt.Errorf("Could not find CLUSTERS/%s", secondaryID)
+		return nil, fmt.Errorf("could not find CLUSTERS/%s", secondaryID)
 	}
 	i := stackItem{}
 	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
@@ -431,6 +431,7 @@ These currently require AWS authentication credentials to operate unlike app-spe
 var accountCmd = &cobra.Command{
 	Use:                   "account",
 	Short:                 "setup resources for your AppPack account",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		answers, err := askForMissingArgs(cmd, nil)
@@ -519,7 +520,7 @@ var accountCmd = &cobra.Command{
 var createClusterCmd = &cobra.Command{
 	Use:                   "cluster [<name>]",
 	Short:                 "setup resources for an AppPack Cluster",
-	Long:                  "Creates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
+	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -609,7 +610,7 @@ var createClusterCmd = &cobra.Command{
 var createDatabaseCmd = &cobra.Command{
 	Use:                   "database [<name>]",
 	Short:                 "setup resources for an AppPack Database",
-	Long:                  "Creates an AppPack Database. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
+	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Database. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -730,7 +731,7 @@ var createDatabaseCmd = &cobra.Command{
 var createRedisCmd = &cobra.Command{
 	Use:                   "redis [<name>]",
 	Short:                 "setup resources for an AppPack Redis instance",
-	Long:                  "Creates an AppPack Redis instance. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
+	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Redis instance. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -901,6 +902,7 @@ func verifySourceCredentials(sess *session.Session, repositoryType string, inter
 var appCmd = &cobra.Command{
 	Use:                   "app <name>",
 	Short:                 "create an AppPack application",
+	Long:                  "*Requires AWS credentials.*",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -1150,7 +1152,7 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 func init() {
 
 	rootCmd.AddCommand(createCmd)
-	createCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "Check stack in Cloudformation before creating")
+	createCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")
 
 	createCmd.AddCommand(accountCmd)
@@ -1161,20 +1163,20 @@ func init() {
 	createCmd.AddCommand(appCmd)
 	appCmd.Flags().SortFlags = false
 	appCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
-	appCmd.Flags().StringP("repository", "r", "", "Repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
-	appCmd.Flags().StringP("branch", "b", "", "Branch to setup for continuous deployment")
-	appCmd.Flags().StringP("domain", "d", "", "Custom domain to route to app (optional)")
-	appCmd.Flags().String("healthcheck-path", "/", "Path which will return a 200 status code for healthchecks")
-	appCmd.Flags().Bool("addon-private-s3", false, "Setup private S3 bucket add-on")
-	appCmd.Flags().Bool("addon-public-s3", false, "Setup public S3 bucket add-on")
-	appCmd.Flags().Bool("addon-database", false, "Setup database add-on")
-	appCmd.Flags().String("addon-database-name", "", "Database instance to install add-on")
-	appCmd.Flags().Bool("addon-redis", false, "Setup Redis add-on")
+	appCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
+	appCmd.Flags().StringP("branch", "b", "", "branch to setup for continuous deployment")
+	appCmd.Flags().StringP("domain", "d", "", "custom domain to route to app (optional)")
+	appCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
+	appCmd.Flags().Bool("addon-private-s3", false, "setup private S3 bucket add-on")
+	appCmd.Flags().Bool("addon-public-s3", false, "setup public S3 bucket add-on")
+	appCmd.Flags().Bool("addon-database", false, "setup database add-on")
+	appCmd.Flags().String("addon-database-name", "", "database instance to install add-on")
+	appCmd.Flags().Bool("addon-redis", false, "setup Redis add-on")
 	appCmd.Flags().String("addon-redis-name", "", "Redis instance to install add-on")
-	appCmd.Flags().Bool("addon-sqs", false, "Setup SQS Queue add-on")
-	appCmd.Flags().Bool("addon-ses", false, "Setup SES (Email) add-on (requires manual approval of domain at SES)")
-	appCmd.Flags().String("addon-ses-domain", "*", "Domain approved for sending via SES add-on. Use '*' for all domains.")
-	appCmd.Flags().StringSliceP("users", "u", []string{}, "Email addresses for users who can manage the app (comma separated)")
+	appCmd.Flags().Bool("addon-sqs", false, "setup SQS Queue add-on")
+	appCmd.Flags().Bool("addon-ses", false, "setup SES (Email) add-on (requires manual approval of domain at SES)")
+	appCmd.Flags().String("addon-ses-domain", "*", "Ddomain approved for sending via SES add-on. Use '*' for all domains.")
+	appCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
 
 	createCmd.AddCommand(createClusterCmd)
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")

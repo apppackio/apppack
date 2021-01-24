@@ -188,7 +188,7 @@ var watchBuildFlag bool
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
-	buildCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
+	buildCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	buildCmd.MarkPersistentFlagRequired("app-name")
 
 	buildCmd.AddCommand(buildStartCmd)

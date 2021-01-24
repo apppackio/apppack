@@ -97,6 +97,7 @@ var accessCmd = &cobra.Command{
 var accessAddCmd = &cobra.Command{
 	Use:                   "add <email>",
 	Short:                 "add access for a user to the app",
+	Long:                  "*Requires AWS credentials.*\nUpdates the application Cloudformation stack to add access for the user.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -134,6 +135,7 @@ var accessAddCmd = &cobra.Command{
 var accessRemoveCmd = &cobra.Command{
 	Use:                   "remove <email>",
 	Short:                 "remove access for a user to the app",
+	Long:                  "*Requires AWS credentials.*\nUpdates the application Cloudformation stack to remove access for the user.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -171,18 +173,9 @@ var accessRemoveCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(accessCmd)
 
-	accessCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
+	accessCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	accessCmd.MarkPersistentFlagRequired("app-name")
 
 	accessCmd.AddCommand(accessAddCmd)
 	accessCmd.AddCommand(accessRemoveCmd)
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// accessCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// accessCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

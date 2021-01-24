@@ -58,6 +58,6 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 
 func init() {
 	rootCmd.AddCommand(shellCmd)
-	shellCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
+	shellCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	shellCmd.MarkPersistentFlagRequired("app-name")
 }

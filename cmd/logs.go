@@ -104,7 +104,7 @@ var logsOpenCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(logsCmd)
-	logsCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
+	logsCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	logsCmd.MarkPersistentFlagRequired("app-name")
 
 	logsCmd.AddCommand(logsOpenCmd)
@@ -127,7 +127,7 @@ Takes an absolute timestamp in RFC3339 format, or a relative time (eg. 2h).
 Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`,
 	)
 	logsCmd.Flags().StringVar(&sawConfig.Filter, "filter", "", "event filter pattern")
-	logsCmd.Flags().BoolVar(&sawOutputConfig.Raw, "raw", false, "No timestamp, log group or colors")
+	logsCmd.Flags().BoolVar(&sawOutputConfig.Raw, "raw", false, "no timestamp, log group or colors")
 	logsCmd.Flags().BoolVar(&sawOutputConfig.Expand, "expand", false, "indent JSON log messages")
 	logsCmd.Flags().BoolVar(&sawOutputConfig.Invert, "invert", false, "invert colors for light terminal themes")
 	logsCmd.Flags().BoolVar(&sawOutputConfig.RawString, "rawString", false, "print JSON strings without escaping")

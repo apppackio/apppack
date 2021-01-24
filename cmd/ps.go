@@ -157,12 +157,12 @@ var scaleMemory int
 
 func init() {
 	rootCmd.AddCommand(psCmd)
-	psCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
+	psCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	psCmd.MarkPersistentFlagRequired("app-name")
 
 	psCmd.AddCommand(psResizeCmd)
 	psResizeCmd.Flags().IntVarP(&scaleCPU, "cpu", "c", 1024, "CPU shares where 1024 is 1 full CPU")
-	psResizeCmd.Flags().IntVarP(&scaleMemory, "memory", "m", 2048, "Memory in megabytes")
+	psResizeCmd.Flags().IntVarP(&scaleMemory, "memory", "m", 2048, "memory in megabytes")
 
 	psCmd.AddCommand(psScaleCmd)
 }

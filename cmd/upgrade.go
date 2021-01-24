@@ -105,6 +105,7 @@ var upgradeCmd = &cobra.Command{
 var upgradeAppCmd = &cobra.Command{
 	Use:                   "app <name>",
 	Short:                 "upgrade an application AppPack stack",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -118,6 +119,7 @@ var upgradeAppCmd = &cobra.Command{
 var upgradeClusterCmd = &cobra.Command{
 	Use:                   "cluster <name>",
 	Short:                 "upgrade a cluster AppPack stack",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -131,6 +133,7 @@ var upgradeClusterCmd = &cobra.Command{
 var upgradeRedisCmd = &cobra.Command{
 	Use:                   "redis <name>",
 	Short:                 "upgrade a Redis AppPack stack",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -144,6 +147,7 @@ var upgradeRedisCmd = &cobra.Command{
 var upgradeDatabaseCmd = &cobra.Command{
 	Use:                   "database <name>",
 	Short:                 "upgrade a database AppPack stack",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -179,7 +183,7 @@ var upgradeDatabaseCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(upgradeCmd)
-	upgradeCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "Check stack in Cloudformation before creating")
+	upgradeCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	upgradeCmd.AddCommand(upgradeClusterCmd)
 	upgradeCmd.AddCommand(upgradeDatabaseCmd)
 	upgradeCmd.AddCommand(upgradeRedisCmd)

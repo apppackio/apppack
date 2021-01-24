@@ -145,7 +145,7 @@ var listCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-	configCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
+	configCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	configCmd.MarkPersistentFlagRequired("app-name")
 
 	configCmd.AddCommand(getCmd)

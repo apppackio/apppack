@@ -56,12 +56,14 @@ func disableDBDeletionProtection(sess *session.Session, stack *cloudformation.St
 var destroyCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "destroy AWS resources used by AppPack",
+	Long:  "All `destroy` subcommands require AWS credentials.",
 }
 
 // destroyAccountCmd represents the destroy command
 var destroyAccountCmd = &cobra.Command{
 	Use:                   "account",
 	Short:                 "destroy AWS resources used by your AppPack account",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
@@ -108,6 +110,7 @@ var destroyAccountCmd = &cobra.Command{
 var destroyRedisCmd = &cobra.Command{
 	Use:                   "redis <name>",
 	Short:                 "destroy AWS resources used by an AppPack Redis instance",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
@@ -149,6 +152,7 @@ var destroyRedisCmd = &cobra.Command{
 var destroyDatabaseCmd = &cobra.Command{
 	Use:                   "database <name>",
 	Short:                 "destroy AWS resources used by an AppPack Database",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
@@ -187,6 +191,7 @@ var destroyDatabaseCmd = &cobra.Command{
 var destroyClusterCmd = &cobra.Command{
 	Use:                   "cluster <name>",
 	Short:                 "destroy AWS resources used by the AppPack Cluster",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -240,6 +245,7 @@ var destroyClusterCmd = &cobra.Command{
 var destroyAppCmd = &cobra.Command{
 	Use:                   "app <name>",
 	Short:                 "destroy AWS resources used by the AppPack app",
+	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {

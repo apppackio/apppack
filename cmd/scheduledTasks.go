@@ -131,11 +131,11 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 
 func init() {
 	rootCmd.AddCommand(scheduledTasksCmd)
-	scheduledTasksCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "App name (required)")
+	scheduledTasksCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	scheduledTasksCmd.MarkPersistentFlagRequired("app-name")
 
 	scheduledTasksCmd.AddCommand(scheduledTasksCreateCmd)
-	scheduledTasksCreateCmd.Flags().StringVarP(&schedule, "schedule", "s", "", "Cron-like schedule. See https://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions")
+	scheduledTasksCreateCmd.Flags().StringVarP(&schedule, "schedule", "s", "", "cron-like schedule. See https://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions")
 
 	scheduledTasksCmd.AddCommand(scheduledTasksDeleteCmd)
 }
