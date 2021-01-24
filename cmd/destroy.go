@@ -265,11 +265,12 @@ var destroyAppCmd = &cobra.Command{
 			StackName: &stackID,
 		})
 		checkErr(err)
-		err = cfnSvc.WaitUntilStackDeleteComplete(&cloudformation.DescribeStacksInput{
-			StackName: &stackID,
-		})
-		Spinner.Stop()
+		stack, err := waitForCloudformationStack(cfnSvc, stackID)
 		checkErr(err)
+		Spinner.Stop()
+		if *stack.StackStatus != "DELETE_COMPLETE" {
+			checkErr(fmt.Errorf("failed to delete app %s", appName))
+		}
 		printSuccess(fmt.Sprintf("AppPack app %s destroyed", appName))
 	},
 }

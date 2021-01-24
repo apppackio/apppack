@@ -94,17 +94,7 @@ func createStackAndWait(sess *session.Session, stackInput *cloudformation.Create
 	}
 	Spinner.Stop()
 	fmt.Println(aurora.Faint(fmt.Sprintf("creating %s", *stackOutput.StackId)))
-	startSpinner()
-	describeStacksInput := cloudformation.DescribeStacksInput{StackName: stackInput.StackName}
-	err = cfnSvc.WaitUntilStackCreateComplete(&describeStacksInput)
-	if err != nil {
-		return nil, err
-	}
-	stack, err := cfnSvc.DescribeStacks(&describeStacksInput)
-	if err != nil {
-		return nil, err
-	}
-	return stack.Stacks[0], nil
+	return waitForCloudformationStack(cfnSvc, *stackInput.StackName)
 }
 
 type stackItem struct {
@@ -1105,11 +1095,56 @@ var appCmd = &cobra.Command{
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			}
 			printSuccess(
-				fmt.Sprintf("%s app created.\nPush to your git repository to trigger a build or run `apppack -a %s build start`", name, name),
+				fmt.Sprintf("%s app created\nPush to your git repository to trigger a build or run `apppack -a %s build start`", name, name),
 			)
 		}
 
 	},
+}
+
+func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName string) (*cloudformation.Stack, error) {
+	startSpinner()
+	stackDesc, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+		StackName: &stackName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	stack := stackDesc.Stacks[0]
+
+	if strings.HasSuffix(*stack.StackStatus, "_COMPLETE") || strings.HasSuffix(*stack.StackStatus, "_FAILED") {
+		return stack, nil
+	}
+	stackresources, err := cfnSvc.DescribeStackResources(&cloudformation.DescribeStackResourcesInput{
+		StackName: &stackName,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	inProgress := []string{}
+	created := []string{}
+	deleted := []string{}
+	failed := []string{}
+	for _, resource := range stackresources.StackResources {
+		// CREATE_IN_PROGRESS | CREATE_FAILED | CREATE_COMPLETE | DELETE_IN_PROGRESS | DELETE_FAILED | DELETE_COMPLETE | DELETE_SKIPPED | UPDATE_IN_PROGRESS | UPDATE_FAILED | UPDATE_COMPLETE | IMPORT_FAILED | IMPORT_COMPLETE | IMPORT_IN_PROGRESS | IMPORT_ROLLBACK_IN_PROGRESS | IMPORT_ROLLBACK_FAILED | IMPORT_ROLLBACK_COMPLETE
+		if strings.HasSuffix(*resource.ResourceStatus, "_FAILED") {
+			failed = append(failed, *resource.ResourceStatus)
+		} else if strings.HasSuffix(*resource.ResourceStatus, "_IN_PROGRESS") {
+			inProgress = append(inProgress, *resource.ResourceStatus)
+		} else if *resource.ResourceStatus == "CREATE_COMPLETE" {
+			created = append(created, *resource.ResourceStatus)
+		} else if *resource.ResourceStatus == "DELETE_COMPLETE" {
+			deleted = append(deleted, *resource.ResourceStatus)
+		}
+	}
+	status := fmt.Sprintf(" resources: %d in progress / %d complete / %d deleted", len(inProgress), len(created), len(deleted))
+	if len(failed) > 0 {
+		status = fmt.Sprintf("%s / %d failed", status, len(failed))
+	}
+	Spinner.Suffix = status
+	time.Sleep(5 * time.Second)
+	return waitForCloudformationStack(cfnSvc, stackName)
 }
 
 func init() {
