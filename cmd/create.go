@@ -45,6 +45,7 @@ const (
 	appFormationURL             = "https://s3.amazonaws.com/apppack-cloudformations/latest/app.json"
 	clusterFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/cluster.json"
 	accountFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/account.json"
+	regionFormationURL          = "https://s3.amazonaws.com/apppack-cloudformations/latest/region.json"
 	postgresFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/postgres.json"
 	mysqlFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/mysql.json"
 	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
@@ -434,11 +435,9 @@ var accountCmd = &cobra.Command{
 	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		answers, err := askForMissingArgs(cmd, nil)
-		checkErr(err)
 		sess := session.Must(session.NewSession())
 		ssmSvc := ssm.New(sess)
-		_, err = ssmSvc.GetParameter(&ssm.GetParameterInput{
+		_, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
 			Name: aws.String("/apppack/account"),
 		})
 
@@ -451,17 +450,6 @@ var accountCmd = &cobra.Command{
 			fmt.Println("Creating account-level resources...")
 		}
 		startSpinner()
-		tags := []*ssm.Tag{
-			{Key: aws.String("apppack:account"), Value: aws.String("true")},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
-		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-			Name:  aws.String("/apppack/account/dockerhub-access-token"),
-			Value: getArgValue(cmd, answers, "dockerhub-access-token", true),
-			Type:  aws.String("SecureString"),
-			Tags:  tags,
-		})
-		checkErr(err)
 		cfnTags := []*cloudformation.Tag{
 			{Key: aws.String("apppack:account"), Value: aws.String("true")},
 			{Key: aws.String("apppack"), Value: aws.String("true")},
@@ -474,10 +462,6 @@ var accountCmd = &cobra.Command{
 				{
 					ParameterKey:   aws.String("AppPackRoleExternalId"),
 					ParameterValue: aws.String(strings.Replace(uuid.New().String(), "-", "", -1)),
-				},
-				{
-					ParameterKey:   aws.String("DockerhubUsername"),
-					ParameterValue: getArgValue(cmd, answers, "dockerhub-username", true),
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
@@ -509,6 +493,80 @@ var accountCmd = &cobra.Command{
 				for _, output := range stack.Outputs {
 					fmt.Println(fmt.Sprintf("%s: %s", *output.OutputKey, *output.OutputValue))
 				}
+
+			}
+		}
+
+	},
+}
+
+// createRegionCmd represents the create command
+var createRegionCmd = &cobra.Command{
+	Use:                   "region",
+	Short:                 "setup AppPack resources for an AWS region",
+	Long:                  "*Requires AWS credentials.*",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		answers, err := askForMissingArgs(cmd, nil)
+		checkErr(err)
+		sess := session.Must(session.NewSession())
+		ssmSvc := ssm.New(sess)
+		if createChangeSet {
+			fmt.Println("Creating Cloudformation Change Set for region-level resources...")
+		} else {
+			fmt.Println("Creating region-level resources...")
+		}
+		startSpinner()
+		region := sess.Config.Region
+		tags := []*ssm.Tag{
+			{Key: aws.String("apppack:region"), Value: region},
+			{Key: aws.String("apppack"), Value: aws.String("true")},
+		}
+		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
+			Name:  aws.String("/apppack/account/dockerhub-access-token"),
+			Value: getArgValue(cmd, answers, "dockerhub-access-token", true),
+			Type:  aws.String("SecureString"),
+			Tags:  tags,
+		})
+		checkErr(err)
+		cfnTags := []*cloudformation.Tag{
+			{Key: aws.String("apppack:region"), Value: region},
+			{Key: aws.String("apppack"), Value: aws.String("true")},
+		}
+
+		input := cloudformation.CreateStackInput{
+			StackName:   aws.String(fmt.Sprintf("apppack-region-%s", *region)),
+			TemplateURL: aws.String(regionFormationURL),
+			Parameters: []*cloudformation.Parameter{
+				{
+					ParameterKey:   aws.String("DockerhubUsername"),
+					ParameterValue: getArgValue(cmd, answers, "dockerhub-username", true),
+				},
+			},
+			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+			Tags:         cfnTags,
+		}
+		var statusURL string
+		if createChangeSet {
+			changeSet, err := createChangeSetAndWait(sess, &input)
+			Spinner.Stop()
+			checkErr(err)
+			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			if *changeSet.Status != "CREATE_COMPLETE" {
+				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
+			} else {
+				fmt.Println("View ChangeSet at:")
+				fmt.Println(aurora.White(statusURL))
+			}
+		} else {
+			stack, err := createStackAndWait(sess, &input)
+			Spinner.Stop()
+			checkErr(err)
+			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			if *stack.StackStatus != "CREATE_COMPLETE" {
+				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
+			} else {
+				printSuccess(fmt.Sprintf("AppPack region %s created", *region))
 
 			}
 		}
@@ -1157,9 +1215,9 @@ func init() {
 	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")
 
 	createCmd.AddCommand(accountCmd)
-	appCmd.Flags().SortFlags = false
-	accountCmd.Flags().StringP("dockerhub-username", "u", "", "Docker Hub username")
-	accountCmd.Flags().StringP("dockerhub-access-token", "t", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
+	createCmd.AddCommand(createRegionCmd)
+	createRegionCmd.Flags().StringP("dockerhub-username", "u", "", "Docker Hub username")
+	createRegionCmd.Flags().StringP("dockerhub-access-token", "t", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
 
 	createCmd.AddCommand(appCmd)
 	appCmd.Flags().SortFlags = false
