@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/spf13/cobra"
 )
@@ -75,7 +74,8 @@ var accessCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf(appStackName, AppName)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -106,7 +106,8 @@ var accessAddCmd = &cobra.Command{
 			checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
 		}
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf(appStackName, AppName)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -141,7 +142,8 @@ var accessRemoveCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		email := args[0]
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf(appStackName, AppName)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -177,5 +179,7 @@ func init() {
 	accessCmd.MarkPersistentFlagRequired("app-name")
 
 	accessCmd.AddCommand(accessAddCmd)
+	accessAddCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region of app")
 	accessCmd.AddCommand(accessRemoveCmd)
+	accessRemoveCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region of app")
 }
