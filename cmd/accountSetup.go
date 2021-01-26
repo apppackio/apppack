@@ -16,6 +16,8 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +28,7 @@ var accountSetupCmd = &cobra.Command{
 	Long:  "*Requires AWS credentials.*\n\nThis is a shortcut for `apppack create account && apppack create region`",
 	Run: func(cmd *cobra.Command, args []string) {
 		accountCmd.Run(cmd, []string{})
+		fmt.Println("")
 		createRegionCmd.Run(cmd, []string{})
 	},
 }
