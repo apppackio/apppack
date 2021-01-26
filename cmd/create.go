@@ -472,7 +472,7 @@ var accountCmd = &cobra.Command{
 			changeSet, err := createChangeSetAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
 			if *changeSet.Status != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -484,7 +484,7 @@ var accountCmd = &cobra.Command{
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
 			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -551,7 +551,7 @@ var createRegionCmd = &cobra.Command{
 			changeSet, err := createChangeSetAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
 			if *changeSet.Status != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -562,7 +562,7 @@ var createRegionCmd = &cobra.Command{
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
 			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -642,7 +642,7 @@ var createClusterCmd = &cobra.Command{
 			changeSet, err := createChangeSetAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
 			if *changeSet.Status != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -653,7 +653,7 @@ var createClusterCmd = &cobra.Command{
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
 			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -763,7 +763,7 @@ var createDatabaseCmd = &cobra.Command{
 			changeSet, err := createChangeSetAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
 			if *changeSet.Status != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -774,7 +774,7 @@ var createDatabaseCmd = &cobra.Command{
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
 			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -879,7 +879,7 @@ var createRedisCmd = &cobra.Command{
 			changeSet, err := createChangeSetAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
 			if *changeSet.Status != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -890,7 +890,7 @@ var createRedisCmd = &cobra.Command{
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
 			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -928,7 +928,7 @@ func verifySourceCredentials(sess *session.Session, repositoryType string, inter
 		fmt.Printf("    3. Keep the default %s\n", aurora.Bold("Connect using OAuth"))
 		fmt.Printf("    4. Click %s\n", aurora.Bold(fmt.Sprintf("Connect to %s", friendlySourceName)))
 		fmt.Printf("    5. Click %s in the popup window\n\n", aurora.Bold("Confirm"))
-		newProjectURL := "https://console.aws.amazon.com/codesuite/codebuild/project/new"
+		newProjectURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/project/new", *sess.Config.Region)
 		if !interactive {
 			fmt.Printf("Visit %s to complete the authentication\n", newProjectURL)
 			fmt.Println("No further steps are necessary. After you've completed the authentication, re-run this command.")
@@ -1139,7 +1139,7 @@ var appCmd = &cobra.Command{
 			changeSet, err := createChangeSetAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL = fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*changeSet.ChangeSetId))
+			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
 			if *changeSet.Status != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -1150,7 +1150,7 @@ var appCmd = &cobra.Command{
 			stack, err := createStackAndWait(sess, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", url.QueryEscape(*stack.StackId))
+			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
 			if *stack.StackStatus != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			}
