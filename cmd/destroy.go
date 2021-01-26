@@ -94,6 +94,45 @@ var destroyAccountCmd = &cobra.Command{
 		})
 		checkErr(err)
 		stack, err := waitForCloudformationStack(cfnSvc, account.StackID)
+		Spinner.Stop()
+		checkErr(err)
+		if *stack.StackStatus != "DELETE_COMPLETE" {
+			checkErr(fmt.Errorf("Account deletion failed. current state: %s", *stack.StackStatus))
+		}
+		printSuccess("AppPack account deleted")
+	},
+}
+
+// destroyRegionCmd represents the destroy command
+var destroyRegionCmd = &cobra.Command{
+	Use:                   "region",
+	Short:                 "destroy AWS resources used by an AppPack region",
+	Long:                  "*Requires AWS credentials.*",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		sess := session.Must(session.NewSession())
+		ssmSvc := ssm.New(sess)
+		cfnSvc := cloudformation.New(sess)
+		stackName := fmt.Sprintf("apppack-region-%s", *sess.Config.Region)
+		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+			StackName: &stackName,
+		})
+		checkErr(err)
+		stack := stackOutput.Stacks[0]
+		Spinner.Stop()
+		var confirm string
+		fmt.Printf("Are you sure you want to delete your AppPack Region Stack\n%s? yes/[%s]\n", aurora.Faint(*stack.StackId), aurora.Bold("no"))
+		fmt.Scanln(&confirm)
+		if confirm != "yes" {
+			checkErr(fmt.Errorf("aborting due to user input"))
+		}
+		startSpinner()
+		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+			StackName: stack.StackId,
+		})
+		checkErr(err)
+		stack, err = waitForCloudformationStack(cfnSvc, stackName)
 		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String("/apppack/account/dockerhub-access-token"),
 		})
@@ -101,9 +140,9 @@ var destroyAccountCmd = &cobra.Command{
 		checkErr(err)
 		checkErr(err1)
 		if *stack.StackStatus != "DELETE_COMPLETE" {
-			checkErr(fmt.Errorf("Redis deletion failed. current state: %s", *stack.StackStatus))
+			checkErr(fmt.Errorf("Region deletion failed. current state: %s", *stack.StackStatus))
 		}
-		printSuccess("AppPack account deleted")
+		printSuccess("AppPack region deleted")
 	},
 }
 
@@ -287,6 +326,7 @@ func init() {
 	rootCmd.AddCommand(destroyCmd)
 
 	destroyCmd.AddCommand(destroyAccountCmd)
+	destroyCmd.AddCommand(destroyRegionCmd)
 	destroyCmd.AddCommand(destroyClusterCmd)
 	destroyCmd.AddCommand(destroyAppCmd)
 	destroyCmd.AddCommand(destroyRedisCmd)

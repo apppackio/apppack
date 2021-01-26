@@ -102,6 +102,15 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
       -
+        name: Destroy region
+        run: yes yes | ./apppack destroy region
+        if: always()
+        timeout-minutes: 3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+      -
         name: Destroy account
         run: yes yes | ./apppack destroy account
         if: always()
