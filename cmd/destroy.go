@@ -132,7 +132,7 @@ var destroyRegionCmd = &cobra.Command{
 			StackName: stack.StackId,
 		})
 		checkErr(err)
-		stack, err = waitForCloudformationStack(cfnSvc, stackName)
+		stack, err = waitForCloudformationStack(cfnSvc, *stack.StackId)
 		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String("/apppack/account/dockerhub-access-token"),
 		})
@@ -175,7 +175,7 @@ var destroyRedisCmd = &cobra.Command{
 			StackName: stack.StackId,
 		})
 		checkErr(err)
-		stack, err = waitForCloudformationStack(cfnSvc, stackName)
+		stack, err = waitForCloudformationStack(cfnSvc, *stack.StackId)
 		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String(fmt.Sprintf(redisAuthTokenParameterTmpl, args[0])),
 		})
@@ -219,7 +219,7 @@ var destroyDatabaseCmd = &cobra.Command{
 			StackName: stack.StackId,
 		})
 		checkErr(err)
-		stack, err = waitForCloudformationStack(cfnSvc, stackName)
+		stack, err = waitForCloudformationStack(cfnSvc, *stack.StackId)
 		checkErr(err)
 		if *stack.StackStatus != "DELETE_COMPLETE" {
 			checkErr(fmt.Errorf("database deletion failed. current state: %s", *stack.StackStatus))
