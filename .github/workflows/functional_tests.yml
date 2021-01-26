@@ -21,9 +21,9 @@ jobs:
         name: Build
         run: go build 
       -
-        name: Create account
-        run: ./apppack create account --region us-east-1 | tee account_create_output.txt
-        timeout-minutes: 3
+        name: Account Setup
+        run: ./apppack account-setup --region us-east-1 --dockerhub-username $DOCKERHUB_USERNAME --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN | tee account_setup_output.txt
+        timeout-minutes: 6
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
@@ -32,24 +32,15 @@ jobs:
       -
         name: Approve account
         run: |
-          export ROLE_ARN=$(grep AppPackRoleArn account_create_output.txt | awk '{print $2}')
+          export ROLE_ARN=$(grep AppPackRoleArn account_setup_output.txt | awk '{print $2}')
           export ACCOUNT_ID=$(echo $ROLE_ARN | cut -d: -f5)
-          export EXTERNAL_ID=$(grep ExternalId account_create_output.txt | awk '{print $2}')
+          export EXTERNAL_ID=$(grep ExternalId account_setup_output.txt | awk '{print $2}')
           python -c "import json; print(json.dumps({\"primary_id\": {\"S\": \"ACCT#$ACCOUNT_ID\"}, \"secondary_id\": {\"S\": \"-\"}, \"external_id\": {\"S\": \"$EXTERNAL_ID\"}, \"region\": {\"S\": \"us-east-1\"}, \"role_arn\": {\"S\": \"$ROLE_ARN\"}}))" > item.json
           aws dynamodb put-item --table-name apppack --item file://item.json
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.APPPACK_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
-      -
-        name: Create region
-        run: ./apppack create region --region us-east-1 --dockerhub-username $DOCKERHUB_USERNAME --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
-        timeout-minutes: 3
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Create cluster
         run: ./apppack create cluster --region us-east-1 --domain testclusters.apppack.io --hosted-zone-id Z05906472T84V7X7Q6UDY --instance-class t3.micro
@@ -118,7 +109,7 @@ jobs:
         run: |
           cat item.json
           aws dynamodb delete-item --table-name apppack --key '{
-            "primary_id": {"S": "ACCT#'$(grep AppPackRoleArn account_create_output.txt | awk '{print $2}' | cut -d: -f5)'"},
+            "primary_id": {"S": "ACCT#'$(grep AppPackRoleArn account_setup_output.txt | awk '{print $2}' | cut -d: -f5)'"},
             "secondary_id": {"S": "-"}
           }'
         env:
