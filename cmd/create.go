@@ -1128,7 +1128,7 @@ var appCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("AllowedUsers"),
-					ParameterValue: getArgValue(cmd, &answers, "users", true),
+					ParameterValue: aws.String(strings.Trim(*(getArgValue(cmd, &answers, "users", true)), "[]")),
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
