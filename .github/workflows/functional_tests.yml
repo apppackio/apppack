@@ -22,14 +22,13 @@ jobs:
         run: go build 
       -
         name: Create account
-        run: ./apppack create account | tee account_create_output.txt
+        run: ./apppack create account --region us-east-1 | tee account_create_output.txt
         timeout-minutes: 3
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
       -
         name: Approve account
         run: |
@@ -44,26 +43,25 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
       -
         name: Create region
-        run: ./apppack create region --dockerhub-username $DOCKERHUB_USERNAME --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
+        run: ./apppack create region --region us-east-1 --dockerhub-username $DOCKERHUB_USERNAME --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
         timeout-minutes: 3
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
       -
         name: Create cluster
-        run: ./apppack create cluster --domain testclusters.apppack.io --hosted-zone-id Z05906472T84V7X7Q6UDY --instance-class t3.micro
+        run: ./apppack create cluster --region us-east-1 --domain testclusters.apppack.io --hosted-zone-id Z05906472T84V7X7Q6UDY --instance-class t3.micro
         timeout-minutes: 8
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
       -
         name: Create app
         run:  |
-            ./apppack create app --non-interactive \
+            ./apppack create app --region us-east-1 \
+                                 --non-interactive \
                                  --cluster apppack \
                                  --repository https://github.com/apppackio/apppack-demo-python.git \
                                  --branch main \
@@ -73,7 +71,6 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
       # TODO: authorize CLI
       # -
       #   name: Deploy app
@@ -85,40 +82,36 @@ jobs:
       #   run: curl --fail https://app-test.testclusters.apppack.io
       -
         name: Destroy app
-        run: yes yes | ./apppack destroy app app-test
+        run: yes yes | ./apppack destroy app app-test --region us-east-1
         if: always()
         timeout-minutes: 5
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
       -
         name: Destroy cluster
-        run: yes yes | ./apppack destroy cluster apppack
+        run: yes yes | ./apppack destroy cluster apppack --region us-east-1
         if: always()
         timeout-minutes: 8
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
       -
         name: Destroy region
-        run: yes yes | ./apppack destroy region
+        run: yes yes | ./apppack destroy region --region us-east-1
         if: always()
         timeout-minutes: 3
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
       -
         name: Destroy account
-        run: yes yes | ./apppack destroy account
+        run: yes yes | ./apppack destroy account --region us-east-1
         if: always()
         timeout-minutes: 3
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
       -
         name: Disable account
         if: always()

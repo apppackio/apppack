@@ -56,6 +56,7 @@ const (
 
 var createChangeSet bool
 var nonInteractive bool
+var region string
 
 func createChangeSetAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeChangeSetOutput, error) {
 	cfnSvc := cloudformation.New(sess)
@@ -96,6 +97,22 @@ func createStackAndWait(sess *session.Session, stackInput *cloudformation.Create
 	Spinner.Stop()
 	fmt.Println(aurora.Faint(fmt.Sprintf("creating %s", *stackOutput.StackId)))
 	return waitForCloudformationStack(cfnSvc, *stackInput.StackName)
+}
+
+// awsSession starts a session, verifying a region has been provided
+func awsSession() (*session.Session, error) {
+	if region != "" {
+		return session.NewSession(&aws.Config{Region: &region})
+	}
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	if *sess.Config.Region == "" {
+		return nil, fmt.Errorf("no region provided. Use the `--region` flag or set the AWS_REGION environment")
+	}
+	return sess, err
+
 }
 
 type stackItem struct {
@@ -435,9 +452,10 @@ var accountCmd = &cobra.Command{
 	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		ssmSvc := ssm.New(sess)
-		_, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
+		_, err = ssmSvc.GetParameter(&ssm.GetParameterInput{
 			Name: aws.String("/apppack/account"),
 		})
 
@@ -509,7 +527,8 @@ var createRegionCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		answers, err := askForMissingArgs(cmd, nil)
 		checkErr(err)
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		if createChangeSet {
 			fmt.Println("Creating Cloudformation Change Set for region-level resources...")
@@ -590,7 +609,8 @@ var createClusterCmd = &cobra.Command{
 			clusterName = args[0]
 		}
 		checkErr(err)
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		_, err = stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
 		if err == nil {
 			checkErr(fmt.Errorf("cluster %s already exists", clusterName))
@@ -678,7 +698,8 @@ var createDatabaseCmd = &cobra.Command{
 		} else {
 			name = args[0]
 		}
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		answers := make(map[string]interface{})
 		if !nonInteractive {
 			questions := []*survey.Question{}
@@ -697,7 +718,7 @@ var createDatabaseCmd = &cobra.Command{
 		}
 		cluster := getArgValue(cmd, &answers, "cluster", true)
 		// check if a database already exists on the cluster
-		_, err := getDDBClusterItem(sess, cluster, "DATABASE", &name)
+		_, err = getDDBClusterItem(sess, cluster, "DATABASE", &name)
 		if err == nil {
 			checkErr(fmt.Errorf(fmt.Sprintf("a database named %s already exists on the cluster %s", name, *cluster)))
 		}
@@ -799,7 +820,8 @@ var createRedisCmd = &cobra.Command{
 		} else {
 			name = args[0]
 		}
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		answers := make(map[string]interface{})
 		if !nonInteractive {
 			questions := []*survey.Question{}
@@ -814,7 +836,7 @@ var createRedisCmd = &cobra.Command{
 		}
 		cluster := getArgValue(cmd, &answers, "cluster", true)
 		// check if a redis already exists on the cluster
-		_, err := getDDBClusterItem(sess, cluster, "REDIS", &name)
+		_, err = getDDBClusterItem(sess, cluster, "REDIS", &name)
 		if err == nil {
 			checkErr(fmt.Errorf(fmt.Sprintf("a Redis instance named %s already exists on the cluster %s", name, *cluster)))
 		}
@@ -968,7 +990,8 @@ var appCmd = &cobra.Command{
 		var databaseAddonEnabled bool
 		var redisAddonEnabled bool
 		name := args[0]
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		if !nonInteractive {
 			questions := []*survey.Question{}
 			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for app"))
@@ -1213,6 +1236,7 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 	createCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")
+	createCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to create resources in")
 
 	createCmd.AddCommand(accountCmd)
 	createCmd.AddCommand(createRegionCmd)

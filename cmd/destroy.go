@@ -67,7 +67,8 @@ var destroyAccountCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		paramOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
 			Name: aws.String("/apppack/account"),
@@ -111,7 +112,8 @@ var destroyRegionCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf("apppack-region-%s", *sess.Config.Region)
@@ -154,7 +156,8 @@ var destroyRedisCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf(redisStackNameTmpl, args[0])
@@ -197,7 +200,8 @@ var destroyDatabaseCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf(databaseStackNameTmpl, args[0])
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -239,7 +243,8 @@ var destroyClusterCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		clusterName := args[0]
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		stackName := fmt.Sprintf("apppack-cluster-%s", clusterName)
 		cfnSvc := cloudformation.New(sess)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -292,7 +297,8 @@ var destroyAppCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		appName := args[0]
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		stackName := fmt.Sprintf("apppack-app-%s", appName)
 		cfnSvc := cloudformation.New(sess)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -324,6 +330,7 @@ var destroyAppCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(destroyCmd)
+	destroyCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to destroy resources in")
 
 	destroyCmd.AddCommand(destroyAccountCmd)
 	destroyCmd.AddCommand(destroyRegionCmd)

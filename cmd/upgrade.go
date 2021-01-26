@@ -68,7 +68,8 @@ func updateStackAndWait(sess *session.Session, stackInput *cloudformation.Update
 
 func upgradeStack(stackName string, templateURL string) error {
 	startSpinner()
-	sess := session.Must(session.NewSession())
+	sess, err := awsSession()
+	checkErr(err)
 	cfnSvc := cloudformation.New(sess)
 	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: &stackName,
@@ -153,7 +154,8 @@ var upgradeDatabaseCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		stackName := fmt.Sprintf("apppack-database-%s", args[0])
 		startSpinner()
-		sess := session.Must(session.NewSession())
+		sess, err := awsSession()
+		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 			StackName: &stackName,
@@ -184,6 +186,7 @@ var upgradeDatabaseCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(upgradeCmd)
 	upgradeCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
+	upgradeCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to upgrade resources in")
 	upgradeCmd.AddCommand(upgradeClusterCmd)
 	upgradeCmd.AddCommand(upgradeDatabaseCmd)
 	upgradeCmd.AddCommand(upgradeRedisCmd)
