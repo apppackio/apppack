@@ -677,106 +677,6 @@ var createClusterCmd = &cobra.Command{
 	},
 }
 
-// createDatabaseCmd represents the create database command
-var createDatabaseCmd = &cobra.Command{
-	Use:                   "database [<name>]",
-	Short:                 "setup resources for an AppPack Database",
-	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Database. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
-	DisableFlagsInUseLine: true,
-	Args:                  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		var name string
-		if len(args) == 0 {
-			name = "apppack"
-		} else {
-			name = args[0]
-		}
-		sess, err := awsSession()
-		checkErr(err)
-		answers := make(map[string]interface{})
-		if !nonInteractive {
-			questions := []*survey.Question{}
-			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for database"))
-			checkErr(err)
-			questions = append(questions, clusterQuestion)
-			addQuestionFromFlag(cmd.Flags().Lookup("engine"), &questions, &survey.Question{
-				Name:   "engine",
-				Prompt: &survey.Select{Message: "select the database engine", Options: []string{"mysql", "postgres"}, FilterMessage: "", Default: "postgres"},
-			})
-			addQuestionFromFlag(cmd.Flags().Lookup("multi-az"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, nil)
-			if err := survey.Ask(questions, &answers); err != nil {
-				checkErr(err)
-			}
-		}
-		cluster := getArgValue(cmd, &answers, "cluster", true)
-		// check if a database already exists on the cluster
-		_, err = getDDBClusterItem(sess, cluster, "DATABASE", &name)
-		if err == nil {
-			checkErr(fmt.Errorf(fmt.Sprintf("a database named %s already exists on the cluster %s", name, *cluster)))
-		}
-		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
-		checkErr(err)
-		var multiAZParameter string
-		if *(getArgValue(cmd, &answers, "multi-az", false)) == "true" {
-			multiAZParameter = "yes"
-		} else {
-			multiAZParameter = "no"
-		}
-		engine := getArgValue(cmd, &answers, "engine", false)
-		var formationURL string
-		if *engine == "mysql" {
-			formationURL = mysqlFormationURL
-		} else if *engine == "postgres" {
-			formationURL = postgresFormationURL
-		} else {
-			checkErr(fmt.Errorf("unrecognized databae engine. valid options are 'mysql' or 'postgres'"))
-		}
-		if createChangeSet {
-			fmt.Println("Creating Cloudformation Change Set for database resources...")
-		} else {
-			fmt.Println("Creating database resources, this may take a few minutes...")
-		}
-		startSpinner()
-		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:database"), Value: &name},
-			{Key: aws.String("apppack:cluster"), Value: cluster},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
-
-		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf(databaseStackNameTmpl, name)),
-			TemplateURL: aws.String(formationURL),
-			Parameters: []*cloudformation.Parameter{
-				{
-					ParameterKey:   aws.String("Name"),
-					ParameterValue: &name,
-				},
-				{
-					ParameterKey:   aws.String("ClusterStackName"),
-					ParameterValue: clusterStack.StackName,
-				},
-				{
-					ParameterKey:   aws.String("OneTimePassword"),
-					ParameterValue: aws.String(generatePassword()),
-				},
-				{
-					ParameterKey:   aws.String("InstanceClass"),
-					ParameterValue: getArgValue(cmd, &answers, "instance-class", true),
-				},
-				{
-					ParameterKey:   aws.String("MultiAZ"),
-					ParameterValue: &multiAZParameter,
-				},
-			},
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-			Tags:         cfnTags,
-		}
-		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s database", name))
-		checkErr(err)
-	},
-}
-
 // createRedisCmd represents the create redis command
 var createRedisCmd = &cobra.Command{
 	Use:                   "redis [<name>]",
@@ -1192,12 +1092,6 @@ func init() {
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
 	createClusterCmd.Flags().StringP("hosted-zone-id", "z", "", "AWS Route53 Hosted Zone ID for domain")
 	createClusterCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
-
-	createCmd.AddCommand(createDatabaseCmd)
-	createDatabaseCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
-	createDatabaseCmd.Flags().StringP("instance-class", "i", "db.t3.medium", "instance class -- see https://aws.amazon.com/rds/postgresql/pricing/?pg=pr&loc=3")
-	createDatabaseCmd.Flags().StringP("engine", "e", "postgres", "engine [mysql,postgres]")
-	createDatabaseCmd.Flags().Bool("multi-az", false, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html")
 
 	createCmd.AddCommand(createRedisCmd)
 	createRedisCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
