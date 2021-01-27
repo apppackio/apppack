@@ -37,4 +37,5 @@ func init() {
 	rootCmd.AddCommand(accountSetupCmd)
 	accountSetupCmd.Flags().StringP("dockerhub-username", "u", "", "Docker Hub username")
 	accountSetupCmd.Flags().StringP("dockerhub-access-token", "t", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
+	accountSetupCmd.Flags().StringVar(&region, "region", "", "AWS region to create resources in")
 }
