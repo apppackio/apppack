@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -123,17 +122,21 @@ var listCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
-		checkErr(err)
-		svc := ssm.New(a.Session)
-		resp, err := svc.GetParametersByPath(&ssm.GetParametersByPathInput{
-			Path:           aws.String(fmt.Sprintf("/apppack/apps/%s/config/", AppName)),
-			WithDecryption: aws.Bool(true),
+		ssmSvc := ssm.New(a.Session)
+		var parameters []*ssm.Parameter
+		input := ssm.GetParametersByPathInput{Path: aws.String(fmt.Sprintf("/apppack/apps/%s/config/", AppName)), WithDecryption: aws.Bool(true)}
+		err = ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
+			for _, parameter := range resp.Parameters {
+				if parameter == nil {
+					continue
+				}
+				parameters = append(parameters, parameter)
+			}
+			return !lastPage
 		})
+		checkErr(err)
 		Spinner.Stop()
-		if err != nil {
-			log.Fatalf("AWS API call failed: %v\n", err)
-		}
-		for _, value := range resp.Parameters {
+		for _, value := range parameters {
 			parts := strings.Split(*value.Name, "/")
 			varname := parts[len(parts)-1]
 			fmt.Fprintf(w, "%s\t%s\t\n", aurora.Green(fmt.Sprintf("%s:", varname)), *value.Value)
