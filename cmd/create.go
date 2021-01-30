@@ -533,7 +533,7 @@ var accountCmd = &cobra.Command{
 			} else {
 				fmt.Println("View ChangeSet at:")
 				fmt.Println(aurora.White(statusURL))
-				fmt.Println("Once your stack is created send the 'Outputs' to pete@lincolnloop.com for account approval.")
+				fmt.Println("Once your stack is created send the 'Outputs' to support@apppack.io for account approval.")
 			}
 		} else {
 			stack, err := createStackAndWait(sess, &input)
@@ -544,7 +544,7 @@ var accountCmd = &cobra.Command{
 				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
 			} else {
 				printSuccess("AppPack account created")
-				fmt.Println(aurora.Bold("Send the following information to pete@lincolnloop.com for account approval:"))
+				fmt.Println(aurora.Bold("Send the following information to support@apppack.io for account approval:"))
 				for _, output := range stack.Outputs {
 					fmt.Println(fmt.Sprintf("%s: %s", *output.OutputKey, *output.OutputValue))
 				}
