@@ -32,6 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
@@ -264,6 +265,32 @@ func ddbClusterQuery(sess *session.Session, cluster *string, addon *string) (*[]
 		return nil, fmt.Errorf("could not find any AppPack %s stacks on %s cluster", strings.ToLower(*addon), *cluster)
 	}
 	return &result.Items, nil
+}
+
+func isHostedZoneForDomain(dnsName string, hostedZone *route53.HostedZone) bool {
+	return strings.HasSuffix(dnsName, strings.Trim(*hostedZone.Name, "."))
+}
+
+// hostedZoneForDomain searches AWS Hosted Zones for a place for this domain
+func hostedZoneForDomain(sess *session.Session, dnsName string) (*route53.HostedZone, error) {
+	r53Svc := route53.New(sess)
+	nameParts := strings.Split(dnsName, ".")
+	// keep stripping off subdomains until a match is found
+	for i := range nameParts {
+		input := route53.ListHostedZonesByNameInput{
+			DNSName: aws.String(strings.Join(nameParts[i:], ".")),
+		}
+		resp, err := r53Svc.ListHostedZonesByName(&input)
+		if err != nil {
+			return nil, err
+		}
+		for _, zone := range resp.HostedZones {
+			if isHostedZoneForDomain(dnsName, zone) && *zone.Config.PrivateZone != true {
+				return zone, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no hosted zones found for %s", dnsName)
 }
 
 func listStacks(sess *session.Session, cluster *string, addon string) ([]string, error) {
@@ -640,6 +667,10 @@ var createClusterCmd = &cobra.Command{
 			{Key: aws.String("apppack:cluster"), Value: &clusterName},
 			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
+		domain := getArgValue(cmd, answers, "domain", true)
+		zone, err := hostedZoneForDomain(sess, *domain)
+		zoneId := strings.Split(*zone.Id, "/")[2]
+		checkErr(err)
 
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf("apppack-cluster-%s", clusterName)),
@@ -662,11 +693,11 @@ var createClusterCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("Domain"),
-					ParameterValue: getArgValue(cmd, answers, "domain", true),
+					ParameterValue: domain,
 				},
 				{
 					ParameterKey:   aws.String("HostedZone"),
-					ParameterValue: getArgValue(cmd, answers, "hosted-zone-id", true),
+					ParameterValue: &zoneId,
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
@@ -1190,7 +1221,6 @@ func init() {
 
 	createCmd.AddCommand(createClusterCmd)
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
-	createClusterCmd.Flags().StringP("hosted-zone-id", "z", "", "AWS Route53 Hosted Zone ID for domain")
 	createClusterCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 
 	createCmd.AddCommand(createDatabaseCmd)
