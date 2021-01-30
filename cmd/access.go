@@ -77,7 +77,7 @@ var accessCmd = &cobra.Command{
 		sess, err := awsSession()
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
-		stackName := fmt.Sprintf(appStackName, AppName)
+		stackName := appStackName(AppName)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 			StackName: &stackName,
 		})
@@ -109,7 +109,7 @@ var accessAddCmd = &cobra.Command{
 		sess, err := awsSession()
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
-		stackName := fmt.Sprintf(appStackName, AppName)
+		stackName := appStackName(AppName)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 			StackName: &stackName,
 		})
@@ -145,7 +145,7 @@ var accessRemoveCmd = &cobra.Command{
 		sess, err := awsSession()
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
-		stackName := fmt.Sprintf(appStackName, AppName)
+		stackName := appStackName(AppName)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 			StackName: &stackName,
 		})

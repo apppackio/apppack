@@ -299,7 +299,7 @@ var destroyAppCmd = &cobra.Command{
 		startSpinner()
 		sess, err := awsSession()
 		checkErr(err)
-		stackName := fmt.Sprintf("apppack-app-%s", appName)
+		stackName := appStackName(appName)
 		cfnSvc := cloudformation.New(sess)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 			StackName: &stackName,

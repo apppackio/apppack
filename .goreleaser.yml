@@ -49,3 +49,4 @@ changelog:
       - '^test:'
       - '^ci:'
       - '^lint:'
+      - '^refactor:'

@@ -110,7 +110,7 @@ var upgradeAppCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		stackName := fmt.Sprintf("apppack-app-%s", args[0])
+		stackName := appStackName(args[0])
 		err := upgradeStack(stackName, appFormationURL)
 		checkErr(err)
 	},

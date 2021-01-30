@@ -33,7 +33,6 @@ var cfgFile string
 
 const (
 	timeFmt      = "Jan 02, 2006 15:04:05 -0700"
-	appStackName = "apppack-app-%s"
 )
 
 // AppName is used to hold the `--app-name` flag

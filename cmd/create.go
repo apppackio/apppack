@@ -58,6 +58,10 @@ var createChangeSet bool
 var nonInteractive bool
 var region string
 
+func appStackName(appName string) string {
+	return fmt.Sprintf("apppack-app-%s", appName)
+}
+
 func createChangeSetAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeChangeSetOutput, error) {
 	cfnSvc := cloudformation.New(sess)
 	changeSetName := fmt.Sprintf("create-%d", int32(time.Now().Unix()))
@@ -1082,7 +1086,7 @@ var appCmd = &cobra.Command{
 		checkErr(err)
 		rand.Seed(time.Now().UnixNano())
 		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf("apppack-app-%s", name)),
+			StackName:   aws.String(appStackName(name)),
 			TemplateURL: aws.String(appFormationURL),
 			Parameters: []*cloudformation.Parameter{
 				{
