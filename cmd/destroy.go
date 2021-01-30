@@ -18,6 +18,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -111,40 +112,47 @@ var destroyRegionCmd = &cobra.Command{
 	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
 		sess, err := awsSession()
 		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf("apppack-region-%s", *sess.Config.Region)
-		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: &stackName,
-		})
-		checkErr(err)
-		stack := stackOutput.Stacks[0]
-		Spinner.Stop()
 		var confirm string
-		fmt.Printf("Are you sure you want to delete your AppPack Region Stack\n%s? yes/[%s]\n", aurora.Faint(*stack.StackId), aurora.Bold("no"))
+		fmt.Printf("Are you sure you want to delete your AppPack Region Stack %s? yes/[%s]\n", stackName, aurora.Bold("no"))
 		fmt.Scanln(&confirm)
 		if confirm != "yes" {
 			checkErr(fmt.Errorf("aborting due to user input"))
 		}
 		startSpinner()
-		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
-			StackName: stack.StackId,
-		})
-		checkErr(err)
-		stack, err = waitForCloudformationStack(cfnSvc, *stack.StackId)
-		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
+		_, err = ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String("/apppack/account/dockerhub-access-token"),
 		})
-		Spinner.Stop()
-		checkErr(err)
-		checkErr(err1)
+		// avoid crashing on errors so stack can be destroyed
+		if err != nil {
+			Spinner.Stop()
+			printError(fmt.Sprintf("%v", err))
+			startSpinner()
+		}
+		stackOutput, cfnErr := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+			StackName: &stackName,
+		})
+		checkErr(cfnErr)
+		stack := stackOutput.Stacks[0]
+		_, cfnErr = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+			StackName: stack.StackId,
+		})
+		checkErr(cfnErr)
+		stack, cfnErr = waitForCloudformationStack(cfnSvc, *stack.StackId)
+		checkErr(cfnErr)
 		if *stack.StackStatus != "DELETE_COMPLETE" {
 			checkErr(fmt.Errorf("Region deletion failed. current state: %s", *stack.StackStatus))
 		}
-		printSuccess("AppPack region deleted")
+		Spinner.Stop()
+		if err == nil {
+			printSuccess("AppPack region deleted")
+		} else {
+			os.Exit(1)
+		}
 	},
 }
 
