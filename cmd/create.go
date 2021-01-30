@@ -62,6 +62,39 @@ func appStackName(appName string) string {
 	return fmt.Sprintf("apppack-app-%s", appName)
 }
 
+func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateStackInput, changeSet bool, friendlyName string) error {
+	var statusURL string
+	if changeSet {
+		fmt.Printf("Creating Cloudformation Change Set for %s...\n", friendlyName)
+		startSpinner()
+		changeSet, err := createChangeSetAndWait(sess, input)
+		Spinner.Stop()
+		if err != nil {
+			return err
+		}
+		statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
+		if *changeSet.Status != "CREATE_COMPLETE" {
+			return fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL)
+		}
+		fmt.Println("View ChangeSet at:")
+		fmt.Println(aurora.White(statusURL))
+	} else {
+		fmt.Printf("Creating %s resources...\n", friendlyName)
+		startSpinner()
+		stack, err := createStackAndWait(sess, input)
+		Spinner.Stop()
+		if err != nil {
+			return err
+		}
+		statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
+		if *stack.StackStatus != "CREATE_COMPLETE" {
+			return fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL)
+		}
+		printSuccess(fmt.Sprintf("created %s", friendlyName))
+	}
+	return nil
+}
+
 func createChangeSetAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeChangeSetOutput, error) {
 	cfnSvc := cloudformation.New(sess)
 	changeSetName := fmt.Sprintf("create-%d", int32(time.Now().Unix()))
@@ -569,31 +602,8 @@ var createRegionCmd = &cobra.Command{
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,
 		}
-		var statusURL string
-		if createChangeSet {
-			changeSet, err := createChangeSetAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
-			if *changeSet.Status != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
-			} else {
-				fmt.Println("View ChangeSet at:")
-				fmt.Println(aurora.White(statusURL))
-			}
-		} else {
-			stack, err := createStackAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
-			if *stack.StackStatus != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
-			} else {
-				printSuccess(fmt.Sprintf("AppPack region %s created", *region))
-
-			}
-		}
-
+		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s region", *region))
+		checkErr(err)
 	},
 }
 
@@ -661,30 +671,8 @@ var createClusterCmd = &cobra.Command{
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,
 		}
-		var statusURL string
-		if createChangeSet {
-			changeSet, err := createChangeSetAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
-			if *changeSet.Status != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
-			} else {
-				fmt.Println("View ChangeSet at:")
-				fmt.Println(aurora.White(statusURL))
-			}
-		} else {
-			stack, err := createStackAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
-			if *stack.StackStatus != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
-			} else {
-				printSuccess(fmt.Sprintf("AppPack cluster %s created", clusterName))
-			}
-		}
-
+		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s cluster", clusterName))
+		checkErr(err)
 	},
 }
 
@@ -783,30 +771,8 @@ var createDatabaseCmd = &cobra.Command{
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,
 		}
-		var statusURL string
-		if createChangeSet {
-			changeSet, err := createChangeSetAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
-			if *changeSet.Status != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
-			} else {
-				fmt.Println("View ChangeSet at:")
-				fmt.Println(aurora.White(statusURL))
-			}
-		} else {
-			stack, err := createStackAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
-			if *stack.StackStatus != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
-			} else {
-				printSuccess(fmt.Sprintf("AppPack database %s created", name))
-			}
-		}
-
+		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s database", name))
+		checkErr(err)
 	},
 }
 
@@ -900,30 +866,8 @@ var createRedisCmd = &cobra.Command{
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,
 		}
-		var statusURL string
-		if createChangeSet {
-			changeSet, err := createChangeSetAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
-			if *changeSet.Status != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
-			} else {
-				fmt.Println("View ChangeSet at:")
-				fmt.Println(aurora.White(statusURL))
-			}
-		} else {
-			stack, err := createStackAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
-			if *stack.StackStatus != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
-			} else {
-				printSuccess(fmt.Sprintf("AppPack Redis instance %s created", name))
-			}
-		}
-
+		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s Redis instance", name))
+		checkErr(err)
 	},
 }
 
@@ -1161,31 +1105,9 @@ var appCmd = &cobra.Command{
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,
 		}
-		var statusURL string
-		if createChangeSet {
-			changeSet, err := createChangeSetAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
-			if *changeSet.Status != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
-			} else {
-				fmt.Println("View ChangeSet at:")
-				fmt.Println(aurora.White(statusURL))
-			}
-		} else {
-			stack, err := createStackAndWait(sess, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
-			if *stack.StackStatus != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
-			}
-			printSuccess(
-				fmt.Sprintf("%s app created\nPush to your git repository to trigger a build or run `apppack -a %s build start`", name, name),
-			)
-		}
-
+		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s app", name))
+		checkErr(err)
+		fmt.Println(aurora.White(fmt.Sprintf("  %s app created\n  Push to your git repository to trigger a build or run `apppack -a %s build start`", name, name)))
 	},
 }
 
