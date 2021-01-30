@@ -67,7 +67,8 @@ type Settings struct {
 		ARN  string `json:"arn"`
 		Name string `json:"name"`
 	} `json:"cluster"`
-	Shell struct {
+	Domains []string `json:"domains"`
+	Shell   struct {
 		Command    string `json:"command"`
 		TaskFamily string `json:"task_family"`
 	} `json:"shell"`

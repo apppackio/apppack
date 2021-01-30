@@ -49,6 +49,7 @@ const (
 	postgresFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/postgres.json"
 	mysqlFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/mysql.json"
 	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
+	customDomainFormationURL    = "https://s3.amazonaws.com/apppack-cloudformations/latest/custom-domain.json"
 	redisStackNameTmpl          = "apppack-redis-%s"
 	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token"
 	databaseStackNameTmpl       = "apppack-database-%s"
