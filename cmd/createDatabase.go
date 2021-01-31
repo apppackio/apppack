@@ -227,7 +227,7 @@ var createDatabaseCmd = &cobra.Command{
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,
 		}
-        err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s database", name))
+		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s database", name))
 		checkErr(err)
 		if createChangeSet {
 			printWarning(" deletion protection will not be enabled when the database is created. You can manually enable it after the database is created.")
