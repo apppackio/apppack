@@ -17,13 +17,61 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/spf13/cobra"
 )
 
+func ec2InstanceTypes(sess *session.Session) ([]*ec2.InstanceTypeInfo, error) {
+	ec2Svc := ec2.New(sess)
+	input := ec2.DescribeInstanceTypesInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("current-generation"),
+				Values: []*string{aws.String("true")},
+			},
+			{
+				Name:   aws.String("processor-info.supported-architecture"),
+				Values: []*string{aws.String("x86_64")},
+			},
+		},
+	}
+	instanceTypes := []*ec2.InstanceTypeInfo{}
+	err := ec2Svc.DescribeInstanceTypesPages(&input, func(page *ec2.DescribeInstanceTypesOutput, lastPage bool) bool {
+		for _, instanceType := range page.InstanceTypes {
+			if instanceType == nil {
+				continue
+			}
+			instanceTypes = append(instanceTypes, instanceType)
+		}
+		return !lastPage
+	})
+	if err != nil {
+		return nil, err
+	}
+	return instanceTypes, nil
+}
+
+func instanceTypeNames(sess *session.Session) ([]string, error) {
+	instanceTypes, err := ec2InstanceTypes(sess)
+	if err != nil {
+		return nil, err
+	}
+	names := []string{}
+	for _, i := range instanceTypes {
+		names = append(names, *i.InstanceType)
+	}
+	sort.Slice(names, func(i int, j int) bool {
+		return instanceNameWeight(names[i]) < instanceNameWeight(names[j])
+	})
+	return names, nil
+}
 
 // createClusterCmd represents the create command
 var createClusterCmd = &cobra.Command{
@@ -59,7 +107,7 @@ var createClusterCmd = &cobra.Command{
 		}
 		domain := getArgValue(cmd, answers, "domain", true)
 		zone, err := hostedZoneForDomain(sess, *domain)
-		zoneId := strings.Split(*zone.Id, "/")[2]
+		zoneID := strings.Split(*zone.Id, "/")[2]
 		checkErr(err)
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf("apppack-cluster-%s", clusterName)),
@@ -86,7 +134,7 @@ var createClusterCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("HostedZone"),
-					ParameterValue: &zoneId,
+					ParameterValue: &zoneID,
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
