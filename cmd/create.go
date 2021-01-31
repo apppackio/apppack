@@ -583,79 +583,6 @@ var accountCmd = &cobra.Command{
 	},
 }
 
-// createClusterCmd represents the create command
-var createClusterCmd = &cobra.Command{
-	Use:                   "cluster [<name>]",
-	Short:                 "setup resources for an AppPack Cluster",
-	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
-	DisableFlagsInUseLine: true,
-	Args:                  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		answers, err := askForMissingArgs(cmd, nil)
-		var clusterName string
-		if len(args) == 0 {
-			clusterName = "apppack"
-		} else {
-			clusterName = args[0]
-		}
-		checkErr(err)
-		sess, err := awsSession()
-		checkErr(err)
-		_, err = stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
-		if err == nil {
-			checkErr(fmt.Errorf("cluster %s already exists", clusterName))
-		}
-		if createChangeSet {
-			fmt.Println("Creating Cloudformation Change Set for cluster resources...")
-		} else {
-			fmt.Println("Creating cluster resources...")
-		}
-		startSpinner()
-		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:cluster"), Value: &clusterName},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
-		domain := getArgValue(cmd, answers, "domain", true)
-		zone, err := hostedZoneForDomain(sess, *domain)
-		zoneId := strings.Split(*zone.Id, "/")[2]
-		checkErr(err)
-
-		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf("apppack-cluster-%s", clusterName)),
-			TemplateURL: aws.String(clusterFormationURL),
-			Parameters: []*cloudformation.Parameter{
-				{
-					ParameterKey:   aws.String("Name"),
-					ParameterValue: &clusterName,
-				},
-				{
-					ParameterKey: aws.String("AvailabilityZones"),
-					ParameterValue: aws.String(strings.Join(
-						[]string{fmt.Sprintf("%sa", *sess.Config.Region), fmt.Sprintf("%sb", *sess.Config.Region), fmt.Sprintf("%sc", *sess.Config.Region)},
-						",",
-					)),
-				},
-				{
-					ParameterKey:   aws.String("InstanceType"),
-					ParameterValue: getArgValue(cmd, answers, "instance-class", false),
-				},
-				{
-					ParameterKey:   aws.String("Domain"),
-					ParameterValue: domain,
-				},
-				{
-					ParameterKey:   aws.String("HostedZone"),
-					ParameterValue: &zoneId,
-				},
-			},
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-			Tags:         cfnTags,
-		}
-		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s cluster", clusterName))
-		checkErr(err)
-	},
-}
-
 // createDatabaseCmd represents the create database command
 var createDatabaseCmd = &cobra.Command{
 	Use:                   "database [<name>]",
@@ -1175,10 +1102,6 @@ func init() {
 	appCmd.Flags().Bool("addon-ses", false, "setup SES (Email) add-on (requires manual approval of domain at SES)")
 	appCmd.Flags().String("addon-ses-domain", "*", "Ddomain approved for sending via SES add-on. Use '*' for all domains.")
 	appCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
-
-	createCmd.AddCommand(createClusterCmd)
-	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
-	createClusterCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 
 	createCmd.AddCommand(createDatabaseCmd)
 	createDatabaseCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
