@@ -955,7 +955,7 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 			deleted = append(deleted, *resource.ResourceStatus)
 		}
 	}
-	status := fmt.Sprintf(" resources: %d in progress / %d complete / %d deleted", len(inProgress), len(created), len(deleted))
+	status := fmt.Sprintf(" resources: %d in progress / %d created / %d deleted", len(inProgress), len(created), len(deleted))
 	if len(failed) > 0 {
 		status = fmt.Sprintf("%s / %d failed", status, len(failed))
 	}
