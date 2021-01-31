@@ -25,7 +25,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/spf13/cobra"
 )
 
@@ -95,32 +94,6 @@ func clusterStackForApp(sess *session.Session, appName string) (*string, error) 
 		}
 	}
 	return nil, fmt.Errorf("app stack %s missing ClusterStackName parameter", appName)
-}
-
-func isHostedZoneForDomain(dnsName string, hostedZone *route53.HostedZone) bool {
-	return strings.HasSuffix(dnsName, strings.Trim(*hostedZone.Name, "."))
-}
-
-// hostedZoneForDomain searches AWS Hosted Zones for a place for this domain
-func hostedZoneForDomain(sess *session.Session, dnsName string) (*route53.HostedZone, error) {
-	r53Svc := route53.New(sess)
-	nameParts := strings.Split(dnsName, ".")
-	// keep stripping off subdomains until a match is found
-	for i := range nameParts {
-		input := route53.ListHostedZonesByNameInput{
-			DNSName: aws.String(strings.Join(nameParts[i:], ".")),
-		}
-		resp, err := r53Svc.ListHostedZonesByName(&input)
-		if err != nil {
-			return nil, err
-		}
-		for _, zone := range resp.HostedZones {
-			if isHostedZoneForDomain(dnsName, zone) && *zone.Config.PrivateZone != true {
-				return zone, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("no hosted zones found for %s", dnsName)
 }
 
 // createCustomDomainCmd represents the createCustomDomain command
