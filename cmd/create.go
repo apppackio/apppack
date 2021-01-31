@@ -32,6 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
@@ -264,6 +265,32 @@ func ddbClusterQuery(sess *session.Session, cluster *string, addon *string) (*[]
 		return nil, fmt.Errorf("could not find any AppPack %s stacks on %s cluster", strings.ToLower(*addon), *cluster)
 	}
 	return &result.Items, nil
+}
+
+func isHostedZoneForDomain(dnsName string, hostedZone *route53.HostedZone) bool {
+	return strings.HasSuffix(dnsName, strings.Trim(*hostedZone.Name, "."))
+}
+
+// hostedZoneForDomain searches AWS Hosted Zones for a place for this domain
+func hostedZoneForDomain(sess *session.Session, dnsName string) (*route53.HostedZone, error) {
+	r53Svc := route53.New(sess)
+	nameParts := strings.Split(dnsName, ".")
+	// keep stripping off subdomains until a match is found
+	for i := range nameParts {
+		input := route53.ListHostedZonesByNameInput{
+			DNSName: aws.String(strings.Join(nameParts[i:], ".")),
+		}
+		resp, err := r53Svc.ListHostedZonesByName(&input)
+		if err != nil {
+			return nil, err
+		}
+		for _, zone := range resp.HostedZones {
+			if isHostedZoneForDomain(dnsName, zone) && *zone.Config.PrivateZone != true {
+				return zone, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no hosted zones found for %s", dnsName)
 }
 
 func listStacks(sess *session.Session, cluster *string, addon string) ([]string, error) {
@@ -553,127 +580,6 @@ var accountCmd = &cobra.Command{
 			}
 		}
 
-	},
-}
-
-// createRegionCmd represents the create command
-var createRegionCmd = &cobra.Command{
-	Use:                   "region",
-	Short:                 "setup AppPack resources for an AWS region",
-	Long:                  "*Requires AWS credentials.*",
-	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		answers, err := askForMissingArgs(cmd, nil)
-		checkErr(err)
-		sess, err := awsSession()
-		checkErr(err)
-		ssmSvc := ssm.New(sess)
-		if createChangeSet {
-			fmt.Println("Creating Cloudformation Change Set for region-level resources...")
-		} else {
-			fmt.Println("Creating region-level resources...")
-		}
-		startSpinner()
-		region := sess.Config.Region
-		tags := []*ssm.Tag{
-			{Key: aws.String("apppack:region"), Value: region},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
-		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-			Name:  aws.String("/apppack/account/dockerhub-access-token"),
-			Value: getArgValue(cmd, answers, "dockerhub-access-token", true),
-			Type:  aws.String("SecureString"),
-			Tags:  tags,
-		})
-		checkErr(err)
-		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:region"), Value: region},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
-
-		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf("apppack-region-%s", *region)),
-			TemplateURL: aws.String(regionFormationURL),
-			Parameters: []*cloudformation.Parameter{
-				{
-					ParameterKey:   aws.String("DockerhubUsername"),
-					ParameterValue: getArgValue(cmd, answers, "dockerhub-username", true),
-				},
-			},
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-			Tags:         cfnTags,
-		}
-		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s region", *region))
-		checkErr(err)
-	},
-}
-
-// createClusterCmd represents the create command
-var createClusterCmd = &cobra.Command{
-	Use:                   "cluster [<name>]",
-	Short:                 "setup resources for an AppPack Cluster",
-	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
-	DisableFlagsInUseLine: true,
-	Args:                  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		answers, err := askForMissingArgs(cmd, nil)
-		var clusterName string
-		if len(args) == 0 {
-			clusterName = "apppack"
-		} else {
-			clusterName = args[0]
-		}
-		checkErr(err)
-		sess, err := awsSession()
-		checkErr(err)
-		_, err = stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
-		if err == nil {
-			checkErr(fmt.Errorf("cluster %s already exists", clusterName))
-		}
-		if createChangeSet {
-			fmt.Println("Creating Cloudformation Change Set for cluster resources...")
-		} else {
-			fmt.Println("Creating cluster resources...")
-		}
-		startSpinner()
-		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:cluster"), Value: &clusterName},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
-
-		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf("apppack-cluster-%s", clusterName)),
-			TemplateURL: aws.String(clusterFormationURL),
-			Parameters: []*cloudformation.Parameter{
-				{
-					ParameterKey:   aws.String("Name"),
-					ParameterValue: &clusterName,
-				},
-				{
-					ParameterKey: aws.String("AvailabilityZones"),
-					ParameterValue: aws.String(strings.Join(
-						[]string{fmt.Sprintf("%sa", *sess.Config.Region), fmt.Sprintf("%sb", *sess.Config.Region), fmt.Sprintf("%sc", *sess.Config.Region)},
-						",",
-					)),
-				},
-				{
-					ParameterKey:   aws.String("InstanceType"),
-					ParameterValue: getArgValue(cmd, answers, "instance-class", false),
-				},
-				{
-					ParameterKey:   aws.String("Domain"),
-					ParameterValue: getArgValue(cmd, answers, "domain", true),
-				},
-				{
-					ParameterKey:   aws.String("HostedZone"),
-					ParameterValue: getArgValue(cmd, answers, "hosted-zone-id", true),
-				},
-			},
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-			Tags:         cfnTags,
-		}
-		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s cluster", clusterName))
-		checkErr(err)
 	},
 }
 
@@ -1066,9 +972,6 @@ func init() {
 	createCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to create resources in")
 
 	createCmd.AddCommand(accountCmd)
-	createCmd.AddCommand(createRegionCmd)
-	createRegionCmd.Flags().StringP("dockerhub-username", "u", "", "Docker Hub username")
-	createRegionCmd.Flags().StringP("dockerhub-access-token", "t", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
 
 	createCmd.AddCommand(appCmd)
 	appCmd.Flags().SortFlags = false
@@ -1087,11 +990,6 @@ func init() {
 	appCmd.Flags().Bool("addon-ses", false, "setup SES (Email) add-on (requires manual approval of domain at SES)")
 	appCmd.Flags().String("addon-ses-domain", "*", "Ddomain approved for sending via SES add-on. Use '*' for all domains.")
 	appCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
-
-	createCmd.AddCommand(createClusterCmd)
-	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
-	createClusterCmd.Flags().StringP("hosted-zone-id", "z", "", "AWS Route53 Hosted Zone ID for domain")
-	createClusterCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 
 	createCmd.AddCommand(createRedisCmd)
 	createRedisCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
