@@ -79,7 +79,7 @@ func instanceNameWeight(name string) string {
 			return name
 		}
 		// multiply multiplier by 10 to bump it above the ones without multipliers
-		return fmt.Sprintf("%s.%05d", parts[1], num*10)
+		return fmt.Sprintf("%s.%05d", class, num*10)
 	}
 	// determine string from static classOrder list
 	for _, o := range classOrder {
