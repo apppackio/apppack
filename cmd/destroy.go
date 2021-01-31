@@ -32,7 +32,7 @@ type accountDetails struct {
 	StackID string `json:"stack_id"`
 }
 
-func disableDBDeletionProtection(sess *session.Session, stack *cloudformation.Stack) error {
+func setRdsDeletionProtection(sess *session.Session, stack *cloudformation.Stack, protected bool) error {
 	rdsSvc := rds.New(sess)
 	clusterID := ""
 	for _, output := range stack.Outputs {
@@ -46,7 +46,7 @@ func disableDBDeletionProtection(sess *session.Session, stack *cloudformation.St
 	}
 	_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
 		DBClusterIdentifier: &clusterID,
-		DeletionProtection:  aws.Bool(false),
+		DeletionProtection:  &protected,
 		ApplyImmediately:    aws.Bool(true),
 	})
 	return err
@@ -217,8 +217,10 @@ var destroyDatabaseCmd = &cobra.Command{
 			checkErr(fmt.Errorf("aborting due to user input"))
 		}
 		startSpinner()
-		err = disableDBDeletionProtection(sess, stack)
-		checkErr(err)
+		err = setRdsDeletionProtection(sess, stack, false)
+		if err != nil {
+			printError(fmt.Sprintf("%v", err))
+		}
 		_, err = cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
 			StackName: stack.StackId,
 		})

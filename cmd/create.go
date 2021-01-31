@@ -722,6 +722,18 @@ var createDatabaseCmd = &cobra.Command{
 		}
 		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s database", name))
 		checkErr(err)
+		if createChangeSet {
+			printWarning(" deletion protection will not be enabled when the database is created. You can manually enable it after the database is created.")
+			return
+		}
+		// enable deletion protection after create
+		cfnSvc := cloudformation.New(sess)
+		stackDesc, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+			StackName: input.StackName,
+		})
+		checkErr(err)
+		err = setRdsDeletionProtection(sess, stackDesc.Stacks[0], true)
+		checkErr(err)
 	},
 }
 
