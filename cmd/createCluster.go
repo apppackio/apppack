@@ -81,31 +81,38 @@ var createClusterCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		answers, err := askForMissingArgs(cmd, nil)
 		var clusterName string
 		if len(args) == 0 {
 			clusterName = "apppack"
 		} else {
 			clusterName = args[0]
 		}
-		checkErr(err)
+		questions := []*survey.Question{}
+		answers := make(map[string]interface{})
+		addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
+		startSpinner()
 		sess, err := awsSession()
 		checkErr(err)
 		_, err = stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
 		if err == nil {
 			checkErr(fmt.Errorf("cluster %s already exists", clusterName))
 		}
-		if createChangeSet {
-			fmt.Println("Creating Cloudformation Change Set for cluster resources...")
-		} else {
-			fmt.Println("Creating cluster resources...")
-		}
-		startSpinner()
+		Spinner.Suffix = " looking up EC2 instance types"
+		instanceClasses, err := instanceTypeNames(sess)
+		Spinner.Suffix = ""
+		checkErr(err)
+		addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, &survey.Question{
+			Name:   "instance-class",
+			Prompt: &survey.Select{Message: "select an instance class", Options: instanceClasses, FilterMessage: "", Default: "t3.medium"},
+		})
+		Spinner.Stop()
+		err = survey.Ask(questions, &answers)
+		checkErr(err)
 		cfnTags := []*cloudformation.Tag{
 			{Key: aws.String("apppack:cluster"), Value: &clusterName},
 			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
-		domain := getArgValue(cmd, answers, "domain", true)
+		domain := getArgValue(cmd, &answers, "domain", true)
 		zone, err := hostedZoneForDomain(sess, *domain)
 		zoneID := strings.Split(*zone.Id, "/")[2]
 		checkErr(err)
@@ -126,11 +133,11 @@ var createClusterCmd = &cobra.Command{
 				},
 				{
 					ParameterKey:   aws.String("InstanceType"),
-					ParameterValue: getArgValue(cmd, answers, "instance-class", false),
+					ParameterValue: getArgValue(cmd, &answers, "instance-class", false),
 				},
 				{
 					ParameterKey:   aws.String("Domain"),
-					ParameterValue: getArgValue(cmd, answers, "domain", true),
+					ParameterValue: getArgValue(cmd, &answers, "domain", true),
 				},
 				{
 					ParameterKey:   aws.String("HostedZone"),
