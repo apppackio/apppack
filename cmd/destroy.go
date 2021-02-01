@@ -135,12 +135,14 @@ var destroyRegionCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("region %s", *sess.Config.Region)
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
+		_, err = ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String("/apppack/account/dockerhub-access-token"),
 		})
+		if err != nil {
+			printError(fmt.Sprintf("%v", err))
+		}
+		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		checkErr(err)
-		checkErr(err1)
 	},
 }
 
@@ -159,11 +161,13 @@ var destroyRedisCmd = &cobra.Command{
 		friendlyName := fmt.Sprintf("app %s", args[0])
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		_, err1 := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
+		if err != nil {
+			printError(fmt.Sprintf("%v", err))
+		}
+		_, err = ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String(fmt.Sprintf(redisAuthTokenParameterTmpl, args[0])),
 		})
 		checkErr(err)
-		checkErr(err1)
 	},
 }
 
