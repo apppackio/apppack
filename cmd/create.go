@@ -68,6 +68,7 @@ func appStackName(appName string) string {
 func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateStackInput, changeSet bool, friendlyName string) error {
 	var statusURL string
 	if changeSet {
+		Spinner.Stop()
 		fmt.Printf("Creating Cloudformation Change Set for %s...\n", friendlyName)
 		startSpinner()
 		changeSet, err := createChangeSetAndWait(sess, input)
@@ -82,6 +83,7 @@ func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateS
 		fmt.Println("View ChangeSet at:")
 		fmt.Println(aurora.White(statusURL))
 	} else {
+		Spinner.Stop()
 		fmt.Printf("Creating %s resources...\n", friendlyName)
 		startSpinner()
 		stack, err := createStackAndWait(sess, input)
