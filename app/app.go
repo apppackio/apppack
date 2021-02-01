@@ -311,7 +311,7 @@ func (a *App) WaitForTaskStopped(task *ecs.Task) error {
 func (a *App) ConnectToTask(task *ecs.Task, cmd *string) error {
 	binaryPath, err := exec.LookPath("session-manager-plugin")
 	if err != nil {
-		fmt.Println(aurora.Red("AWS Session Manager plugin was not found on the path. Install it to use this feature."))
+		fmt.Println(aurora.Red("AWS Session Manager plugin was not found on the path. Install it locally to use this feature."))
 		fmt.Println(aurora.White("https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html"))
 		os.Exit(1)
 	}
