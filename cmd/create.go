@@ -18,8 +18,10 @@ package cmd
 import (
 	"fmt"
 	"math/rand"
+	"net"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -266,8 +268,9 @@ func ddbClusterQuery(sess *session.Session, cluster *string, addon *string) (*[]
 	return &result.Items, nil
 }
 
+// isHostedZoneForDomain verifies that the dnsName would be a valid record in the hosted zone
 func isHostedZoneForDomain(dnsName string, hostedZone *route53.HostedZone) bool {
-	return strings.HasSuffix(dnsName, strings.Trim(*hostedZone.Name, "."))
+	return strings.HasSuffix(dnsName, strings.TrimSuffix(*hostedZone.Name, "."))
 }
 
 // hostedZoneForDomain searches AWS Hosted Zones for a place for this domain
@@ -285,11 +288,60 @@ func hostedZoneForDomain(sess *session.Session, dnsName string) (*route53.Hosted
 		}
 		for _, zone := range resp.HostedZones {
 			if isHostedZoneForDomain(dnsName, zone) && *zone.Config.PrivateZone != true {
+				err = checkHostedZone(r53Svc, zone)
+				if err != nil {
+					printError(fmt.Sprintf("%v", err))
+				}
 				return zone, nil
 			}
 		}
 	}
 	return nil, fmt.Errorf("no hosted zones found for %s", dnsName)
+}
+
+// HasSameItems verifies two string slices contain the same elements
+func HasSameItems(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	sort.Strings(a)
+	sort.Strings(b)
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// checkHostedZone prompts the user if the NS records for the domain don't match what AWS expects
+func checkHostedZone(r53svc *route53.Route53, zone *route53.HostedZone) error {
+	results, err := net.LookupNS(*zone.Name)
+	if err != nil {
+		return err
+	}
+	actualServers := []string{}
+	for _, r := range results {
+		actualServers = append(actualServers, strings.TrimSuffix(r.Host, "."))
+	}
+	expectedServers := []string{}
+	resp, err := r53svc.GetHostedZone(&route53.GetHostedZoneInput{Id: zone.Id})
+	if err != nil {
+		return err
+	}
+	for _, ns := range resp.DelegationSet.NameServers {
+		expectedServers = append(expectedServers, strings.TrimSuffix(*ns, "."))
+	}
+	if HasSameItems(actualServers, expectedServers) {
+		return nil
+	}
+	Spinner.Stop()
+	printWarning(fmt.Sprintf("%s doesn't appear to be using AWS' domain servers", strings.TrimSuffix(*zone.Name, ".")))
+	fmt.Printf("Expected:\n  %s\n\n", strings.Join(expectedServers, "\n  "))
+	fmt.Printf("Actual:\n  %s\n\n", strings.Join(actualServers, "\n  "))
+	fmt.Printf("If nameservers are not setup properly, TLS certificate creation will fail.\n")
+	pauseUntilEnter("Once you've verified the nameservers are correct, press ENTER to continue.")
+	return nil
 }
 
 func listStacks(sess *session.Session, cluster *string, addon string) ([]string, error) {
