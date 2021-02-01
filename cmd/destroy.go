@@ -233,6 +233,25 @@ var destroyAppCmd = &cobra.Command{
 	},
 }
 
+// destroyCustomDomainCmd represents the destroy custom-domain
+var destroyCustomDomainCmd = &cobra.Command{
+	Use:                   "custom-domain <domain>",
+	Short:                 "destroy AWS resources used by the custom domain",
+	Long:                  "*Requires AWS credentials.*",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		primaryDomain := args[0]
+		friendlyName := fmt.Sprintf("%s domain", primaryDomain)
+		sess, err := awsSession()
+		checkErr(err)
+		cfnSvc := cloudformation.New(sess)
+		stack, err := confirmDeleteStack(cfnSvc, customDomainStackName(primaryDomain), friendlyName)
+		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
+		checkErr(err)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(destroyCmd)
 	destroyCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to destroy resources in")
@@ -240,6 +259,7 @@ func init() {
 	destroyCmd.AddCommand(destroyAccountCmd)
 	destroyCmd.AddCommand(destroyRegionCmd)
 	destroyCmd.AddCommand(destroyClusterCmd)
+	destroyCmd.AddCommand(destroyCustomDomainCmd)
 	destroyCmd.AddCommand(destroyAppCmd)
 	destroyCmd.AddCommand(destroyRedisCmd)
 	destroyCmd.AddCommand(destroyDatabaseCmd)

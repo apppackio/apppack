@@ -28,6 +28,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func customDomainStackName(domain string) string {
+	return fmt.Sprintf("apppack-customdomain-%s", strings.Replace(strings.TrimSuffix(domain, "."), ".", "-", -1))
+}
+
 // appList gets a list of app names from DynamoDB
 func appList(sess *session.Session) ([]string, error) {
 	ddbSvc := dynamodb.New(sess)
@@ -150,7 +154,7 @@ The domain(s) provided must all part of the same parent domain and a Route53 Hos
 		}
 
 		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf("apppack-customdomain-%s", strings.Replace(primaryDomain, ".", "-", -1))),
+			StackName:   aws.String(customDomainStackName(primaryDomain)),
 			TemplateURL: aws.String(customDomainFormationURL),
 			Parameters:  parameters,
 			Tags:        cfnTags,
