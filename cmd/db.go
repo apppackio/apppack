@@ -112,9 +112,10 @@ var dbShellCmd = &cobra.Command{
 
 // dbDumpCmd represents the db load command
 var dbDumpCmd = &cobra.Command{
-	Use:   "dump",
-	Short: "dump the database to a local file",
-	Long:  "Dump the database to `<app-name>.dump` in the current directory",
+	Use:                   "dump",
+	Short:                 "dump the database to a local file",
+	Long:                  "Dump the database to `<app-name>.dump` in the current directory",
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		getObjectInput, err := dbDumplocation("dumps/")
@@ -148,7 +149,8 @@ var dbLoadCmd = &cobra.Command{
 	
 WARNING: This is a destructive action which will delete the contents of your remote database in order to load the dump in.
 	`,
-	Args: cobra.ExactArgs(1),
+	Args:                  cobra.ExactArgs(1),
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		var remoteFile string
 		startSpinner()
