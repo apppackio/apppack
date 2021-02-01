@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-isatty"
@@ -66,17 +67,17 @@ func appStackName(appName string) string {
 }
 
 func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateStackInput, changeSet bool, friendlyName string) error {
-	var statusURL string
+	cfnSvc := cloudformation.New(sess)
 	if changeSet {
 		Spinner.Stop()
 		fmt.Printf("Creating Cloudformation Change Set for %s...\n", friendlyName)
 		startSpinner()
-		changeSet, err := createChangeSetAndWait(sess, input)
+		changeSet, err := createChangeSetAndWait(cfnSvc, input)
 		Spinner.Stop()
 		if err != nil {
 			return err
 		}
-		statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
+		statusURL := cloudformationStackURL(sess.Config.Region, changeSet.ChangeSetId)
 		if *changeSet.Status != "CREATE_COMPLETE" {
 			return fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL)
 		}
@@ -86,22 +87,20 @@ func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateS
 		Spinner.Stop()
 		fmt.Printf("Creating %s resources...\n", friendlyName)
 		startSpinner()
-		stack, err := createStackAndWait(sess, input)
+		stack, err := createStackAndWait(cfnSvc, input, true)
 		Spinner.Stop()
 		if err != nil {
 			return err
 		}
-		statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
 		if *stack.StackStatus != "CREATE_COMPLETE" {
-			return fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL)
+			return fmt.Errorf("Stack creation failed.\nView status at %s", cloudformationStackURL(sess.Config.Region, stack.StackId))
 		}
 		printSuccess(fmt.Sprintf("created %s", friendlyName))
 	}
 	return nil
 }
 
-func createChangeSetAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeChangeSetOutput, error) {
-	cfnSvc := cloudformation.New(sess)
+func createChangeSetAndWait(cfnSvc *cloudformation.CloudFormation, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeChangeSetOutput, error) {
 	changeSetName := fmt.Sprintf("create-%d", int32(time.Now().Unix()))
 	_, err := cfnSvc.CreateChangeSet(&cloudformation.CreateChangeSetInput{
 		ChangeSetType: aws.String("CREATE"),
@@ -130,15 +129,45 @@ func createChangeSetAndWait(sess *session.Session, stackInput *cloudformation.Cr
 	return changeSet, nil
 }
 
-func createStackAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
-	cfnSvc := cloudformation.New(sess)
+func createStackAndWait(cfnSvc *cloudformation.CloudFormation, stackInput *cloudformation.CreateStackInput, retry bool) (*cloudformation.Stack, error) {
 	stackOutput, err := cfnSvc.CreateStack(stackInput)
 	if err != nil {
 		return nil, err
 	}
 	Spinner.Stop()
-	fmt.Println(aurora.Faint(fmt.Sprintf("creating %s", *stackOutput.StackId)))
-	return waitForCloudformationStack(cfnSvc, *stackInput.StackName)
+	fmt.Println(aurora.Faint(*stackOutput.StackId))
+	stack, err := waitForCloudformationStack(cfnSvc, *stackInput.StackName)
+	if retry && *stack.StackStatus == "ROLLBACK_COMPLETE" {
+		stack, err = retryStackCreation(cfnSvc, stack.StackId, stackInput)
+	}
+	return stack, err
+}
+
+// retryStackCreation will attempt to destroy and recreate the stack
+func retryStackCreation(cfnSvc *cloudformation.CloudFormation, stackID *string, input *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
+	printWarning("stack creation failed")
+	fmt.Println("retrying operation... deleting and recreating stack")
+	sentry.CaptureException(fmt.Errorf("Stack creation failed: %s", *input.StackName))
+	defer sentry.Flush(time.Second * 5)
+	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{StackName: stackID})
+	if err != nil {
+		return nil, err
+	}
+	stack, err := waitForCloudformationStack(cfnSvc, *stackID)
+	if *stack.StackStatus != "DELETE_COMPLETE" {
+		err = fmt.Errorf("Stack destruction failed: %s", *stack.StackName)
+		sentry.CaptureException(err)
+		fmt.Printf("%s", aurora.Bold(aurora.White(
+			fmt.Sprintf("Unable to destroy stack. Check Cloudformation console for more details:\n%s", cloudformationStackURL(&region, stackID)),
+		)))
+		return nil, err
+	}
+	fmt.Println("successfully deleted failed stack...")
+	return createStackAndWait(cfnSvc, input, false)
+}
+
+func cloudformationStackURL(region *string, stackID *string) string {
+	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
 }
 
 // awsSession starts a session, verifying a region has been provided
@@ -603,12 +632,12 @@ var accountCmd = &cobra.Command{
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,
 		}
-		var statusURL string
+		cfnSvc := cloudformation.New(sess)
 		if createChangeSet {
-			changeSet, err := createChangeSetAndWait(sess, &input)
+			changeSet, err := createChangeSetAndWait(cfnSvc, &input)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL = fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*changeSet.ChangeSetId))
+			statusURL := cloudformationStackURL(sess.Config.Region, changeSet.ChangeSetId)
 			if *changeSet.Status != "CREATE_COMPLETE" {
 				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
 			} else {
@@ -617,12 +646,11 @@ var accountCmd = &cobra.Command{
 				fmt.Println("Once your stack is created send the 'Outputs' to support@apppack.io for account approval.")
 			}
 		} else {
-			stack, err := createStackAndWait(sess, &input)
+			stack, err := createStackAndWait(cfnSvc, &input, true)
 			Spinner.Stop()
 			checkErr(err)
-			statusURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *sess.Config.Region, url.QueryEscape(*stack.StackId))
 			if *stack.StackStatus != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack creation Failed.\nView status at %s", statusURL))
+				checkErr(fmt.Errorf("Stack creation failed.\nView status at %s", cloudformationStackURL(sess.Config.Region, stack.StackId)))
 			} else {
 				printSuccess("AppPack account created")
 				fmt.Println(aurora.Bold("Send the following information to support@apppack.io for account approval:"))
