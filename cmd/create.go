@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -725,9 +724,7 @@ func verifySourceCredentials(sess *session.Session, repositoryType string, inter
 		} else {
 			fmt.Printf("Visit the following URL to authenticate: %s", *url)
 		}
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Finish authentication in your web browser then press ENTER to continue.")
-		_, _ = reader.ReadString('\n')
+		pauseUntilEnter("Finish authentication in your web browser then press ENTER to continue.")
 		return verifySourceCredentials(sess, repositoryType, interactive)
 	}
 	return nil

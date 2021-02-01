@@ -16,9 +16,7 @@ limitations under the License.
 package cmd
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 
 	"github.com/apppackio/apppack/auth"
 	"github.com/logrusorgru/aurora"
@@ -47,9 +45,7 @@ var loginCmd = &cobra.Command{
 		data := *dataPtr
 		fmt.Println("Your verification code is", data.UserCode)
 		browser.OpenURL(data.VerificationURIComplete)
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Finish verification in your web browser then press ENTER to continue.")
-		_, _ = reader.ReadString('\n')
+		pauseUntilEnter("Finish verification in your web browser then press ENTER to continue.")
 		userInfo, err := auth.LoginComplete(data.DeviceCode)
 		checkErr(err)
 		printSuccess(fmt.Sprintf("Logged in as %s", aurora.Bold(userInfo.Email)))

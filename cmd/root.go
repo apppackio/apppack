@@ -47,6 +47,11 @@ func startSpinner() {
 	}
 }
 
+func pauseUntilEnter(msg string) {
+	fmt.Println(aurora.Bold(aurora.White(msg)))
+	fmt.Scanln()
+}
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:                   "apppack",
