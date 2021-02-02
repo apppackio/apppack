@@ -188,6 +188,9 @@ func awsSession() (*session.Session, error) {
 
 }
 
+// hasApppackOIDC checks for existence of our OIDC Provider
+// usually we check for the existence of a Cfn Stack, but these resources are global
+// and Stacks are per-region, so we need to check for this resource directly
 func hasApppackOIDC(sess *session.Session) (*bool, error) {
 	iamSvc := iam.New(sess)
 	resp, err := iamSvc.ListOpenIDConnectProviders(&iam.ListOpenIDConnectProvidersInput{})
@@ -208,6 +211,7 @@ func hasApppackOIDC(sess *session.Session) (*bool, error) {
 	return aws.Bool(false), nil
 }
 
+// stackExists checks if a named Cfn Stack already exists in the region
 func stackExists(sess *session.Session, stackName string) (*bool, error) {
 	cfnSvc := cloudformation.New(sess)
 	_, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
