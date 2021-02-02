@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ssm"
@@ -31,9 +32,13 @@ var createRegionCmd = &cobra.Command{
 	Long:                  "*Requires AWS credentials.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		answers, err := askForMissingArgs(cmd, nil)
-		checkErr(err)
 		sess, err := awsSession()
+		checkErr(err)
+		questions := []*survey.Question{}
+		answers := make(map[string]interface{})
+		addQuestionFromFlag(cmd.Flags().Lookup("dockerhub-username"), &questions, nil)
+		addQuestionFromFlag(cmd.Flags().Lookup("dockerhub-access-token"), &questions, nil)
+		err = survey.Ask(questions, &answers)
 		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		if createChangeSet {
@@ -49,7 +54,7 @@ var createRegionCmd = &cobra.Command{
 		}
 		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 			Name:  aws.String("/apppack/account/dockerhub-access-token"),
-			Value: getArgValue(cmd, answers, "dockerhub-access-token", true),
+			Value: getArgValue(cmd, &answers, "dockerhub-access-token", true),
 			Type:  aws.String("SecureString"),
 			Tags:  tags,
 		})
@@ -65,7 +70,7 @@ var createRegionCmd = &cobra.Command{
 			Parameters: []*cloudformation.Parameter{
 				{
 					ParameterKey:   aws.String("DockerhubUsername"),
-					ParameterValue: getArgValue(cmd, answers, "dockerhub-username", true),
+					ParameterValue: getArgValue(cmd, &answers, "dockerhub-username", true),
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
