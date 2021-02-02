@@ -33,7 +33,7 @@ var initCmd = &cobra.Command{
 		fmt.Print(aurora.Faint("==="), aurora.Bold(aurora.Blue("Welcome to AppPack!")), " 🎉\n\n")
 		fmt.Println("This will step you through the intial AppPack setup process.")
 		fmt.Println("Before getting started, make sure you've taken care of the prerequisites (https://docs.apppack.io/setup/#prerequisites).")
-		fmt.Printf("This process should take about 10 minutes. After that, you'll be ready to start installing apps on your cluster.\n\n")
+		fmt.Printf("This process should take less than 10 minutes. After that, you'll be ready to start installing apps on your cluster.\n\n")
 		alreadyInstalled, err := hasApppackOIDC(sess)
 		checkErr(err)
 		if *alreadyInstalled {
@@ -44,7 +44,7 @@ var initCmd = &cobra.Command{
 			accountCmd.Run(cmd, []string{})
 		}
 
-		fmt.Printf("\n\n")
+		fmt.Println("")
 		alreadyInstalled, err = stackExists(sess, fmt.Sprintf("apppack-region-%s", *sess.Config.Region))
 		if *alreadyInstalled {
 			fmt.Printf("It looks like you've already setup the %s region resources.\n", *sess.Config.Region)
@@ -54,7 +54,7 @@ var initCmd = &cobra.Command{
 			createRegionCmd.Run(cmd, []string{})
 		}
 
-		fmt.Printf("\n\n")
+		fmt.Println("")
 		clusterName := cmd.Flags().Lookup("cluster-name").Value.String()
 		alreadyInstalled, err = stackExists(sess, fmt.Sprintf("apppack-cluster-%s", clusterName))
 		if *alreadyInstalled {
@@ -65,7 +65,7 @@ var initCmd = &cobra.Command{
 			createClusterCmd.Run(cmd, []string{clusterName})
 		}
 
-		fmt.Printf("\n\n")
+		fmt.Println("")
 		printSuccess("AppPack initialization complete")
 		fmt.Print("You can now start installing apps onto your cluster.\n")
 	},
