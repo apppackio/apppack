@@ -831,19 +831,12 @@ func verifySourceCredentials(sess *session.Session, repositoryType string, inter
 			fmt.Println("No further steps are necessary. After you've completed the authentication, re-run this command.")
 			os.Exit(1)
 		}
-		creds, err := sess.Config.Credentials.Get()
-		if err != nil {
-			return err
-		}
-		url, err := auth.GetConsoleURL(&creds, newProjectURL)
-		if err != nil {
-			return err
-		}
-		if isatty.IsTerminal(os.Stdin.Fd()) {
+		url, err := auth.GetConsoleURL(sess, newProjectURL)
+		if err == nil && isatty.IsTerminal(os.Stdin.Fd()) {
 			fmt.Println("Opening the CodeBuild new project page now...")
 			browser.OpenURL(*url)
 		} else {
-			fmt.Printf("Visit the following URL to authenticate: %s", *url)
+			fmt.Printf("Visit the following URL to authenticate: %s", newProjectURL)
 		}
 		pauseUntilEnter("Finish authentication in your web browser then press ENTER to continue.")
 		return verifySourceCredentials(sess, repositoryType, interactive)

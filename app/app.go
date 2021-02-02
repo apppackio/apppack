@@ -451,11 +451,7 @@ func (a *App) GetBuildArtifact(build *codebuild.Build, name string) ([]byte, err
 
 // GetConsoleURL generate a URL which will sign the user in to the AWS console and redirect to the desinationURL
 func (a *App) GetConsoleURL(destinationURL string) (*string, error) {
-	creds, err := a.Session.Config.Credentials.Get()
-	if err != nil {
-		return nil, err
-	}
-	return auth.GetConsoleURL(&creds, destinationURL)
+	return auth.GetConsoleURL(a.Session, destinationURL)
 }
 
 // DescribeTasks generate a URL which will sign the user in to the AWS console and redirect to the desinationURL

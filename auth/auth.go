@@ -403,8 +403,15 @@ func WhoAmI() (*string, error) {
 }
 
 // GetConsoleURL - Returns the sign-in URL
-func GetConsoleURL(creds *credentials.Value, destinationURL string) (*string, error) {
-	token, err := awsconsoleurl.GetSignInToken(creds)
+func GetConsoleURL(sess *session.Session, destinationURL string) (*string, error) {
+	creds, err := sess.Config.Credentials.Get()
+	if err != nil {
+		return nil, err
+	}
+	if creds.SessionToken == "" {
+		return nil, fmt.Errorf("can't generate a signin token without a session token")
+	}
+	token, err := awsconsoleurl.GetSignInToken(&creds)
 	return aws.String(fmt.Sprintf(
 		"https://signin.aws.amazon.com/federation?Action=login&Destination=%s&SigninToken=%s",
 		url.QueryEscape(destinationURL),
