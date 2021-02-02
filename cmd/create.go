@@ -824,7 +824,8 @@ func verifySourceCredentials(sess *session.Session, repositoryType string, inter
 		fmt.Printf("    2. Select %s for the %s\n", aurora.Bold(friendlySourceName), aurora.Bold("Source provider"))
 		fmt.Printf("    3. Keep the default %s\n", aurora.Bold("Connect using OAuth"))
 		fmt.Printf("    4. Click %s\n", aurora.Bold(fmt.Sprintf("Connect to %s", friendlySourceName)))
-		fmt.Printf("    5. Click %s in the popup window\n\n", aurora.Bold("Confirm"))
+		fmt.Printf("    5. Click %s in the popup window\n", aurora.Bold("Confirm"))
+		fmt.Printf("    6. %s You can close the browser window and continue with app setup here.\n\n", aurora.Bold("That's it!"))
 		newProjectURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/project/new", *sess.Config.Region)
 		if !interactive {
 			fmt.Printf("Visit %s to complete the authentication\n", newProjectURL)
