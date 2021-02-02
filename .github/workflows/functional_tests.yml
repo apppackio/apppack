@@ -21,9 +21,15 @@ jobs:
         name: Build
         run: go build 
       -
-        name: Account Setup
-        run: ./apppack account-setup --region us-east-1 --dockerhub-username $DOCKERHUB_USERNAME --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN | tee account_setup_output.txt
-        timeout-minutes: 6
+        name: AppPack Init
+        run: |
+            ./apppack init --region us-east-1 \
+                           --dockerhub-username $DOCKERHUB_USERNAME \
+                           --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN \
+                           --cluster-name test \
+                           --domain testclusters.apppack.io \
+                           --instance-class t3.micro | tee account_setup_output.txt
+        timeout-minutes: 9
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
@@ -42,18 +48,11 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
       -
-        name: Create cluster
-        run: ./apppack create cluster --region us-east-1 --domain testclusters.apppack.io --instance-class t3.micro
-        timeout-minutes: 8
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      -
         name: Create app
         run:  |
             ./apppack create app --region us-east-1 \
                                  --non-interactive \
-                                 --cluster apppack \
+                                 --cluster test \
                                  --repository https://github.com/apppackio/apppack-demo-python.git \
                                  --branch main \
                                  --users user@apppack.io \
@@ -81,7 +80,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy cluster
-        run: yes yes | ./apppack destroy cluster apppack --region us-east-1
+        run: yes yes | ./apppack destroy cluster test --region us-east-1
         if: always()
         timeout-minutes: 8
         env:

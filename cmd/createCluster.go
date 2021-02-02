@@ -154,6 +154,9 @@ var createClusterCmd = &cobra.Command{
 
 func init() {
 	createCmd.AddCommand(createClusterCmd)
+	// All flags need to be added to `initCmd` as well so it can call this cmd
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
+	initCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
 	createClusterCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
+	initCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 }

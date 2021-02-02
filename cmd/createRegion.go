@@ -78,7 +78,10 @@ var createRegionCmd = &cobra.Command{
 
 func init() {
 	createCmd.AddCommand(createRegionCmd)
+	// All flags need to be added to `initCmd` as well so it can call this cmd
 	createRegionCmd.Flags().StringP("dockerhub-username", "u", "", "Docker Hub username")
+	initCmd.Flags().StringP("dockerhub-username", "u", "", "Docker Hub username")
 	createRegionCmd.Flags().StringP("dockerhub-access-token", "t", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
+	initCmd.Flags().StringP("dockerhub-access-token", "t", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
 
 }

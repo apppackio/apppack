@@ -28,11 +28,13 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/getsentry/sentry-go"
@@ -184,6 +186,42 @@ func awsSession() (*session.Session, error) {
 	}
 	return sess, err
 
+}
+
+func hasApppackOIDC(sess *session.Session) (*bool, error) {
+	iamSvc := iam.New(sess)
+	resp, err := iamSvc.ListOpenIDConnectProviders(&iam.ListOpenIDConnectProvidersInput{})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range resp.OpenIDConnectProviderList {
+		oidcProvider, err := iamSvc.GetOpenIDConnectProvider(&iam.GetOpenIDConnectProviderInput{
+			OpenIDConnectProviderArn: r.Arn,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if *oidcProvider.Url == "auth.apppack.io/" {
+			return aws.Bool(true), nil
+		}
+	}
+	return aws.Bool(false), nil
+}
+
+func stackExists(sess *session.Session, stackName string) (*bool, error) {
+	cfnSvc := cloudformation.New(sess)
+	_, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+		StackName: &stackName,
+	})
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if fmt.Sprint(aerr.Code()) == "ValidationError" {
+				return aws.Bool(false), nil
+			}
+		}
+		return nil, err
+	}
+	return aws.Bool(true), nil
 }
 
 type stackItem struct {
@@ -601,12 +639,9 @@ var accountCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sess, err := awsSession()
 		checkErr(err)
-		ssmSvc := ssm.New(sess)
-		_, err = ssmSvc.GetParameter(&ssm.GetParameterInput{
-			Name: aws.String("/apppack/account"),
-		})
-
-		if err == nil {
+		alreadyInstalled, err := hasApppackOIDC(sess)
+		checkErr(err)
+		if *alreadyInstalled {
 			checkErr(fmt.Errorf("account already exists"))
 		}
 		if createChangeSet {
