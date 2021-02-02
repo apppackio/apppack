@@ -347,7 +347,7 @@ func (a *App) ConnectToTask(task *ecs.Task, cmd *string) error {
 	}
 	// session-manager-plugin isn't documented
 	// args were determined from here: https://github.com/aws/aws-cli/blob/84f751b71131489afcb5401d8297bb5b3faa29cb/awscli/customizations/sessionmanager.py#L83-L89
-	err = syscall.Exec(binaryPath, []string{"session-manager-plugin", string(arg1), *region, "StartSession", "", string(arg2), fmt.Sprintf("https://ssm.%s.amazonaws.com", region)}, os.Environ())
+	err = syscall.Exec(binaryPath, []string{"session-manager-plugin", string(arg1), *region, "StartSession", "", string(arg2), fmt.Sprintf("https://ssm.%s.amazonaws.com", *region)}, os.Environ())
 	if err != nil {
 		return err
 	}
