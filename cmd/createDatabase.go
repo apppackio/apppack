@@ -57,6 +57,23 @@ var classOrder = []struct {
 	{"metal", 9999},
 }
 
+var previousGenerations = []string{
+	"db.t2.",
+	"db.m3.",
+	"db.m4.",
+	"db.r3.",
+	"db.r4.",
+}
+
+func isPreviousGeneration(instanceClass *string) bool {
+	for _, p := range previousGenerations {
+		if strings.HasPrefix(*instanceClass, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // instanceNameWeight creates a sortable string for instance classes
 func instanceNameWeight(name string) string {
 	parts := strings.Split(name, ".")
@@ -90,11 +107,14 @@ func instanceNameWeight(name string) string {
 	return name
 }
 
-func listRDSInstanceClasses(sess *session.Session, engine *string) ([]string, error) {
+func listRDSInstanceClasses(sess *session.Session, engine *string, version *string) ([]string, error) {
 	rdsSvc := rds.New(sess)
 	var instanceClassResults []*rds.OrderableDBInstanceOption
 
-	err := rdsSvc.DescribeOrderableDBInstanceOptionsPages(&rds.DescribeOrderableDBInstanceOptionsInput{Engine: engine}, func(resp *rds.DescribeOrderableDBInstanceOptionsOutput, lastPage bool) bool {
+	err := rdsSvc.DescribeOrderableDBInstanceOptionsPages(&rds.DescribeOrderableDBInstanceOptionsInput{
+		Engine:        engine,
+		EngineVersion: version,
+	}, func(resp *rds.DescribeOrderableDBInstanceOptionsOutput, lastPage bool) bool {
 		for _, instanceOption := range resp.OrderableDBInstanceOptions {
 			if instanceOption == nil {
 				continue
@@ -109,13 +129,41 @@ func listRDSInstanceClasses(sess *session.Session, engine *string) ([]string, er
 	}
 	var instanceClasses []string
 	for _, opt := range instanceClassResults {
-		instanceClasses = append(instanceClasses, *opt.DBInstanceClass)
+		if !isPreviousGeneration(opt.DBInstanceClass) {
+			instanceClasses = append(instanceClasses, *opt.DBInstanceClass)
+		}
 	}
 	instanceClasses = dedupe(instanceClasses)
 	sort.Slice(instanceClasses, func(i int, j int) bool {
 		return instanceNameWeight(instanceClasses[i]) < instanceNameWeight(instanceClasses[j])
 	})
 	return instanceClasses, nil
+}
+
+func engineName(engine *string, aurora *string) (*string, error) {
+	if *aurora == "yes" {
+		if *engine == "mysql" {
+			return aws.String("aurora-mysql"), nil
+		} else if *engine == "postgres" {
+			return aws.String("aurora-postgresql"), nil
+		} else {
+			return nil, fmt.Errorf("unrecognized databae engine. valid options are 'mysql' or 'postgres'")
+		}
+	}
+	if *engine == "mysql" || *engine == "postgres" {
+		return engine, nil
+	} else {
+		return nil, fmt.Errorf("unrecognized databae engine. valid options are 'mysql' or 'postgres'")
+	}
+}
+
+func getLatestRdsVersion(sess *session.Session, engine *string) (*string, error) {
+	rdsSvc := rds.New(sess)
+	resp, err := rdsSvc.DescribeDBEngineVersions(&rds.DescribeDBEngineVersionsInput{Engine: engine})
+	if err != nil {
+		return nil, err
+	}
+	return resp.DBEngineVersions[len(resp.DBEngineVersions)-1].EngineVersion, nil
 }
 
 // createDatabaseCmd represents the create database command
@@ -135,6 +183,8 @@ var createDatabaseCmd = &cobra.Command{
 		sess, err := awsSession()
 		checkErr(err)
 		var engine *string
+		var isAurora *string
+		var version *string
 		answers := make(map[string]interface{})
 		if !nonInteractive {
 			questions := []*survey.Question{}
@@ -143,26 +193,41 @@ var createDatabaseCmd = &cobra.Command{
 			questions = append(questions, clusterQuestion)
 			addQuestionFromFlag(cmd.Flags().Lookup("engine"), &questions, &survey.Question{
 				Name:   "engine",
-				Prompt: &survey.Select{Message: "select the database engine", Options: []string{"aurora-mysql", "aurora-postgresql"}, FilterMessage: "", Default: "aurora-postgresql"},
+				Prompt: &survey.Select{Message: "select the database engine", Options: []string{"mysql", "postgres"}, FilterMessage: "", Default: "postgres"},
 			})
+			addQuestionFromFlag(cmd.Flags().Lookup("aurora"), &questions, nil)
 			err = survey.Ask(questions, &answers)
 			checkErr(err)
 			engine = getArgValue(cmd, &answers, "engine", false)
+			isAurora = getArgValue(cmd, &answers, "aurora", false)
+			engine, err = engineName(engine, isAurora)
+			checkErr(err)
 			questions = []*survey.Question{}
 			startSpinner()
 			Spinner.Suffix = fmt.Sprintf(" retrieving instance classes for %s", *engine)
-			instanceClasses, err := listRDSInstanceClasses(sess, engine)
+			version, err = getLatestRdsVersion(sess, engine)
 			checkErr(err)
+			instanceClasses, err := listRDSInstanceClasses(sess, engine, version)
+			checkErr(err)
+			Spinner.Stop()
 			addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, &survey.Question{
 				Name:   "instance-class",
 				Prompt: &survey.Select{Message: "select the instance class", Options: instanceClasses, FilterMessage: "", Default: "db.t3.medium"},
 			})
-			Spinner.Stop()
 			addQuestionFromFlag(cmd.Flags().Lookup("multi-az"), &questions, nil)
+			fmt.Println(*isAurora)
+			if *isAurora == "no" {
+				addQuestionFromFlag(cmd.Flags().Lookup("allocated-storage"), &questions, nil)
+				addQuestionFromFlag(cmd.Flags().Lookup("max-allocated-storage"), &questions, nil)
+			}
 			err = survey.Ask(questions, &answers)
 			checkErr(err)
 		} else {
 			engine = getArgValue(cmd, &answers, "engine", false)
+			isAurora = getArgValue(cmd, &answers, "aurora", false)
+			engine, err = engineName(engine, isAurora)
+			version, err = getLatestRdsVersion(sess, engine)
+			checkErr(err)
 		}
 		cluster := getArgValue(cmd, &answers, "cluster", true)
 		// check if a database already exists on the cluster
@@ -173,20 +238,12 @@ var createDatabaseCmd = &cobra.Command{
 		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
 		checkErr(err)
 		var multiAZParameter string
-		if *(getArgValue(cmd, &answers, "multi-az", false)) == "true" {
+		if isTruthy((getArgValue(cmd, &answers, "multi-az", false))) {
 			multiAZParameter = "yes"
 		} else {
 			multiAZParameter = "no"
 		}
 
-		var formationURL string
-		if *engine == "aurora-mysql" {
-			formationURL = mysqlFormationURL
-		} else if *engine == "aurora-postgresql" {
-			formationURL = postgresFormationURL
-		} else {
-			checkErr(fmt.Errorf("unrecognized databae engine. valid options are 'aurora-mysql' or 'aurora-postgresql'"))
-		}
 		if createChangeSet {
 			fmt.Println("Creating Cloudformation Change Set for database resources...")
 		} else {
@@ -198,32 +255,49 @@ var createDatabaseCmd = &cobra.Command{
 			{Key: aws.String("apppack:cluster"), Value: cluster},
 			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
+		parameters := []*cloudformation.Parameter{
+			{
+				ParameterKey:   aws.String("Name"),
+				ParameterValue: &name,
+			},
+			{
+				ParameterKey:   aws.String("ClusterStackName"),
+				ParameterValue: clusterStack.StackName,
+			},
+			{
+				ParameterKey:   aws.String("Engine"),
+				ParameterValue: engine,
+			},
+			{
+				ParameterKey:   aws.String("Version"),
+				ParameterValue: version,
+			},
+			{
+				ParameterKey:   aws.String("OneTimePassword"),
+				ParameterValue: aws.String(generatePassword()),
+			},
+			{
+				ParameterKey:   aws.String("InstanceClass"),
+				ParameterValue: getArgValue(cmd, &answers, "instance-class", true),
+			},
+			{
+				ParameterKey:   aws.String("MultiAZ"),
+				ParameterValue: &multiAZParameter,
+			},
+			{
+				ParameterKey:   aws.String("AllocatedStorage"),
+				ParameterValue: getArgValue(cmd, &answers, "allocated-storage", false),
+			},
+			{
+				ParameterKey:   aws.String("MaxAllocatedStorage"),
+				ParameterValue: getArgValue(cmd, &answers, "max-allocated-storage", false),
+			},
+		}
 
 		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf(databaseStackNameTmpl, name)),
-			TemplateURL: aws.String(formationURL),
-			Parameters: []*cloudformation.Parameter{
-				{
-					ParameterKey:   aws.String("Name"),
-					ParameterValue: &name,
-				},
-				{
-					ParameterKey:   aws.String("ClusterStackName"),
-					ParameterValue: clusterStack.StackName,
-				},
-				{
-					ParameterKey:   aws.String("OneTimePassword"),
-					ParameterValue: aws.String(generatePassword()),
-				},
-				{
-					ParameterKey:   aws.String("InstanceClass"),
-					ParameterValue: getArgValue(cmd, &answers, "instance-class", true),
-				},
-				{
-					ParameterKey:   aws.String("MultiAZ"),
-					ParameterValue: &multiAZParameter,
-				},
-			},
+			StackName:    aws.String(fmt.Sprintf(databaseStackNameTmpl, name)),
+			TemplateURL:  aws.String(databaseFormationURL),
+			Parameters:   parameters,
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,
 		}
@@ -248,7 +322,9 @@ func init() {
 	createCmd.AddCommand(createDatabaseCmd)
 	createDatabaseCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
 	createDatabaseCmd.Flags().StringP("instance-class", "i", "db.t3.medium", "instance class -- see https://aws.amazon.com/rds/postgresql/pricing/?pg=pr&loc=3")
-	createDatabaseCmd.Flags().StringP("engine", "e", "aurora-postgresql", "engine [aurora-mysql,aurora-postgresql]")
+	createDatabaseCmd.Flags().BoolP("aurora", "a", false, "use Aurora -- see https://aws.amazon.com/rds/aurora/")
+	createDatabaseCmd.Flags().StringP("engine", "e", "postgresql", "engine [mysql,postgres")
 	createDatabaseCmd.Flags().Bool("multi-az", false, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html")
-
+	createDatabaseCmd.Flags().Int("allocated-storage", 50, "initial storage allocated in GB (does not apply to Aurora engines)")
+	createDatabaseCmd.Flags().Int("max-allocated-storage", 500, "maximum storage allocated on-demand in GB (does not apply to Aurora engines)")
 }

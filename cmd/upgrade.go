@@ -153,32 +153,7 @@ var upgradeDatabaseCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		stackName := fmt.Sprintf("apppack-database-%s", args[0])
-		startSpinner()
-		sess, err := awsSession()
-		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: &stackName,
-		})
-		checkErr(err)
-		engine := aws.String("")
-		for _, out := range stackOutput.Stacks[0].Outputs {
-			if *out.OutputKey == "Engine" {
-				engine = out.OutputValue
-				break
-			}
-		}
-		var formationURL string
-		if *engine == "mysql" {
-			formationURL = mysqlFormationURL
-		} else if *engine == "postgres" {
-			formationURL = postgresFormationURL
-		} else {
-			Spinner.Stop()
-			checkErr(fmt.Errorf("unexpected database engine, %s", *engine))
-		}
-
-		err = upgradeStack(stackName, formationURL)
+		err := upgradeStack(stackName, databaseFormationURL)
 		checkErr(err)
 	},
 }

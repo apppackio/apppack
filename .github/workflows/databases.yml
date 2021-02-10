@@ -1,0 +1,153 @@
+name: databases
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 1 * * *'
+
+jobs:
+  databases:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+      -
+        name: Build
+        run: go build 
+      -
+        name: AppPack Init
+        run: |
+            ./apppack create region --region us-east-2 \
+                                    --dockerhub-username $DOCKERHUB_USERNAME \
+                                    --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
+            ./apppack create cluster --region us-east-2 \
+                           --domain testclusters.apppack.io \
+                           --instance-class t3.micro
+        timeout-minutes: 9
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Create standard MySQL
+        needs: ["AppPack Init"]
+        run:  |
+            ./apppack create database --region us-east-2 \
+                                 --non-interactive \
+                                 --instance-class db.t3.micro \
+                                 --engine mysql \
+                                 --version 8.0.21 \
+                                 --allocated-storage 10 \
+                                 --max-allocated-storage 20 \
+                                 standard-mysql
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Create standard Postgres
+        needs: ["AppPack Init"]
+        run:  |
+            ./apppack create database --region us-east-2 \
+                                 --non-interactive \
+                                 --instance-class db.t3.micro \
+                                 --engine postgres \
+                                 --version 8.0.21 \
+                                 --allocated-storage 10 \
+                                 --max-allocated-storage 20 \
+                                 standard-postgres
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Create Aurora MySQL
+        needs: ["AppPack Init"]
+        run:  |
+            ./apppack create database --region us-east-2 \
+                                 --non-interactive \
+                                 --instance-class db.t3.micro \
+                                 --aurora \
+                                 --engine mysql \
+                                 --version aurora-mysql5.7 \
+                                 --allocated-storage 10 \
+                                 --max-allocated-storage 20 \
+                                 aurora-mysql
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Create Aurora Postgres
+        needs: ["AppPack Init"]
+        run:  |
+            ./apppack create database --region us-east-2 \
+                                 --non-interactive \
+                                 --instance-class db.t3.micro \
+                                 --aurora \
+                                 --engine postgres \
+                                 --version aurora-postgresql12 \
+                                 aurora-postgres
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Destroy standard MySQL
+        needs: ["Create standard MySQL"]
+        run: yes yes | ./apppack destroy database standard-mysql --region us-east-2
+        if: always()
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Destroy standard Postgres
+        needs: ["Create standard Postgres"]
+        run: yes yes | ./apppack destroy database standard-postgres --region us-east-2
+        if: always()
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Destroy Aurora MySQL
+        needs: ["Create Aurora MySQL"]
+        run: yes yes | ./apppack destroy database aurora-mysql --region us-east-2
+        if: always()
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Destroy Aurora Postgres
+        needs: ["Create Aurora Postgres"]
+        run: yes yes | ./apppack destroy database aurora-postgres --region us-east-2
+        if: always()
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Destroy cluster
+        run: yes yes | ./apppack destroy cluster apppack --region us-east-1
+        if: always()
+        timeout-minutes: 8
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Destroy region
+        run: yes yes | ./apppack destroy region --region us-east-1
+        if: always()
+        timeout-minutes: 3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
