@@ -7,7 +7,8 @@ on:
     - cron: '0 1 * * *'
 
 jobs:
-  databases:
+  init:
+    name: init
     runs-on: ubuntu-latest
     steps:
       -
@@ -20,16 +21,16 @@ jobs:
           go-version: 1.15
       -
         name: Build
-        run: go build 
+        run: go build -o bin/apppack
       -
         name: AppPack Init
         run: |
-            ./apppack create region --region us-east-2 \
-                                    --dockerhub-username $DOCKERHUB_USERNAME \
-                                    --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
-            ./apppack create cluster --region us-east-2 \
-                           --domain testclusters.apppack.io \
-                           --instance-class t3.micro
+            ./bin/apppack create region --region us-east-2 \
+                --dockerhub-username $DOCKERHUB_USERNAME \
+                --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
+            ./bin/apppack create cluster --region us-east-2 \
+                --domain testclusters.apppack.io \
+                --instance-class t3.micro
         timeout-minutes: 9
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -37,108 +38,165 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
+        uses: actions/upload-artifact@master
+        with:
+          name: apppack
+          path: bin
+  standard-mysql:
+    runs-on: ubuntu-latest
+    needs: ["init"]
+    steps:
+      -
+        uses: actions/download-artifact@master
+        with:
+          name: apppack
+          path: bin
+      -
         name: Create standard MySQL
-        needs: ["AppPack Init"]
-        run:  |
-            ./apppack create database --region us-east-2 \
-                                 --non-interactive \
-                                 --instance-class db.t3.micro \
-                                 --engine mysql \
-                                 --version 8.0.21 \
-                                 --allocated-storage 10 \
-                                 --max-allocated-storage 20 \
-                                 standard-mysql
-        timeout-minutes: 5
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      -
-        name: Create standard Postgres
-        needs: ["AppPack Init"]
-        run:  |
-            ./apppack create database --region us-east-2 \
-                                 --non-interactive \
-                                 --instance-class db.t3.micro \
-                                 --engine postgres \
-                                 --version 8.0.21 \
-                                 --allocated-storage 10 \
-                                 --max-allocated-storage 20 \
-                                 standard-postgres
-        timeout-minutes: 5
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      -
-        name: Create Aurora MySQL
-        needs: ["AppPack Init"]
-        run:  |
-            ./apppack create database --region us-east-2 \
-                                 --non-interactive \
-                                 --instance-class db.t3.micro \
-                                 --aurora \
-                                 --engine mysql \
-                                 --version aurora-mysql5.7 \
-                                 --allocated-storage 10 \
-                                 --max-allocated-storage 20 \
-                                 aurora-mysql
-        timeout-minutes: 5
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      -
-        name: Create Aurora Postgres
-        needs: ["AppPack Init"]
-        run:  |
-            ./apppack create database --region us-east-2 \
-                                 --non-interactive \
-                                 --instance-class db.t3.micro \
-                                 --aurora \
-                                 --engine postgres \
-                                 --version aurora-postgresql12 \
-                                 aurora-postgres
-        timeout-minutes: 5
+        run: |
+            chmod +x ./bin/apppack
+            ./bin/apppack create database --region us-east-2 \
+                --non-interactive \
+                --instance-class db.t3.micro \
+                --engine mysql \
+                --allocated-storage 10 \
+                --max-allocated-storage 20 \
+                standard-mysql
+        timeout-minutes: 25
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy standard MySQL
-        needs: ["Create standard MySQL"]
-        run: yes yes | ./apppack destroy database standard-mysql --region us-east-2
+        run: |
+            yes yes | ./bin/apppack destroy database standard-mysql \
+                          --region us-east-2
         if: always()
-        timeout-minutes: 5
+        timeout-minutes: 15
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  standard-postgres:
+    runs-on: ubuntu-latest
+    needs: ["init"]
+    steps:
+      -
+        uses: actions/download-artifact@master
+        with:
+          name: apppack
+          path: bin
+      -
+        name: Create standard Postgres
+        run: |
+            chmod +x ./bin/apppack
+            ./bin/apppack create database --region us-east-2 \
+                --non-interactive \
+                --instance-class db.t3.micro \
+                --engine postgres \
+                --allocated-storage 10 \
+                --max-allocated-storage 20 \
+                standard-postgres
+        timeout-minutes: 25
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy standard Postgres
-        needs: ["Create standard Postgres"]
-        run: yes yes | ./apppack destroy database standard-postgres --region us-east-2
+        run: |
+            yes yes | ./bin/apppack destroy database standard-postgres \
+                          --region us-east-2
         if: always()
-        timeout-minutes: 5
+        timeout-minutes: 15
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  aurora-mysql:
+    runs-on: ubuntu-latest
+    needs: ["init"]
+    steps:
+      -
+        uses: actions/download-artifact@master
+        with:
+          name: apppack
+          path: bin
+      -
+        name: Create Aurora MySQL
+        run: |
+            chmod +x ./bin/apppack
+            ./bin/apppack create database --region us-east-2 \
+                --non-interactive \
+                --instance-class db.t3.micro \
+                --aurora \
+                --engine mysql \
+                --allocated-storage 10 \
+                --max-allocated-storage 20 \
+                aurora-mysql
+        timeout-minutes: 25
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy Aurora MySQL
-        needs: ["Create Aurora MySQL"]
-        run: yes yes | ./apppack destroy database aurora-mysql --region us-east-2
+        run: |
+            yes yes | ./bin/apppack destroy database aurora-mysql \
+                          --region us-east-2
         if: always()
-        timeout-minutes: 5
+        timeout-minutes: 15
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  aurora-postgres:
+    runs-on: ubuntu-latest
+    needs: ["init"]
+    steps:
+      -
+        uses: actions/download-artifact@master
+        with:
+          name: apppack
+          path: bin
+      -
+        name: Create Aurora Postgres
+        run: |
+            chmod +x ./bin/apppack
+            ./bin/apppack create database --region us-east-2 \
+                --non-interactive \
+                --instance-class db.t3.micro \
+                --aurora \
+                --engine postgres \
+                aurora-postgres
+        timeout-minutes: 25
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy Aurora Postgres
-        needs: ["Create Aurora Postgres"]
-        run: yes yes | ./apppack destroy database aurora-postgres --region us-east-2
+        run: |
+            yes yes | ./bin/apppack destroy database aurora-postgres \
+                          --region us-east-2
         if: always()
-        timeout-minutes: 5
+        timeout-minutes: 15
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  destroy:
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - standard-mysql
+      - standard-postgres
+      - aurora-mysql
+      - aurora-postgres
+    steps:
+      -
+        uses: actions/download-artifact@master
+        with:
+          name: apppack
+          path: bin
       -
         name: Destroy cluster
-        run: yes yes | ./apppack destroy cluster apppack --region us-east-1
+        run: |
+            chmod +x ./bin/apppack
+            yes yes | ./bin/apppack destroy cluster apppack --region us-east-2
         if: always()
         timeout-minutes: 8
         env:
@@ -146,7 +204,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy region
-        run: yes yes | ./apppack destroy region --region us-east-1
+        run: yes yes | ./bin/apppack destroy region --region us-east-2
         if: always()
         timeout-minutes: 3
         env:
