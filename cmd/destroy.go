@@ -116,6 +116,7 @@ var destroyAccountCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := "AppPack account"
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
+		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		checkErr(err)
 	},
@@ -135,6 +136,7 @@ var destroyRegionCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("region %s", *sess.Config.Region)
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
+		checkErr(err)
 		_, err = ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String("/apppack/account/dockerhub-access-token"),
 		})
@@ -160,6 +162,7 @@ var destroyRedisCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("app %s", args[0])
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
+		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		if err != nil {
 			printError(fmt.Sprintf("%v", err))
@@ -210,6 +213,7 @@ var destroyClusterCmd = &cobra.Command{
 		friendlyName := fmt.Sprintf("cluster %s", clusterName)
 		stackName := fmt.Sprintf("apppack-cluster-%s", clusterName)
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
+		checkErr(err)
 		// Weird circular dependency causes this https://github.com/aws/containers-roadmap/issues/631
 		// Cluster depends on ASG for creation, but ASG must be deleted before the Cluster
 		// retrying works around this for now
@@ -232,6 +236,7 @@ var destroyAppCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("app %s", appName)
 		stack, err := confirmDeleteStack(cfnSvc, appStackName(appName), friendlyName)
+		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		checkErr(err)
 	},
@@ -251,6 +256,7 @@ var destroyCustomDomainCmd = &cobra.Command{
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stack, err := confirmDeleteStack(cfnSvc, customDomainStackName(primaryDomain), friendlyName)
+		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		checkErr(err)
 	},
