@@ -33,22 +33,36 @@ type accountDetails struct {
 
 func setRdsDeletionProtection(sess *session.Session, stack *cloudformation.Stack, protected bool) error {
 	rdsSvc := rds.New(sess)
-	clusterID := ""
+	DBID := ""
+	DBType := ""
 	for _, output := range stack.Outputs {
-		if *output.OutputKey == "DBClusterId" {
-			clusterID = *output.OutputValue
-			break
+		if *output.OutputKey == "DBId" {
+			DBID = *output.OutputValue
+		}
+		if *output.OutputKey == "DBType" {
+			DBType = *output.OutputValue
 		}
 	}
-	if clusterID == "" {
-		return fmt.Errorf("unable to retrieve DBClusterID from %s", *stack.StackId)
+	if DBID == "" || DBType == "" {
+		return fmt.Errorf("unable to retrieve Database ID from %s", *stack.StackId)
 	}
-	_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
-		DBClusterIdentifier: &clusterID,
-		DeletionProtection:  &protected,
-		ApplyImmediately:    aws.Bool(true),
-	})
-	return err
+	if DBType == "instance" {
+		_, err := rdsSvc.ModifyDBInstance(&rds.ModifyDBInstanceInput{
+			DBInstanceIdentifier: &DBID,
+			DeletionProtection:   &protected,
+			ApplyImmediately:     aws.Bool(true),
+		})
+		return err
+	}
+	if DBType == "cluster" {
+		_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
+			DBClusterIdentifier: &DBID,
+			DeletionProtection:  &protected,
+			ApplyImmediately:    aws.Bool(true),
+		})
+		return err
+	}
+	return fmt.Errorf("unexpected DB type %s", DBType)
 }
 
 // confirmDeleteStack will prompt the user to confirm stack deletion and return a Stack object
