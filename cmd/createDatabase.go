@@ -140,8 +140,8 @@ func listRDSInstanceClasses(sess *session.Session, engine *string, version *stri
 	return instanceClasses, nil
 }
 
-func engineName(engine *string, aurora *string) (*string, error) {
-	if *aurora == "yes" {
+func engineName(engine *string, aurora bool) (*string, error) {
+	if aurora {
 		if *engine == "mysql" {
 			return aws.String("aurora-mysql"), nil
 		} else if *engine == "postgres" {
@@ -183,7 +183,7 @@ var createDatabaseCmd = &cobra.Command{
 		sess, err := awsSession()
 		checkErr(err)
 		var engine *string
-		var isAurora *string
+		var isAurora bool
 		var version *string
 		answers := make(map[string]interface{})
 		if !nonInteractive {
@@ -199,7 +199,7 @@ var createDatabaseCmd = &cobra.Command{
 			err = survey.Ask(questions, &answers)
 			checkErr(err)
 			engine = getArgValue(cmd, &answers, "engine", false)
-			isAurora = getArgValue(cmd, &answers, "aurora", false)
+			isAurora = isTruthy(getArgValue(cmd, &answers, "aurora", false))
 			engine, err = engineName(engine, isAurora)
 			checkErr(err)
 			questions = []*survey.Question{}
@@ -215,8 +215,7 @@ var createDatabaseCmd = &cobra.Command{
 				Prompt: &survey.Select{Message: "select the instance class", Options: instanceClasses, FilterMessage: "", Default: "db.t3.medium"},
 			})
 			addQuestionFromFlag(cmd.Flags().Lookup("multi-az"), &questions, nil)
-			fmt.Println(*isAurora)
-			if *isAurora == "no" {
+			if !isAurora {
 				addQuestionFromFlag(cmd.Flags().Lookup("allocated-storage"), &questions, nil)
 				addQuestionFromFlag(cmd.Flags().Lookup("max-allocated-storage"), &questions, nil)
 			}
@@ -224,7 +223,7 @@ var createDatabaseCmd = &cobra.Command{
 			checkErr(err)
 		} else {
 			engine = getArgValue(cmd, &answers, "engine", false)
-			isAurora = getArgValue(cmd, &answers, "aurora", false)
+			isAurora = isTruthy(getArgValue(cmd, &answers, "aurora", false))
 			engine, err = engineName(engine, isAurora)
 			version, err = getLatestRdsVersion(sess, engine)
 			checkErr(err)

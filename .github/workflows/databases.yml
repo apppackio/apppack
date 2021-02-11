@@ -125,7 +125,7 @@ jobs:
             chmod +x ./bin/apppack
             ./bin/apppack create database --region us-east-2 \
                 --non-interactive \
-                --instance-class db.t3.micro \
+                --instance-class db.t3.small \
                 --aurora \
                 --engine mysql \
                 --allocated-storage 10 \
@@ -160,7 +160,7 @@ jobs:
             chmod +x ./bin/apppack
             ./bin/apppack create database --region us-east-2 \
                 --non-interactive \
-                --instance-class db.t3.micro \
+                --instance-class db.t3.medium \
                 --aurora \
                 --engine postgres \
                 aurora-postgres
