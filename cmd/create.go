@@ -51,8 +51,7 @@ const (
 	clusterFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/cluster.json"
 	accountFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/account.json"
 	regionFormationURL          = "https://s3.amazonaws.com/apppack-cloudformations/latest/region.json"
-	postgresFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/postgres.json"
-	mysqlFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/mysql.json"
+	databaseFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/database.json"
 	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
 	customDomainFormationURL    = "https://s3.amazonaws.com/apppack-cloudformations/latest/custom-domain.json"
 	redisStackNameTmpl          = "apppack-redis-%s"
@@ -740,7 +739,7 @@ var createRedisCmd = &cobra.Command{
 		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
 		checkErr(err)
 		var multiAZParameter string
-		if *(getArgValue(cmd, &answers, "multi-az", false)) == "true" {
+		if isTruthy((getArgValue(cmd, &answers, "multi-az", false))) {
 			multiAZParameter = "yes"
 		} else {
 			multiAZParameter = "no"

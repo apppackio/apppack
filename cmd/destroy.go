@@ -33,22 +33,36 @@ type accountDetails struct {
 
 func setRdsDeletionProtection(sess *session.Session, stack *cloudformation.Stack, protected bool) error {
 	rdsSvc := rds.New(sess)
-	clusterID := ""
+	DBID := ""
+	DBType := ""
 	for _, output := range stack.Outputs {
-		if *output.OutputKey == "DBClusterId" {
-			clusterID = *output.OutputValue
-			break
+		if *output.OutputKey == "DBId" {
+			DBID = *output.OutputValue
+		}
+		if *output.OutputKey == "DBType" {
+			DBType = *output.OutputValue
 		}
 	}
-	if clusterID == "" {
-		return fmt.Errorf("unable to retrieve DBClusterID from %s", *stack.StackId)
+	if DBID == "" || DBType == "" {
+		return fmt.Errorf("unable to retrieve Database ID from %s", *stack.StackId)
 	}
-	_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
-		DBClusterIdentifier: &clusterID,
-		DeletionProtection:  &protected,
-		ApplyImmediately:    aws.Bool(true),
-	})
-	return err
+	if DBType == "instance" {
+		_, err := rdsSvc.ModifyDBInstance(&rds.ModifyDBInstanceInput{
+			DBInstanceIdentifier: &DBID,
+			DeletionProtection:   &protected,
+			ApplyImmediately:     aws.Bool(true),
+		})
+		return err
+	}
+	if DBType == "cluster" {
+		_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
+			DBClusterIdentifier: &DBID,
+			DeletionProtection:  &protected,
+			ApplyImmediately:    aws.Bool(true),
+		})
+		return err
+	}
+	return fmt.Errorf("unexpected DB type %s", DBType)
 }
 
 // confirmDeleteStack will prompt the user to confirm stack deletion and return a Stack object
@@ -116,6 +130,7 @@ var destroyAccountCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := "AppPack account"
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
+		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		checkErr(err)
 	},
@@ -135,6 +150,7 @@ var destroyRegionCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("region %s", *sess.Config.Region)
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
+		checkErr(err)
 		_, err = ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String("/apppack/account/dockerhub-access-token"),
 		})
@@ -160,6 +176,7 @@ var destroyRedisCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("app %s", args[0])
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
+		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		if err != nil {
 			printError(fmt.Sprintf("%v", err))
@@ -210,6 +227,7 @@ var destroyClusterCmd = &cobra.Command{
 		friendlyName := fmt.Sprintf("cluster %s", clusterName)
 		stackName := fmt.Sprintf("apppack-cluster-%s", clusterName)
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
+		checkErr(err)
 		// Weird circular dependency causes this https://github.com/aws/containers-roadmap/issues/631
 		// Cluster depends on ASG for creation, but ASG must be deleted before the Cluster
 		// retrying works around this for now
@@ -232,6 +250,7 @@ var destroyAppCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("app %s", appName)
 		stack, err := confirmDeleteStack(cfnSvc, appStackName(appName), friendlyName)
+		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		checkErr(err)
 	},
@@ -251,6 +270,7 @@ var destroyCustomDomainCmd = &cobra.Command{
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stack, err := confirmDeleteStack(cfnSvc, customDomainStackName(primaryDomain), friendlyName)
+		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		checkErr(err)
 	},
