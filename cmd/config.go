@@ -16,12 +16,16 @@ limitations under the License.
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ssm"
 
 	"github.com/apppackio/apppack/app"
@@ -75,15 +79,9 @@ var setCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
-		svc := ssm.New(a.Session)
-		_, err = svc.PutParameter(&ssm.PutParameterInput{
-			Name:      aws.String(fmt.Sprintf("/apppack/apps/%s/config/%s", AppName, name)),
-			Type:      aws.String("SecureString"),
-			Overwrite: aws.Bool(true),
-			Value:     &value,
-		})
-		Spinner.Stop()
+		err = a.SetConfig(name, value, true)
 		checkErr(err)
+		Spinner.Stop()
 		printSuccess(fmt.Sprintf("stored config variable %s", name))
 	},
 }
@@ -122,18 +120,7 @@ var listCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
-		ssmSvc := ssm.New(a.Session)
-		var parameters []*ssm.Parameter
-		input := ssm.GetParametersByPathInput{Path: aws.String(fmt.Sprintf("/apppack/apps/%s/config/", AppName)), WithDecryption: aws.Bool(true)}
-		err = ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
-			for _, parameter := range resp.Parameters {
-				if parameter == nil {
-					continue
-				}
-				parameters = append(parameters, parameter)
-			}
-			return !lastPage
-		})
+		parameters, err := a.GetConfig()
 		checkErr(err)
 		Spinner.Stop()
 		for _, value := range parameters {
@@ -146,6 +133,105 @@ var listCmd = &cobra.Command{
 	},
 }
 
+var includeManagedVars bool
+
+// parameterIsManaged checks is the parameter was created by a Cloudformation stack
+func parameterIsManaged(ssmSvc *ssm.SSM, parameter *ssm.Parameter) (*bool, error) {
+	resp, err := ssmSvc.ListTagsForResource(&ssm.ListTagsForResourceInput{
+		ResourceId:   parameter.Name,
+		ResourceType: aws.String(ssm.ResourceTypeForTaggingParameter),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, tag := range resp.TagList {
+		if *tag.Key == "aws:cloudformation:stack-id" {
+			return aws.Bool(true), nil
+		}
+	}
+	return aws.Bool(false), nil
+}
+
+// configExportCmd represents the config export command
+var configExportCmd = &cobra.Command{
+	Use:                   "export",
+	Short:                 "export the config variables to JSON",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(0),
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		a, err := app.Init(AppName)
+		checkErr(err)
+		parameters, err := a.GetConfig()
+		checkErr(err)
+		config := make(map[string]string)
+		ssmSvc := ssm.New(a.Session)
+		for _, p := range parameters {
+			parts := strings.Split(*p.Name, "/")
+			varname := parts[len(parts)-1]
+			if !includeManagedVars {
+				isManaged, err := parameterIsManaged(ssmSvc, p)
+				checkErr(err)
+				if *isManaged {
+					continue
+				}
+			}
+			config[varname] = *p.Value
+		}
+		j, err := json.Marshal(config)
+		checkErr(err)
+		Spinner.Stop()
+		b := bytes.NewBuffer([]byte{})
+		json.Indent(b, j, "", "  ")
+		fmt.Println(string(b.Bytes()))
+	},
+}
+
+var importConfigOverride bool
+
+// configImportCmd represents the config export command
+var configImportCmd = &cobra.Command{
+	Use:                   "import <file>",
+	Short:                 "import config variables from a JSON file",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		a, err := app.Init(AppName)
+		checkErr(err)
+		data, err := ioutil.ReadFile(args[0])
+		if err != nil {
+			fmt.Print(err)
+		}
+		config := make(map[string]string)
+		err = json.Unmarshal(data, &config)
+		checkErr(err)
+		imported := 0
+		skipped := 0
+		for key, val := range config {
+			err = a.SetConfig(key, val, importConfigOverride)
+			if err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					if ok && aerr.Code() == "ParameterAlreadyExists" && !importConfigOverride {
+						skipped++
+						continue
+					}
+				}
+				checkErr(err)
+			} else {
+				imported++
+			}
+		}
+		msg := fmt.Sprintf("imported %d variables", imported)
+		if skipped > 0 {
+			msg = fmt.Sprintf("%s / %d skipped", msg, skipped)
+		}
+		Spinner.Stop()
+		printSuccess(msg)
+
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(configCmd)
 	configCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
@@ -155,4 +241,9 @@ func init() {
 	configCmd.AddCommand(setCmd)
 	configCmd.AddCommand(unsetCmd)
 	configCmd.AddCommand(listCmd)
+	configCmd.AddCommand(configExportCmd)
+	configExportCmd.Flags().BoolVar(&includeManagedVars, "all", false, "include AppPack managed variables (e.g. DATABASE_URL)")
+
+	configCmd.AddCommand(configImportCmd)
+	configImportCmd.Flags().BoolVar(&importConfigOverride, "overwrite", false, "overwrite variables if they already exist")
 }

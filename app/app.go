@@ -449,6 +449,41 @@ func (a *App) GetBuildArtifact(build *codebuild.Build, name string) ([]byte, err
 	return ioutil.ReadAll(obj.Body)
 }
 
+// GetConfig returns a list of config parameters for the app
+func (a *App) GetConfig() ([]*ssm.Parameter, error) {
+	ssmSvc := ssm.New(a.Session)
+	var parameters []*ssm.Parameter
+	input := ssm.GetParametersByPathInput{
+		Path:           aws.String(fmt.Sprintf("/apppack/apps/%s/config/", a.Name)),
+		WithDecryption: aws.Bool(true),
+	}
+	err := ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
+		for _, parameter := range resp.Parameters {
+			if parameter == nil {
+				continue
+			}
+			parameters = append(parameters, parameter)
+		}
+		return !lastPage
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parameters, nil
+}
+
+// SetConfig sets a config value for the app
+func (a *App) SetConfig(key string, value string, overwrite bool) error {
+	ssmSvc := ssm.New(a.Session)
+	_, err := ssmSvc.PutParameter(&ssm.PutParameterInput{
+		Name:      aws.String(fmt.Sprintf("/apppack/apps/%s/config/%s", a.Name, key)),
+		Type:      aws.String("SecureString"),
+		Overwrite: &overwrite,
+		Value:     &value,
+	})
+	return err
+}
+
 // GetConsoleURL generate a URL which will sign the user in to the AWS console and redirect to the desinationURL
 func (a *App) GetConsoleURL(destinationURL string) (*string, error) {
 	return auth.GetConsoleURL(a.Session, destinationURL)
