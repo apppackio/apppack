@@ -28,7 +28,7 @@ jobs:
                            --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN \
                            --domain testclusters.apppack.io \
                            --instance-class t3.micro | tee account_setup_output.txt
-        timeout-minutes: 11
+        timeout-minutes: 15
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
@@ -81,7 +81,7 @@ jobs:
         name: Destroy cluster
         run: yes yes | ./apppack destroy cluster apppack --region us-east-1
         if: always()
-        timeout-minutes: 8
+        timeout-minutes: 10
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
