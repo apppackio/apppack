@@ -90,12 +90,12 @@ var dbShellCmd = &cobra.Command{
 		err = a.LoadSettings()
 		checkErr(err)
 		var exec string
-		if a.Settings.DBUtils.Engine == "mysql" {
+		if strings.Contains(a.Settings.DBUtils.Engine, "mysql") {
 			exec = "mysql"
-		} else if a.Settings.DBUtils.Engine == "postgres" {
+		} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
 			exec = "psql"
 		} else {
-			checkErr(fmt.Errorf("unknoown database engine %s", a.Settings.DBUtils.Engine))
+			checkErr(fmt.Errorf("unknown database engine %s", a.Settings.DBUtils.Engine))
 		}
 		taskOutput, err := a.StartTask(&a.Settings.DBUtils.ShellTaskFamily, app.ShellBackgroundCommand, false)
 		checkErr(err)
