@@ -60,7 +60,7 @@ var logsCmd = &cobra.Command{
 		checkErr(err)
 		sawConfig.Group = a.Settings.LogGroup.Name
 		sawOutputConfig.Pretty = !sawOutputConfig.Raw
-		// convert to format saw eexpects
+		// convert to format saw expects
 		sawConfig.Start = fmt.Sprintf("-%s", sawConfig.Start)
 		if sawConfig.End != "" && sawConfig.End != "now" {
 			sawConfig.End = fmt.Sprintf("-%s", sawConfig.Start)

@@ -283,7 +283,7 @@ func (a *App) WaitForTaskRunning(task *ecs.Task) error {
 }
 
 // WaitForTaskStopped waits for a task to be running or complete
-func (a *App) WaitForTaskStopped(task *ecs.Task) error {
+func (a *App) WaitForTaskStopped(task *ecs.Task) (*int64, error) {
 	ecsSvc := ecs.New(a.Session)
 	input := ecs.DescribeTasksInput{
 		Cluster: task.ClusterArn,
