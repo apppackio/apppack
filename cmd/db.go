@@ -97,16 +97,7 @@ var dbShellCmd = &cobra.Command{
 		} else {
 			checkErr(fmt.Errorf("unknown database engine %s", a.Settings.DBUtils.Engine))
 		}
-		taskOutput, err := a.StartTask(&a.Settings.DBUtils.ShellTaskFamily, app.ShellBackgroundCommand, false)
-		checkErr(err)
-		shellTask := taskOutput.Tasks[0]
-		checkErr(err)
-		Spinner.Suffix = fmt.Sprintf(" starting task %s", *shellTask.TaskArn)
-		err = a.WaitForTaskRunning(shellTask)
-		checkErr(err)
-		Spinner.Stop()
-		err = a.ConnectToTask(shellTask, aws.String(fmt.Sprintf("entrypoint.sh %s", exec)))
-		checkErr(err)
+		StartInteractiveShell(a, &a.Settings.DBUtils.ShellTaskFamily, aws.String(fmt.Sprintf("entrypoint.sh %s", exec)))
 	},
 }
 
