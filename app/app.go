@@ -300,6 +300,9 @@ func (a *App) WaitForTaskStopped(task *ecs.Task) error {
 	if *task.StopCode != "EssentialContainerExited" {
 		return fmt.Errorf("task %s failed %s: %s", *task.TaskArn, *task.StopCode, *task.StoppedReason)
 	}
+	if *task.Containers[0].ExitCode > 0 {
+		return fmt.Errorf("task %s failed with exit code %d", *task.TaskArn, *task.Containers[0].ExitCode)
+	}
 	return nil
 }
 
