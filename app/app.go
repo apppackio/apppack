@@ -283,7 +283,7 @@ func (a *App) WaitForTaskRunning(task *ecs.Task) error {
 }
 
 // WaitForTaskStopped waits for a task to be running or complete
-func (a *App) WaitForTaskStopped(task *ecs.Task) error {
+func (a *App) WaitForTaskStopped(task *ecs.Task) (*int64, error) {
 	ecsSvc := ecs.New(a.Session)
 	input := ecs.DescribeTasksInput{
 		Cluster: task.ClusterArn,
@@ -291,20 +291,17 @@ func (a *App) WaitForTaskStopped(task *ecs.Task) error {
 	}
 	err := ecsSvc.WaitUntilTasksStopped(&input)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	taskDesc, err := ecsSvc.DescribeTasks(&input)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	task = taskDesc.Tasks[0]
 	if *task.StopCode != "EssentialContainerExited" {
-		return fmt.Errorf("task %s failed %s: %s", *task.TaskArn, *task.StopCode, *task.StoppedReason)
+		return nil, fmt.Errorf("task %s failed %s: %s", *task.TaskArn, *task.StopCode, *task.StoppedReason)
 	}
-	if *task.Containers[0].ExitCode > 0 {
-		return fmt.Errorf("task %s failed with exit code %d", *task.TaskArn, *task.Containers[0].ExitCode)
-	}
-	return nil
+	return task.Containers[0].ExitCode, nil
 }
 
 // ConnectToTask open a SSM Session to the Docker host and exec into container
