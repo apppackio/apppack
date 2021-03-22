@@ -28,7 +28,7 @@ jobs:
                            --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN \
                            --domain testclusters.apppack.io \
                            --instance-class t3.micro | tee account_setup_output.txt
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
