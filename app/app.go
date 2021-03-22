@@ -290,17 +290,17 @@ func (a *App) WaitForTaskStopped(task *ecs.Task) error {
 	}
 	err := ecsSvc.WaitUntilTasksStopped(&input)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	taskDesc, err := ecsSvc.DescribeTasks(&input)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	task = taskDesc.Tasks[0]
 	if *task.StopCode != "EssentialContainerExited" {
-		return nil, fmt.Errorf("task %s failed %s: %s", *task.TaskArn, *task.StopCode, *task.StoppedReason)
+		return fmt.Errorf("task %s failed %s: %s", *task.TaskArn, *task.StopCode, *task.StoppedReason)
 	}
-	return task.Containers[0].ExitCode, nil
+	return nil
 }
 
 func (a *App) CreateEcsSession(task ecs.Task) (*ecs.Session, error) {
