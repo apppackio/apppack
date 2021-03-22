@@ -61,6 +61,7 @@ type AppRole struct {
 	AccountID string `json:"account_id"`
 	AppName   string `json:"name"`
 	Region    string `json:"region"`
+	Pipeline  bool   `json:"pipeline"`
 }
 
 func getAppRole(IDToken string, name string) (*AppRole, error) {
@@ -80,7 +81,7 @@ func getAppRole(IDToken string, name string) (*AppRole, error) {
 	return nil, fmt.Errorf("app not found in user info")
 }
 
-func getCredentials(appName string) (*sts.Credentials, *string, error) {
+func getCredentials(appName string) (*sts.Credentials, *AppRole, error) {
 	tokens, userInfo, err := verifyAuth()
 	if err != nil {
 		return nil, nil, err
@@ -114,13 +115,13 @@ func getCredentials(appName string) (*sts.Credentials, *string, error) {
 				if err != nil {
 					return nil, nil, err
 				}
-				return resp.Credentials, &appRole.Region, nil
+				return resp.Credentials, appRole, nil
 			}
 			return nil, nil, err
 		}
 		return nil, nil, err
 	}
-	return resp.Credentials, &appRole.Region, nil
+	return resp.Credentials, appRole, nil
 }
 
 func writeToUserCache(name string, data []byte) error {
@@ -366,10 +367,10 @@ func Logout() error {
 	return nil
 }
 
-func AwsSession(appName string) (*session.Session, error) {
-	creds, region, err := getCredentials(appName)
+func AwsSession(appName string) (*session.Session, *AppRole, error) {
+	creds, appRole, err := getCredentials(appName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return session.Must(
 		session.NewSessionWithOptions(
@@ -380,10 +381,10 @@ func AwsSession(appName string) (*session.Session, error) {
 						*creds.SecretAccessKey,
 						*creds.SessionToken,
 					),
-				).WithRegion(*region),
+				).WithRegion(appRole.Region),
 			},
 		),
-	), nil
+	), appRole, nil
 }
 
 func AppList() ([]*AppRole, error) {

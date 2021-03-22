@@ -86,10 +86,14 @@ func upgradeStack(stackName string, templateURL string) error {
 	}
 	if createChangeSet {
 		_, err = updateChangeSetAndWait(sess, &updateStackInput)
+		checkErr(err)
 	} else {
-		_, err = updateStackAndWait(sess, &updateStackInput)
+		stack, err := updateStackAndWait(sess, &updateStackInput)
+		checkErr(err)
+		if *stack.StackStatus != "UPDATE_COMPLETE" {
+			checkErr(fmt.Errorf("stack upgrade failed: %s", *stack.StackStatus))
+		}
 	}
-	checkErr(err)
 	Spinner.Stop()
 	printSuccess("stack upgraded")
 	return nil
@@ -111,6 +115,20 @@ var upgradeAppCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		stackName := appStackName(args[0])
+		err := upgradeStack(stackName, appFormationURL)
+		checkErr(err)
+	},
+}
+
+// upgradePipelineCmd represents the upgrade command
+var upgradePipelineCmd = &cobra.Command{
+	Use:                   "pipeline <name>",
+	Short:                 "upgrade a pipeline AppPack stack",
+	Long:                  "*Requires AWS credentials.*",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		stackName := pipelineStackName(args[0])
 		err := upgradeStack(stackName, appFormationURL)
 		checkErr(err)
 	},
@@ -166,4 +184,5 @@ func init() {
 	upgradeCmd.AddCommand(upgradeDatabaseCmd)
 	upgradeCmd.AddCommand(upgradeRedisCmd)
 	upgradeCmd.AddCommand(upgradeAppCmd)
+	upgradeCmd.AddCommand(upgradePipelineCmd)
 }

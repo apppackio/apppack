@@ -50,6 +50,7 @@ var ShellBackgroundCommand = []string{
 // App is a representation of a AppPack app
 type App struct {
 	Name                  string
+	Pipeline              bool
 	Session               *session.Session
 	Settings              *Settings
 	ECSConfig             *ECSConfig
@@ -150,6 +151,28 @@ func ddbItem(sess *session.Session, primaryID string, secondaryID string) (*map[
 		return nil, fmt.Errorf("Could not find DDB item %s %s", primaryID, secondaryID)
 	}
 	return &result.Item, nil
+}
+
+func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error) {
+	ssmSvc := ssm.New(sess)
+	var parameters []*ssm.Parameter
+	input := ssm.GetParametersByPathInput{
+		Path:           &path,
+		WithDecryption: aws.Bool(true),
+	}
+	err := ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
+		for _, parameter := range resp.Parameters {
+			if parameter == nil {
+				continue
+			}
+			parameters = append(parameters, parameter)
+		}
+		return !lastPage
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parameters, nil
 }
 
 func (a *App) ddbItem(key string) (*map[string]*dynamodb.AttributeValue, error) {
@@ -451,32 +474,26 @@ func (a *App) GetBuildArtifact(build *codebuild.Build, name string) ([]byte, err
 
 // GetConfig returns a list of config parameters for the app
 func (a *App) GetConfig() ([]*ssm.Parameter, error) {
-	ssmSvc := ssm.New(a.Session)
-	var parameters []*ssm.Parameter
-	input := ssm.GetParametersByPathInput{
-		Path:           aws.String(fmt.Sprintf("/apppack/apps/%s/config/", a.Name)),
-		WithDecryption: aws.Bool(true),
+	var parameterName string
+	if a.Pipeline {
+		parameterName = fmt.Sprintf("/apppack/pipelines/%s/config/", a.Name)
+	} else {
+		parameterName = fmt.Sprintf("/apppack/apps/%s/config/", a.Name)
 	}
-	err := ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
-		for _, parameter := range resp.Parameters {
-			if parameter == nil {
-				continue
-			}
-			parameters = append(parameters, parameter)
-		}
-		return !lastPage
-	})
-	if err != nil {
-		return nil, err
-	}
-	return parameters, nil
+	return SsmParameters(a.Session, parameterName)
 }
 
 // SetConfig sets a config value for the app
 func (a *App) SetConfig(key string, value string, overwrite bool) error {
+	var parameterName string
+	if a.Pipeline {
+		parameterName = fmt.Sprintf("/apppack/pipelines/%s/config/%s", a.Name, key)
+	} else {
+		parameterName = fmt.Sprintf("/apppack/apps/%s/config/%s", a.Name, key)
+	}
 	ssmSvc := ssm.New(a.Session)
 	_, err := ssmSvc.PutParameter(&ssm.PutParameterInput{
-		Name:      aws.String(fmt.Sprintf("/apppack/apps/%s/config/%s", a.Name, key)),
+		Name:      &parameterName,
 		Type:      aws.String("SecureString"),
 		Overwrite: &overwrite,
 		Value:     &value,
@@ -707,13 +724,14 @@ func (a *App) ValidateCronString(rule string) error {
 
 // Init will pull in app settings from DyanmoDB and provide helper
 func Init(name string) (*App, error) {
-	sess, err := auth.AwsSession(name)
+	sess, appRole, err := auth.AwsSession(name)
 	if err != nil {
 		return nil, err
 	}
 	app := App{
-		Name:    name,
-		Session: sess,
+		Name:     name,
+		Pipeline: appRole.Pipeline,
+		Session:  sess,
 	}
 	return &app, nil
 }

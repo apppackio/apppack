@@ -67,6 +67,10 @@ func appStackName(appName string) string {
 	return fmt.Sprintf("apppack-app-%s", appName)
 }
 
+func pipelineStackName(appName string) string {
+	return fmt.Sprintf("apppack-pipeline-%s", appName)
+}
+
 func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateStackInput, changeSet bool, friendlyName string) error {
 	cfnSvc := cloudformation.New(sess)
 	if changeSet {
@@ -138,6 +142,9 @@ func createStackAndWait(cfnSvc *cloudformation.CloudFormation, stackInput *cloud
 	Spinner.Stop()
 	fmt.Println(aurora.Faint(*stackOutput.StackId))
 	stack, err := waitForCloudformationStack(cfnSvc, *stackInput.StackName)
+	if err != nil {
+		return nil, err
+	}
 	if retry && *stack.StackStatus == "ROLLBACK_COMPLETE" {
 		stack, err = retryStackCreation(cfnSvc, stack.StackId, stackInput)
 	}
