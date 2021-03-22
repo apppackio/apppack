@@ -8,9 +8,11 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -30,16 +32,13 @@ var ShellBackgroundCommand = []string{
 	"/bin/sh",
 	"-c",
 	strings.Join([]string{
-		// Get initial proc count
-		"EXPECTED_PROCS=\"$(ls -1 /proc | grep -c [0-9])\"",
 		"STOP=$(($(date +%s)+" + fmt.Sprintf("%d", maxLifetime) + "))",
 		// Give user time to connect
 		"sleep " + fmt.Sprintf("%d", waitForConnect),
-		// Loop until procs are less than or equal to initial count
 		// As long as a user has a shell open, this task will keep running
 		"while true",
-		"do PROCS=\"$(ls -1 /proc | grep -c [0-9])\"",
-		"test \"$PROCS\" -le \"$EXPECTED_PROCS\" && exit",
+		"do EXECCMD=\"$(pgrep -fc ssm-session-worker\\ ecs-execute-command)\"",
+		"test \"$EXECCMD\" -eq 0 && exit",
 		// Timeout if exceeds max lifetime
 		"test \"$STOP\" -lt \"$(date +%s)\" && exit 1",
 		"sleep 30",
@@ -304,51 +303,58 @@ func (a *App) WaitForTaskStopped(task *ecs.Task) (*int64, error) {
 	return task.Containers[0].ExitCode, nil
 }
 
-// ConnectToTask open a SSM Session to the Docker host and exec into container
-func (a *App) ConnectToTask(task *ecs.Task, cmd *string) error {
+func (a *App) CreateEcsSession(task ecs.Task) (*ecs.Session, error) {
+	ecsSvc := ecs.New(a.Session)
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	execCmdInput := ecs.ExecuteCommandInput{
+		Cluster:     task.ClusterArn,
+		Command:     aws.String("su --preserve-environment --pty --command '/cnb/lifecycle/launcher bash -l' heroku"),
+		Container:   task.Containers[0].Name,
+		Interactive: aws.Bool(true),
+		Task:        task.TaskArn,
+	}
+	retries := 10
+	// it takes some time for the SSM agent to startup
+	// poll for availability
+	for retries > 0 {
+		time.Sleep(2 * time.Second)
+		out, err := ecsSvc.ExecuteCommand(&execCmdInput)
+		if err == nil {
+			return out.Session, nil
+		} else if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() != ecs.ErrCodeInvalidParameterException {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+		retries--
+	}
+	return nil, fmt.Errorf("timeout attempting to connect to SSM Agent")
+}
+
+// ConnectToEcsSession open a SSM Session to the Docker host and exec into container
+func (a *App) ConnectToEcsSession(ecsSession *ecs.Session, cmd *string) error {
 	binaryPath, err := exec.LookPath("session-manager-plugin")
 	if err != nil {
 		fmt.Println(aurora.Red("AWS Session Manager plugin was not found on the path. Install it locally to use this feature."))
 		fmt.Println(aurora.White("https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html"))
 		os.Exit(1)
 	}
-	ecsSvc := ecs.New(a.Session)
-	resp, err := ecsSvc.DescribeContainerInstances(&ecs.DescribeContainerInstancesInput{
-		Cluster:            task.ClusterArn,
-		ContainerInstances: []*string{task.ContainerInstanceArn},
-	})
-	ssmSvc := ssm.New(a.Session)
-	documentName := "AWS-StartInteractiveCommand"
 	region := a.Session.Config.Region
-	err = a.LoadSettings()
+	arg1, err := json.Marshal(ecsSession)
 	if err != nil {
 		return err
 	}
-	command := fmt.Sprintf("docker exec -it $(docker ps -q -f label=com.amazonaws.ecs.task-arn=%s) %s", *task.TaskArn, *cmd)
-	input := ssm.StartSessionInput{
-		DocumentName: &documentName,
-		Target:       resp.ContainerInstances[0].Ec2InstanceId,
-		Parameters:   map[string][]*string{"command": {&command}},
-	}
-	startSessionResp, err := ssmSvc.StartSession(&input)
-	if err != nil {
-		return err
-	}
-	arg1, err := json.Marshal(startSessionResp)
-	if err != nil {
-		return err
-	}
-	arg2, err := json.Marshal(input)
-	if err != nil {
-		return err
-	}
-	// session-manager-plugin isn't documented
-	// args were determined from here: https://github.com/aws/aws-cli/blob/84f751b71131489afcb5401d8297bb5b3faa29cb/awscli/customizations/sessionmanager.py#L83-L89
-	err = syscall.Exec(binaryPath, []string{"session-manager-plugin", string(arg1), *region, "StartSession", "", string(arg2), fmt.Sprintf("https://ssm.%s.amazonaws.com", *region)}, os.Environ())
-	if err != nil {
-		return err
-	}
-	return nil
+	return syscall.Exec(binaryPath, []string{
+		"session-manager-plugin",
+		string(arg1),
+		*region,
+		"StartSession",
+	}, os.Environ())
 }
 
 // StartBuild starts a new CodeBuild run

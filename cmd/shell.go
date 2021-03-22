@@ -19,9 +19,37 @@ import (
 	"fmt"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/logrusorgru/aurora"
 
 	"github.com/spf13/cobra"
 )
+
+func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string) {
+	taskOutput, err := a.StartTask(
+		taskFamily,
+		app.ShellBackgroundCommand,
+		false,
+	)
+	checkErr(err)
+	if len(taskOutput.Failures) > 0 {
+		checkErr(fmt.Errorf("RunTask failure: %v", taskOutput.Failures))
+	}
+	shellTask := taskOutput.Tasks[0]
+	checkErr(err)
+	Spinner.Stop()
+	fmt.Println(aurora.Faint(fmt.Sprintf("starting %s", *shellTask.TaskArn)))
+	startSpinner()
+	err = a.WaitForTaskRunning(shellTask)
+	checkErr(err)
+	Spinner.Stop()
+	fmt.Println(aurora.Faint("waiting for SSM Agent to startup"))
+	startSpinner()
+	ecsSession, err := a.CreateEcsSession(*shellTask)
+	checkErr(err)
+	Spinner.Stop()
+	err = a.ConnectToEcsSession(ecsSession, shellCmd)
+	checkErr(err)
+}
 
 // shellCmd represents the shell command
 var shellCmd = &cobra.Command{
@@ -37,22 +65,7 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 		checkErr(err)
 		err = a.LoadSettings()
 		checkErr(err)
-		taskOutput, err := a.StartTask(
-			&a.Settings.Shell.TaskFamily,
-			app.ShellBackgroundCommand,
-			false,
-		)
-		checkErr(err)
-		shellTask := taskOutput.Tasks[0]
-		checkErr(err)
-		Spinner.Stop()
-		fmt.Printf("starting %s\n", *shellTask.TaskArn)
-		startSpinner()
-		err = a.WaitForTaskRunning(shellTask)
-		checkErr(err)
-		Spinner.Stop()
-		err = a.ConnectToTask(shellTask, &a.Settings.Shell.Command)
-		checkErr(err)
+		StartInteractiveShell(a, &a.Settings.Shell.TaskFamily, &a.Settings.Shell.Command)
 	},
 }
 
