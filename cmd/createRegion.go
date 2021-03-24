@@ -66,7 +66,7 @@ var createRegionCmd = &cobra.Command{
 
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf("apppack-region-%s", *region)),
-			TemplateURL: aws.String(regionFormationURL),
+			TemplateURL: aws.String(getReleaseUrl(regionFormationURL)),
 			Parameters: []*cloudformation.Parameter{
 				{
 					ParameterKey:   aws.String("DockerhubUsername"),

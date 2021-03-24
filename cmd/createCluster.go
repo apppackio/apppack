@@ -118,7 +118,7 @@ var createClusterCmd = &cobra.Command{
 		checkErr(err)
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf("apppack-cluster-%s", clusterName)),
-			TemplateURL: aws.String(clusterFormationURL),
+			TemplateURL: aws.String(getReleaseUrl(clusterFormationURL)),
 			Parameters: []*cloudformation.Parameter{
 				{
 					ParameterKey:   aws.String("Name"),

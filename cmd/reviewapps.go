@@ -82,7 +82,7 @@ var reviewappsCreateCmd = &cobra.Command{
 		}
 		_, err = createStackAndWait(cfnSvc, &cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf("apppack-reviewapp-%s%s", PipelineName, prNumber)),
-			TemplateURL: aws.String("https://s3.amazonaws.com/apppack-cloudformations/latest/review-app.json"),
+			TemplateURL: aws.String(getReleaseUrl("https://s3.amazonaws.com/apppack-cloudformations/latest/review-app.json")),
 			RoleARN:     cfnRoleArn,
 			Parameters: []*cloudformation.Parameter{
 				{
@@ -164,6 +164,8 @@ func init() {
 	reviewappsCmd.MarkPersistentFlagRequired("pipeline")
 	reviewappsCmd.AddCommand(reviewappsStatusCmd)
 	reviewappsCmd.AddCommand(reviewappsCreateCmd)
+	reviewappsCreateCmd.Flags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
+	upgradeCmd.PersistentFlags().MarkHidden("release")
 	reviewappsCmd.AddCommand(reviewappsDestroyCmd)
 	//reviewappsCmd.AddCommand(configCmd)
 }

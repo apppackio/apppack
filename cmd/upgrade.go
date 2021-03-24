@@ -80,7 +80,7 @@ func upgradeStack(stackName string, templateURL string) error {
 	startSpinner()
 	updateStackInput := cloudformation.UpdateStackInput{
 		StackName:    &stackName,
-		TemplateURL:  &templateURL,
+		TemplateURL:  aws.String(getReleaseUrl(templateURL)),
 		Parameters:   stackOutput.Stacks[0].Parameters,
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 	}
@@ -180,6 +180,8 @@ func init() {
 	rootCmd.AddCommand(upgradeCmd)
 	upgradeCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	upgradeCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to upgrade resources in")
+	upgradeCmd.PersistentFlags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
+	upgradeCmd.PersistentFlags().MarkHidden("release")
 	upgradeCmd.AddCommand(upgradeClusterCmd)
 	upgradeCmd.AddCommand(upgradeDatabaseCmd)
 	upgradeCmd.AddCommand(upgradeRedisCmd)

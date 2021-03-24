@@ -295,7 +295,7 @@ var createDatabaseCmd = &cobra.Command{
 
 		input := cloudformation.CreateStackInput{
 			StackName:    aws.String(fmt.Sprintf(databaseStackNameTmpl, name)),
-			TemplateURL:  aws.String(databaseFormationURL),
+			TemplateURL:  aws.String(getReleaseUrl(databaseFormationURL)),
 			Parameters:   parameters,
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags:         cfnTags,

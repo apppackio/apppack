@@ -155,7 +155,7 @@ The domain(s) provided must all part of the same parent domain and a Route53 Hos
 
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(customDomainStackName(primaryDomain)),
-			TemplateURL: aws.String(customDomainFormationURL),
+			TemplateURL: aws.String(getReleaseUrl(customDomainFormationURL)),
 			Parameters:  parameters,
 			Tags:        cfnTags,
 		}

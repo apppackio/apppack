@@ -62,6 +62,7 @@ const (
 var createChangeSet bool
 var nonInteractive bool
 var region string
+var release string
 
 func appStackName(appName string) string {
 	return fmt.Sprintf("apppack-app-%s", appName)
@@ -69,6 +70,14 @@ func appStackName(appName string) string {
 
 func pipelineStackName(appName string) string {
 	return fmt.Sprintf("apppack-pipeline-%s", appName)
+}
+
+// swap out latest URL for a pre-release
+func getReleaseUrl(url string) string {
+	if release == "" {
+		return url
+	}
+	return strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", release), 1)
 }
 
 func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateStackInput, changeSet bool, friendlyName string) error {
@@ -667,7 +676,7 @@ var accountCmd = &cobra.Command{
 
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String("apppack-account"),
-			TemplateURL: aws.String(accountFormationURL),
+			TemplateURL: aws.String(getReleaseUrl(accountFormationURL)),
 			Parameters: []*cloudformation.Parameter{
 				{
 					ParameterKey:   aws.String("AppPackRoleExternalId"),
@@ -773,7 +782,7 @@ var createRedisCmd = &cobra.Command{
 
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf(redisStackNameTmpl, name)),
-			TemplateURL: aws.String(redisFormationURL),
+			TemplateURL: aws.String(getReleaseUrl(redisFormationURL)),
 			Parameters: []*cloudformation.Parameter{
 				{
 					ParameterKey:   aws.String("Name"),
@@ -1088,6 +1097,8 @@ func init() {
 	createCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")
 	createCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to create resources in")
+	createCmd.PersistentFlags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
+	createCmd.PersistentFlags().MarkHidden("release")
 
 	createCmd.AddCommand(accountCmd)
 
