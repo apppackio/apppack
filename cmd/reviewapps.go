@@ -28,6 +28,21 @@ import (
 
 var PipelineName string
 
+func reviewAppStackName(pipeline string, prNumber string) string {
+	return fmt.Sprintf("apppack-reviewapp-%s%s", pipeline, prNumber)
+}
+
+func getPipelineStack(p *pipeline.Pipeline) (*cloudformation.Stack, error) {
+	cfnSvc := cloudformation.New(p.App.Session)
+	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+		StackName: aws.String(pipelineStackName(p.App.Name)),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return stacks.Stacks[0], nil
+}
+
 // reviewappsCmd represents the reviewapps command
 var reviewappsCmd = &cobra.Command{
 	Use:                   "reviewapps",
@@ -67,24 +82,26 @@ var reviewappsCreateCmd = &cobra.Command{
 		startSpinner()
 		p, err := pipeline.Init(PipelineName)
 		checkErr(err)
-		cfnSvc := cloudformation.New(p.App.Session)
 		prNumber := args[0] // TODO validate
-		stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: aws.String(pipelineStackName(PipelineName)),
-		})
+		stack, err := getPipelineStack(p)
 		checkErr(err)
-		var cfnRoleArn *string
-		for _, o := range stacks.Stacks[0].Outputs {
-			if *o.OutputKey == "ReviewAppCfnRoleArn" {
-				cfnRoleArn = o.OutputValue
-				break
-			}
+		cfnRoleArn, err := getStackOutput(stack, "ReviewAppCfnRoleArn")
+		checkErr(err)
+		databaseLambda, err := getStackOutput(stack, "DatabaseManagerLambdaArn")
+		checkErr(err)
+		var databaseAddon string
+		if *databaseLambda == "~" {
+			databaseAddon = "disabled"
+		} else {
+			databaseAddon = "enabled"
 		}
+		cfnSvc := cloudformation.New(p.App.Session)
 		_, err = createStackAndWait(cfnSvc, &cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf("apppack-reviewapp-%s%s", PipelineName, prNumber)),
+			StackName:   aws.String(reviewAppStackName(PipelineName, prNumber)),
 			TemplateURL: aws.String(getReleaseUrl("https://s3.amazonaws.com/apppack-cloudformations/latest/review-app.json")),
 			RoleARN:     cfnRoleArn,
 			Parameters: []*cloudformation.Parameter{
+				{ParameterKey: aws.String("DatabaseAddon"), ParameterValue: &databaseAddon},
 				{
 					ParameterKey:   aws.String("Name"),
 					ParameterValue: &prNumber,
@@ -147,14 +164,17 @@ var reviewappsDestroyCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		pr := args[0]
+		prNumber := args[0]
 		startSpinner()
 		p, err := pipeline.Init(PipelineName)
 		checkErr(err)
-		err = p.SetReviewAppStatus(pr, "pending_destroy")
+		stackName := reviewAppStackName(PipelineName, prNumber)
+		cfnSvc := cloudformation.New(p.App.Session)
+		friendlyName := fmt.Sprintf("%s review app for PR#%s", PipelineName, prNumber)
+		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
 		checkErr(err)
-		Spinner.Stop()
-		printSuccess(fmt.Sprintf("creating review app for PR #%s", pr))
+		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, true)
+		checkErr(err)
 	},
 }
 

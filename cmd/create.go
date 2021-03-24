@@ -860,7 +860,206 @@ func verifySourceCredentials(sess *session.Session, repositoryType string, inter
 	return nil
 }
 
-// appCmd represents the create command
+func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
+	answers := make(map[string]interface{})
+	var databaseAddonEnabled bool
+	var redisAddonEnabled bool
+	name := args[0]
+	var appType string
+	if pipeline {
+		appType = "pipeline"
+	} else {
+		appType = "app"
+	}
+	sess, err := awsSession()
+	checkErr(err)
+	if !nonInteractive {
+		questions := []*survey.Question{}
+		clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for app"))
+		checkErr(err)
+		questions = append(questions, clusterQuestion)
+		addQuestionFromFlag(cmd.Flags().Lookup("repository"), &questions, nil)
+		if !pipeline {
+			addQuestionFromFlag(cmd.Flags().Lookup("branch"), &questions, nil)
+			addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
+		}
+		addQuestionFromFlag(cmd.Flags().Lookup("healthcheck-path"), &questions, nil)
+		addQuestionFromFlag(cmd.Flags().Lookup("addon-private-s3"), &questions, nil)
+		addQuestionFromFlag(cmd.Flags().Lookup("addon-public-s3"), &questions, nil)
+		addQuestionFromFlag(cmd.Flags().Lookup("addon-database"), &questions, nil)
+		addQuestionFromFlag(cmd.Flags().Lookup("addon-redis"), &questions, nil)
+		if err := survey.Ask(questions, &answers); err != nil {
+			checkErr(err)
+		}
+		questions = []*survey.Question{}
+		databaseAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-database", false))
+		if databaseAddonEnabled {
+			databaseClusterQuestion, err := makeDatabaseQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
+			checkErr(err)
+			questions = append(questions, databaseClusterQuestion)
+		}
+		redisAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-redis", false))
+		if redisAddonEnabled {
+			redisInstanceQuestion, err := makeRedisQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
+			checkErr(err)
+			questions = append(questions, redisInstanceQuestion)
+		}
+		addQuestionFromFlag(cmd.Flags().Lookup("addon-sqs"), &questions, nil)
+		addQuestionFromFlag(cmd.Flags().Lookup("addon-ses"), &questions, nil)
+		if err := survey.Ask(questions, &answers); err != nil {
+			checkErr(err)
+		}
+		questions = []*survey.Question{}
+		if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
+			addQuestionFromFlag(cmd.Flags().Lookup("addon-ses-domain"), &questions, nil)
+		}
+		addQuestionFromFlag(cmd.Flags().Lookup("users"), &questions, nil)
+		if err := survey.Ask(questions, &answers); err != nil {
+			checkErr(err)
+		}
+	}
+	startSpinner()
+	cluster := getArgValue(cmd, &answers, "cluster", true)
+	cfnTags := []*cloudformation.Tag{
+		{Key: aws.String("apppack:appName"), Value: &name},
+		{Key: aws.String("apppack:cluster"), Value: cluster},
+		{Key: aws.String("apppack"), Value: aws.String("true")},
+	}
+	if pipeline {
+		pipelineTag := cloudformation.Tag{Key: aws.String("apppack:pipeline"), Value: aws.String("true")}
+		cfnTags = append(cfnTags, &pipelineTag)
+	}
+
+	clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
+	checkErr(err)
+	sesDomain := ""
+	if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
+		sesDomain = *getArgValue(cmd, &answers, "addon-ses-domain", false)
+	}
+	var databaseStackName string
+	if isTruthy(getArgValue(cmd, &answers, "addon-database", false)) {
+		databaseDisplay := getArgValue(cmd, &answers, "addon-database-name", false)
+		// remove ' (engine)' from the database display text
+		database := strings.Split(*databaseDisplay, " ")[0]
+		databaseStack, err := getDDBClusterItem(sess, cluster, "DATABASE", &database)
+		checkErr(err)
+		databaseStackName = strings.Split(databaseStack.StackID, "/")[1]
+	} else {
+		databaseStackName = ""
+	}
+	var redisStackName string
+	if isTruthy(getArgValue(cmd, &answers, "addon-redis", false)) {
+		redis := getArgValue(cmd, &answers, "addon-redis-name", false)
+		redisStack, err := getDDBClusterItem(sess, cluster, "REDIS", redis)
+		checkErr(err)
+		redisStackName = strings.Split(redisStack.StackID, "/")[1]
+	} else {
+		redisStackName = ""
+	}
+	repositoryURL := getArgValue(cmd, &answers, "repository", true)
+	var repositoryType string
+	if strings.Contains(*repositoryURL, "github.com") {
+		repositoryType = "GITHUB"
+	} else if strings.Contains(*repositoryURL, "bitbucket.org") {
+		repositoryType = "BITBUCKET"
+	} else {
+		checkErr(fmt.Errorf("unknown repository source"))
+	}
+	err = verifySourceCredentials(sess, repositoryType, !nonInteractive)
+	checkErr(err)
+	rand.Seed(time.Now().UnixNano())
+
+	input := cloudformation.CreateStackInput{
+		TemplateURL: aws.String(getReleaseUrl(appFormationURL)),
+		Parameters: []*cloudformation.Parameter{
+			{
+				ParameterKey:   aws.String("Type"),
+				ParameterValue: &appType,
+			},
+			{
+				ParameterKey:   aws.String("HealthCheckPath"),
+				ParameterValue: getArgValue(cmd, &answers, "healthcheck-path", true),
+			},
+			{
+				ParameterKey:   aws.String("LoadBalancerRulePriority"),
+				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-1)+1)), // TODO: verify empty slot
+			},
+			{
+				ParameterKey:   aws.String("Name"),
+				ParameterValue: &name,
+			},
+			{
+				ParameterKey:   aws.String("ClusterStackName"),
+				ParameterValue: clusterStack.StackName,
+			},
+			{
+				ParameterKey:   aws.String("AppPackRoleExternalId"),
+				ParameterValue: aws.String(strings.Replace(uuid.New().String(), "-", "", -1)),
+			},
+			{
+				ParameterKey:   aws.String("PrivateS3BucketEnabled"),
+				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-private-s3", false)))),
+			},
+			{
+				ParameterKey:   aws.String("PublicS3BucketEnabled"),
+				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-public-s3", false)))),
+			},
+			{
+				ParameterKey:   aws.String("SesDomain"),
+				ParameterValue: &sesDomain,
+			},
+			{
+				ParameterKey:   aws.String("DatabaseStackName"),
+				ParameterValue: &databaseStackName,
+			},
+			{
+				ParameterKey:   aws.String("RedisStackName"),
+				ParameterValue: &redisStackName,
+			},
+			{
+				ParameterKey:   aws.String("SQSQueueEnabled"),
+				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-sqs", false)))),
+			},
+			{
+				ParameterKey:   aws.String("RepositoryType"),
+				ParameterValue: &repositoryType,
+			},
+			{
+				ParameterKey:   aws.String("RepositoryUrl"),
+				ParameterValue: repositoryURL,
+			},
+
+			{
+				ParameterKey:   aws.String("AllowedUsers"),
+				ParameterValue: aws.String(strings.Trim(*(getArgValue(cmd, &answers, "users", true)), "[]")),
+			},
+		},
+		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+		Tags:         cfnTags,
+	}
+	if pipeline {
+		input.StackName = aws.String(pipelineStackName(name))
+		pipelineParameters := []*cloudformation.Parameter{
+			{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("")},
+			{ParameterKey: aws.String("Domains"), ParameterValue: aws.String("")},
+		}
+		input.Parameters = append(input.Parameters, pipelineParameters...)
+	} else {
+		input.StackName = aws.String(appStackName(name))
+		appParameters := []*cloudformation.Parameter{
+			{ParameterKey: aws.String("Branch"), ParameterValue: getArgValue(cmd, &answers, "branch", true)},
+			{ParameterKey: aws.String("Domains"), ParameterValue: getArgValue(cmd, &answers, "domain", false)},
+		}
+		input.Parameters = append(input.Parameters, appParameters...)
+	}
+	err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s %s", name, appType))
+	checkErr(err)
+	if !pipeline {
+		fmt.Println(aurora.White(fmt.Sprintf("  %s app created\n  Push to your git repository to trigger a build or run `apppack -a %s build start`", name, name)))
+	}
+}
+
+// appCmd represents the create app command
 var appCmd = &cobra.Command{
 	Use:                   "app <name>",
 	Short:                 "create an AppPack application",
@@ -868,180 +1067,19 @@ var appCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		answers := make(map[string]interface{})
-		var databaseAddonEnabled bool
-		var redisAddonEnabled bool
-		name := args[0]
-		sess, err := awsSession()
-		checkErr(err)
-		if !nonInteractive {
-			questions := []*survey.Question{}
-			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for app"))
-			checkErr(err)
-			questions = append(questions, clusterQuestion)
-			addQuestionFromFlag(cmd.Flags().Lookup("repository"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("branch"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("healthcheck-path"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-private-s3"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-public-s3"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-database"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-redis"), &questions, nil)
-			if err := survey.Ask(questions, &answers); err != nil {
-				checkErr(err)
-			}
-			questions = []*survey.Question{}
-			databaseAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-database", false))
-			if databaseAddonEnabled {
-				databaseClusterQuestion, err := makeDatabaseQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
-				checkErr(err)
-				questions = append(questions, databaseClusterQuestion)
-			}
-			redisAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-redis", false))
-			if redisAddonEnabled {
-				redisInstanceQuestion, err := makeRedisQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
-				checkErr(err)
-				questions = append(questions, redisInstanceQuestion)
-			}
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-sqs"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-ses"), &questions, nil)
-			if err := survey.Ask(questions, &answers); err != nil {
-				checkErr(err)
-			}
-			questions = []*survey.Question{}
-			if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
-				addQuestionFromFlag(cmd.Flags().Lookup("addon-ses-domain"), &questions, nil)
-			}
-			addQuestionFromFlag(cmd.Flags().Lookup("users"), &questions, nil)
-			if err := survey.Ask(questions, &answers); err != nil {
-				checkErr(err)
-			}
-		}
-		startSpinner()
-		cluster := getArgValue(cmd, &answers, "cluster", true)
-		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:appName"), Value: &name},
-			{Key: aws.String("apppack:cluster"), Value: cluster},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
+		createAppOrPipeline(cmd, args, false)
+	},
+}
 
-		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
-		checkErr(err)
-		sesDomain := ""
-		if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
-			sesDomain = *getArgValue(cmd, &answers, "addon-ses-domain", false)
-		}
-		var databaseStackName string
-		if isTruthy(getArgValue(cmd, &answers, "addon-database", false)) {
-			databaseDisplay := getArgValue(cmd, &answers, "addon-database-name", false)
-			// remove ' (engine)' from the database display text
-			database := strings.Split(*databaseDisplay, " ")[0]
-			databaseStack, err := getDDBClusterItem(sess, cluster, "DATABASE", &database)
-			checkErr(err)
-			databaseStackName = strings.Split(databaseStack.StackID, "/")[1]
-		} else {
-			databaseStackName = ""
-		}
-		var redisStackName string
-		if isTruthy(getArgValue(cmd, &answers, "addon-redis", false)) {
-			redis := getArgValue(cmd, &answers, "addon-redis-name", false)
-			redisStack, err := getDDBClusterItem(sess, cluster, "REDIS", redis)
-			checkErr(err)
-			redisStackName = strings.Split(redisStack.StackID, "/")[1]
-		} else {
-			redisStackName = ""
-		}
-		repositoryURL := getArgValue(cmd, &answers, "repository", true)
-		var repositoryType string
-		if strings.Contains(*repositoryURL, "github.com") {
-			repositoryType = "GITHUB"
-		} else if strings.Contains(*repositoryURL, "bitbucket.org") {
-			repositoryType = "BITBUCKET"
-		} else {
-			checkErr(fmt.Errorf("unknown repository source"))
-		}
-		err = verifySourceCredentials(sess, repositoryType, !nonInteractive)
-		checkErr(err)
-		rand.Seed(time.Now().UnixNano())
-		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(appStackName(name)),
-			TemplateURL: aws.String(appFormationURL),
-			Parameters: []*cloudformation.Parameter{
-				{
-					ParameterKey:   aws.String("Branch"),
-					ParameterValue: getArgValue(cmd, &answers, "branch", true),
-				},
-				{
-					ParameterKey:   aws.String("Domains"),
-					ParameterValue: getArgValue(cmd, &answers, "domain", false),
-				},
-				{
-					ParameterKey:   aws.String("HealthCheckPath"),
-					ParameterValue: getArgValue(cmd, &answers, "healthcheck-path", true),
-				},
-				{
-					ParameterKey:   aws.String("LoadBalancerRulePriority"),
-					ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-1)+1)), // TODO: verify empty slot
-				},
-				{
-					ParameterKey:   aws.String("Name"),
-					ParameterValue: &name,
-				},
-				{
-					ParameterKey:   aws.String("ClusterStackName"),
-					ParameterValue: clusterStack.StackName,
-				},
-				{
-					ParameterKey:   aws.String("AppPackRoleExternalId"),
-					ParameterValue: aws.String(strings.Replace(uuid.New().String(), "-", "", -1)),
-				},
-				{
-					ParameterKey:   aws.String("PrivateS3BucketEnabled"),
-					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-private-s3", false)))),
-				},
-				{
-					ParameterKey:   aws.String("PublicS3BucketEnabled"),
-					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-public-s3", false)))),
-				},
-				{
-					ParameterKey:   aws.String("SesDomain"),
-					ParameterValue: &sesDomain,
-				},
-				{
-					ParameterKey:   aws.String("DatabaseStackName"),
-					ParameterValue: &databaseStackName,
-				},
-				{
-					ParameterKey:   aws.String("RedisStackName"),
-					ParameterValue: &redisStackName,
-				},
-				{
-					ParameterKey:   aws.String("SQSQueueEnabled"),
-					ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-sqs", false)))),
-				},
-				{
-					ParameterKey:   aws.String("RepositoryType"),
-					ParameterValue: &repositoryType,
-				},
-				{
-					ParameterKey:   aws.String("RepositoryUrl"),
-					ParameterValue: repositoryURL,
-				},
-				{
-					ParameterKey:   aws.String("Type"),
-					ParameterValue: aws.String("app"),
-				},
-				{
-					ParameterKey:   aws.String("AllowedUsers"),
-					ParameterValue: aws.String(strings.Trim(*(getArgValue(cmd, &answers, "users", true)), "[]")),
-				},
-			},
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-			Tags:         cfnTags,
-		}
-		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s app", name))
-		checkErr(err)
-		fmt.Println(aurora.White(fmt.Sprintf("  %s app created\n  Push to your git repository to trigger a build or run `apppack -a %s build start`", name, name)))
+// pipelineCmd represents the create pipeline command
+var pipelineCmd = &cobra.Command{
+	Use:                   "pipeline <name>",
+	Short:                 "create an AppPack pipeline",
+	Long:                  "*Requires AWS credentials.*",
+	Args:                  cobra.ExactArgs(1),
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		createAppOrPipeline(cmd, args, true)
 	},
 }
 
@@ -1117,8 +1155,24 @@ func init() {
 	appCmd.Flags().String("addon-redis-name", "", "Redis instance to install add-on")
 	appCmd.Flags().Bool("addon-sqs", false, "setup SQS Queue add-on")
 	appCmd.Flags().Bool("addon-ses", false, "setup SES (Email) add-on (requires manual approval of domain at SES)")
-	appCmd.Flags().String("addon-ses-domain", "*", "Ddomain approved for sending via SES add-on. Use '*' for all domains.")
+	appCmd.Flags().String("addon-ses-domain", "*", "domain approved for sending via SES add-on. Use '*' for all domains.")
 	appCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
+
+	createCmd.AddCommand(pipelineCmd)
+	pipelineCmd.Flags().SortFlags = false
+	pipelineCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
+	pipelineCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
+	pipelineCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
+	pipelineCmd.Flags().Bool("addon-private-s3", false, "setup private S3 bucket add-on")
+	pipelineCmd.Flags().Bool("addon-public-s3", false, "setup public S3 bucket add-on")
+	pipelineCmd.Flags().Bool("addon-database", false, "setup database add-on")
+	pipelineCmd.Flags().String("addon-database-name", "", "database instance to install add-on")
+	pipelineCmd.Flags().Bool("addon-redis", false, "setup Redis add-on")
+	pipelineCmd.Flags().String("addon-redis-name", "", "Redis instance to install add-on")
+	pipelineCmd.Flags().Bool("addon-sqs", false, "setup SQS Queue add-on")
+	pipelineCmd.Flags().Bool("addon-ses", false, "setup SES (Email) add-on (requires manual approval of domain at SES)")
+	pipelineCmd.Flags().String("addon-ses-domain", "*", "domain approved for sending via SES add-on. Use '*' for all domains.")
+	pipelineCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
 
 	createCmd.AddCommand(createRedisCmd)
 	createRedisCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
