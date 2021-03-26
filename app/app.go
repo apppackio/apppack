@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
@@ -51,11 +52,19 @@ var ShellBackgroundCommand = []string{
 type App struct {
 	Name                  string
 	Pipeline              bool
+	ReviewApp             *string
 	Session               *session.Session
 	Settings              *Settings
 	ECSConfig             *ECSConfig
 	DeployStatus          *DeployStatus
 	PendingDeployStatuses []*DeployStatus
+}
+
+// ReviewApp is a representation of a AppPack review app
+type ReviewApp struct {
+	PullRequest string `json:"pull_request"`
+	Status      string `json:"status"`
+	Branch      string `json:"branch"`
 }
 type settingsItem struct {
 	PrimaryID   string   `json:"primary_id"`
@@ -175,6 +184,30 @@ func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error)
 	return parameters, nil
 }
 
+func (a *App) IsReviewApp() bool {
+	return a.ReviewApp != nil
+}
+
+func (a *App) GetReviewApps() ([]*ReviewApp, error) {
+	if !a.Pipeline {
+		return nil, fmt.Errorf("%s is not a pipeline and cannot have review apps", a.Name)
+	}
+	parameters, err := SsmParameters(a.Session, fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/", a.Name))
+	if err != nil {
+		return nil, err
+	}
+	var reviewApps []*ReviewApp
+	for _, parameter := range parameters {
+		r := ReviewApp{}
+		err = json.Unmarshal([]byte(*parameter.Value), &r)
+		if err != nil {
+			return nil, err
+		}
+		reviewApps = append(reviewApps, &r)
+	}
+	return reviewApps, nil
+}
+
 func (a *App) ddbItem(key string) (*map[string]*dynamodb.AttributeValue, error) {
 	return ddbItem(a.Session, fmt.Sprintf("APP#%s", a.Name), key)
 }
@@ -251,7 +284,7 @@ func (a *App) LoadSettings() error {
 }
 
 // StartTask start a new task on ECS
-func (a *App) StartTask(taskFamily *string, command []string, fargate bool) (*ecs.RunTaskOutput, error) {
+func (a *App) StartTask(taskFamily *string, command []string, fargate bool) (*ecs.Task, error) {
 	ecsSvc := ecs.New(a.Session)
 	err := a.LoadSettings()
 	if err != nil {
@@ -293,7 +326,11 @@ func (a *App) StartTask(taskFamily *string, command []string, fargate bool) (*ec
 			},
 		},
 	}
-	return ecsSvc.RunTask(&runTaskArgs)
+	ecsTaskOutput, err := ecsSvc.RunTask(&runTaskArgs)
+	if err != nil {
+		return nil, err
+	}
+	return ecsTaskOutput.Tasks[0], nil
 }
 
 // WaitForTaskRunning waits for a task to be running or complete
@@ -472,25 +509,24 @@ func (a *App) GetBuildArtifact(build *codebuild.Build, name string) ([]byte, err
 	return ioutil.ReadAll(obj.Body)
 }
 
+// ConfigPrefix returns the SSM Parameter Store prefix for config variables
+func (a *App) ConfigPrefix() string {
+	if a.IsReviewApp() {
+		return fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s/config/", a.Name, *a.ReviewApp)
+	} else if a.Pipeline {
+		return fmt.Sprintf("/apppack/pipelines/%s/config/", a.Name)
+	}
+	return fmt.Sprintf("/apppack/apps/%s/config/", a.Name)
+}
+
 // GetConfig returns a list of config parameters for the app
 func (a *App) GetConfig() ([]*ssm.Parameter, error) {
-	var parameterName string
-	if a.Pipeline {
-		parameterName = fmt.Sprintf("/apppack/pipelines/%s/config/", a.Name)
-	} else {
-		parameterName = fmt.Sprintf("/apppack/apps/%s/config/", a.Name)
-	}
-	return SsmParameters(a.Session, parameterName)
+	return SsmParameters(a.Session, a.ConfigPrefix())
 }
 
 // SetConfig sets a config value for the app
 func (a *App) SetConfig(key string, value string, overwrite bool) error {
-	var parameterName string
-	if a.Pipeline {
-		parameterName = fmt.Sprintf("/apppack/pipelines/%s/config/%s", a.Name, key)
-	} else {
-		parameterName = fmt.Sprintf("/apppack/apps/%s/config/%s", a.Name, key)
-	}
+	parameterName := fmt.Sprintf("%s%s", a.ConfigPrefix(), key)
 	ssmSvc := ssm.New(a.Session)
 	_, err := ssmSvc.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
@@ -537,6 +573,92 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 		return nil, err
 	}
 	return describeTasksOutput.Tasks, nil
+}
+
+func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
+	currentTime := time.Now()
+	username, err := auth.WhoAmI()
+	if err != nil {
+		return nil, err
+	}
+	a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	if a.IsReviewApp() {
+		prefix = fmt.Sprintf("%spr%s/", prefix, *a.ReviewApp)
+	}
+	var extension string
+	if strings.Contains(a.Settings.DBUtils.Engine, "mysql") {
+		extension = "sql.gz"
+	} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
+		extension = "dump"
+	} else {
+		return nil, fmt.Errorf("unknown database engine %s", a.Settings.DBUtils.Engine)
+	}
+	input := s3.GetObjectInput{
+		Key:    aws.String(fmt.Sprintf("%s%s-%s.%s", prefix, currentTime.Format("20060102150405"), *username, extension)),
+		Bucket: &a.Settings.DBUtils.S3Bucket,
+	}
+	return &input, nil
+}
+
+func (a *App) DBDumpLoadFamily() (*string, error) {
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	if a.IsReviewApp() {
+		return aws.String(fmt.Sprintf("%s-pr%s-dbutils", a.Name, *a.ReviewApp)), nil
+	}
+	return &a.Settings.DBUtils.DumpLoadTaskFamily, nil
+}
+
+func (a *App) DBDump() (*ecs.Task, *s3.GetObjectInput, error) {
+
+	getObjectInput, err := a.DBDumpLocation("dumps/")
+	if err != nil {
+		return nil, nil, err
+	}
+	family, err := a.DBDumpLoadFamily()
+	if err != nil {
+		return nil, nil, err
+	}
+	task, err := a.StartTask(
+		family,
+		[]string{"dump-to-s3.sh", fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)},
+		true,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return task, getObjectInput, nil
+}
+
+// DBShellTaskInfo gets the family and command to execute for a db shell task
+func (a *App) DBShellTaskInfo() (*string, *string, error) {
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var exec string
+	if strings.Contains(a.Settings.DBUtils.Engine, "mysql") {
+		exec = "mysql"
+	} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
+		exec = "psql"
+	} else {
+		return nil, nil, fmt.Errorf("unknown database engine %s", a.Settings.DBUtils.Engine)
+	}
+
+	var family string
+	if a.IsReviewApp() {
+		exec = fmt.Sprintf("%s %s-pr%s", exec, a.Name, *a.ReviewApp)
+		family = fmt.Sprintf("%s-pr%s-dbshell", a.Name, *a.ReviewApp)
+	} else {
+		family = a.Settings.DBUtils.ShellTaskFamily
+	}
+	return &family, &exec, nil
 }
 
 type Scaling struct {
@@ -724,14 +846,26 @@ func (a *App) ValidateCronString(rule string) error {
 
 // Init will pull in app settings from DyanmoDB and provide helper
 func Init(name string) (*App, error) {
+	var reviewApp *string
+	if strings.Contains(name, ":") {
+		parts := strings.Split(name, ":")
+		name = parts[0]
+		reviewApp = &parts[1]
+	} else {
+		reviewApp = nil
+	}
 	sess, appRole, err := auth.AwsSession(name)
 	if err != nil {
 		return nil, err
 	}
 	app := App{
-		Name:     name,
-		Pipeline: appRole.Pipeline,
-		Session:  sess,
+		Name:      name,
+		Pipeline:  appRole.Pipeline,
+		Session:   sess,
+		ReviewApp: reviewApp,
+	}
+	if !app.Pipeline && app.ReviewApp != nil {
+		return nil, fmt.Errorf("%s is a standard app and can't have review apps", name)
 	}
 	return &app, nil
 }

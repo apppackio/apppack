@@ -37,13 +37,11 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 		checkErr(err)
 		err = a.LoadSettings()
 		checkErr(err)
-		taskOutput, err := a.StartTask(
+		shellTask, err := a.StartTask(
 			&a.Settings.Shell.TaskFamily,
 			app.ShellBackgroundCommand,
 			false,
 		)
-		checkErr(err)
-		shellTask := taskOutput.Tasks[0]
 		checkErr(err)
 		Spinner.Stop()
 		fmt.Printf("starting %s\n", *shellTask.TaskArn)

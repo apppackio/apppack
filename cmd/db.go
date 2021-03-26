@@ -19,10 +19,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/apppackio/apppack/app"
-	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -30,23 +28,6 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
-
-func dbDumplocation(prefix string) (*s3.GetObjectInput, error) {
-	currentTime := time.Now()
-	username, err := auth.WhoAmI()
-	if err != nil {
-		return nil, err
-	}
-	app, err := app.Init(AppName)
-	app.LoadSettings()
-	if err != nil {
-		return nil, err
-	}
-	return &s3.GetObjectInput{
-		Key:    aws.String(fmt.Sprintf("%s%s-%s.dump", prefix, currentTime.Format("20060102150405"), *username)),
-		Bucket: &app.Settings.DBUtils.S3Bucket,
-	}, nil
-}
 
 func downloadFile(sess *session.Session, objInput *s3.GetObjectInput, outputFile string) error {
 	Spinner.Suffix = fmt.Sprintf(" downloading %s", outputFile)
@@ -87,25 +68,15 @@ var dbShellCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
-		err = a.LoadSettings()
+		family, exec, err := a.DBShellTaskInfo()
 		checkErr(err)
-		var exec string
-		if strings.Contains(a.Settings.DBUtils.Engine, "mysql") {
-			exec = "mysql"
-		} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
-			exec = "psql"
-		} else {
-			checkErr(fmt.Errorf("unknown database engine %s", a.Settings.DBUtils.Engine))
-		}
-		taskOutput, err := a.StartTask(&a.Settings.DBUtils.ShellTaskFamily, app.ShellBackgroundCommand, false)
-		checkErr(err)
-		shellTask := taskOutput.Tasks[0]
+		shellTask, err := a.StartTask(family, app.ShellBackgroundCommand, false)
 		checkErr(err)
 		Spinner.Suffix = fmt.Sprintf(" starting task %s", *shellTask.TaskArn)
 		err = a.WaitForTaskRunning(shellTask)
 		checkErr(err)
 		Spinner.Stop()
-		err = a.ConnectToTask(shellTask, aws.String(fmt.Sprintf("entrypoint.sh %s", exec)))
+		err = a.ConnectToTask(shellTask, aws.String(fmt.Sprintf("entrypoint.sh %s", *exec)))
 		checkErr(err)
 	},
 }
@@ -118,20 +89,14 @@ var dbDumpCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		getObjectInput, err := dbDumplocation("dumps/")
-		checkErr(err)
 		app, err := app.Init(AppName)
 		checkErr(err)
 		err = app.LoadSettings()
 		checkErr(err)
-		ecsTaskOutput, err := app.StartTask(
-			&app.Settings.DBUtils.DumpLoadTaskFamily,
-			[]string{"dump-to-s3.sh", fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)},
-			true,
-		)
+		task, getObjectInput, err := app.DBDump()
 		checkErr(err)
-		Spinner.Suffix = fmt.Sprintf(" dumping database %s", aurora.Faint(*ecsTaskOutput.Tasks[0].TaskArn))
-		err = app.WaitForTaskStopped(ecsTaskOutput.Tasks[0])
+		Spinner.Suffix = fmt.Sprintf(" dumping database %s", aurora.Faint(*task.TaskArn))
+		err = app.WaitForTaskStopped(task)
 		checkErr(err)
 		localFile := fmt.Sprintf("%s.dump", app.Name)
 		err = downloadFile(app.Session, getObjectInput, localFile)
@@ -161,7 +126,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		} else {
 			file, err := os.Open(args[0])
 			checkErr(err)
-			getObjectInput, err := dbDumplocation("uploads/")
+			getObjectInput, err := app.DBDumpLocation("uploads/")
 			checkErr(err)
 			remoteFile = fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)
 			Spinner.Suffix = fmt.Sprintf(" uploading %s", args[0])
@@ -171,15 +136,16 @@ WARNING: This is a destructive action which will delete the contents of your rem
 				Body:   file,
 			})
 		}
-		app.LoadSettings()
-		ecsTaskOutput, err := app.StartTask(
-			&app.Settings.DBUtils.DumpLoadTaskFamily,
+		family, err := app.DBDumpLoadFamily()
+		checkErr(err)
+		task, err := app.StartTask(
+			family,
 			[]string{"load-from-s3.sh", remoteFile},
 			true,
 		)
-		Spinner.Suffix = fmt.Sprintf(" loading database %s", aurora.Faint(*ecsTaskOutput.Tasks[0].TaskArn))
+		Spinner.Suffix = fmt.Sprintf(" loading database %s", aurora.Faint(*task.TaskArn))
 		checkErr(err)
-		err = app.WaitForTaskStopped(ecsTaskOutput.Tasks[0])
+		err = app.WaitForTaskStopped(task)
 		checkErr(err)
 		Spinner.Stop()
 		printSuccess(fmt.Sprintf("Loaded database dump from %s", args[0]))

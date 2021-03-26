@@ -53,7 +53,7 @@ var getCmd = &cobra.Command{
 		checkErr(err)
 		svc := ssm.New(a.Session)
 		resp, err := svc.GetParameter(&ssm.GetParameterInput{
-			Name:           aws.String(fmt.Sprintf("/apppack/apps/%s/config/%s", AppName, args[0])),
+			Name:           aws.String(fmt.Sprintf("%s%s", a.ConfigPrefix(), args[0])),
 			WithDecryption: aws.Bool(true),
 		})
 		Spinner.Stop()
@@ -99,7 +99,7 @@ var unsetCmd = &cobra.Command{
 		checkErr(err)
 		svc := ssm.New(a.Session)
 		_, err = svc.DeleteParameter(&ssm.DeleteParameterInput{
-			Name: aws.String(fmt.Sprintf("/apppack/apps/%s/config/%s", AppName, args[0])),
+			Name: aws.String(fmt.Sprintf("%s%s", a.ConfigPrefix(), args[0])),
 		})
 		Spinner.Stop()
 		checkErr(err)
@@ -130,6 +130,20 @@ var listCmd = &cobra.Command{
 		}
 		fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(fmt.Sprintf("%s Config Vars", AppName))))
 		w.Flush()
+		if a.IsReviewApp() {
+			fmt.Println()
+			a.ReviewApp = nil
+			parameters, err := a.GetConfig()
+			checkErr(err)
+			Spinner.Stop()
+			for _, value := range parameters {
+				parts := strings.Split(*value.Name, "/")
+				varname := parts[len(parts)-1]
+				fmt.Fprintf(w, "%s\t%s\t\n", aurora.Green(fmt.Sprintf("%s:", varname)), *value.Value)
+			}
+			fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(fmt.Sprintf("%s Config Vars (inherited)", a.Name))))
+			w.Flush()
+		}
 	},
 }
 
@@ -183,7 +197,7 @@ var configExportCmd = &cobra.Command{
 		Spinner.Stop()
 		b := bytes.NewBuffer([]byte{})
 		json.Indent(b, j, "", "  ")
-		fmt.Println(string(b.Bytes()))
+		fmt.Println(b.String())
 	},
 }
 
