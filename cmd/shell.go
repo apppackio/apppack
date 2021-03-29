@@ -19,9 +19,33 @@ import (
 	"fmt"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/logrusorgru/aurora"
 
 	"github.com/spf13/cobra"
 )
+
+func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string) {
+	task, err := a.StartTask(
+		taskFamily,
+		app.ShellBackgroundCommand,
+		false,
+	)
+	checkErr(err)
+	checkErr(err)
+	Spinner.Stop()
+	fmt.Println(aurora.Faint(fmt.Sprintf("starting %s", *task.TaskArn)))
+	startSpinner()
+	err = a.WaitForTaskRunning(task)
+	checkErr(err)
+	Spinner.Stop()
+	fmt.Println(aurora.Faint("waiting for SSM Agent to startup"))
+	startSpinner()
+	ecsSession, err := a.CreateEcsSession(*task, *shellCmd)
+	checkErr(err)
+	Spinner.Stop()
+	err = a.ConnectToEcsSession(ecsSession)
+	checkErr(err)
+}
 
 // shellCmd represents the shell command
 var shellCmd = &cobra.Command{
@@ -37,20 +61,8 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 		checkErr(err)
 		err = a.LoadSettings()
 		checkErr(err)
-		shellTask, err := a.StartTask(
-			&a.Settings.Shell.TaskFamily,
-			app.ShellBackgroundCommand,
-			false,
-		)
-		checkErr(err)
-		Spinner.Stop()
-		fmt.Printf("starting %s\n", *shellTask.TaskArn)
-		startSpinner()
-		err = a.WaitForTaskRunning(shellTask)
-		checkErr(err)
-		Spinner.Stop()
-		err = a.ConnectToTask(shellTask, &a.Settings.Shell.Command)
-		checkErr(err)
+		exec := "su --preserve-environment --pty --command '/cnb/lifecycle/launcher bash -l' heroku"
+		StartInteractiveShell(a, &a.Settings.Shell.TaskFamily, &exec)
 	},
 }
 

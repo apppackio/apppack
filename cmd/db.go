@@ -19,10 +19,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/apppackio/apppack/app"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/logrusorgru/aurora"
@@ -70,14 +73,7 @@ var dbShellCmd = &cobra.Command{
 		checkErr(err)
 		family, exec, err := a.DBShellTaskInfo()
 		checkErr(err)
-		shellTask, err := a.StartTask(family, app.ShellBackgroundCommand, false)
-		checkErr(err)
-		Spinner.Suffix = fmt.Sprintf(" starting task %s", *shellTask.TaskArn)
-		err = a.WaitForTaskRunning(shellTask)
-		checkErr(err)
-		Spinner.Stop()
-		err = a.ConnectToTask(shellTask, aws.String(fmt.Sprintf("entrypoint.sh %s", *exec)))
-		checkErr(err)
+		StartInteractiveShell(a, family, aws.String(fmt.Sprintf("entrypoint.sh %s", *exec)))
 	},
 }
 
@@ -96,14 +92,54 @@ var dbDumpCmd = &cobra.Command{
 		task, getObjectInput, err := app.DBDump()
 		checkErr(err)
 		Spinner.Suffix = fmt.Sprintf(" dumping database %s", aurora.Faint(*task.TaskArn))
-		err = app.WaitForTaskStopped(task)
+		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
+		if *exitCode != 0 {
+			taskLogs(app.Session, task)
+			printError("database dump failed")
+			return
+		}
 		localFile := fmt.Sprintf("%s.dump", app.Name)
 		err = downloadFile(app.Session, getObjectInput, localFile)
 		checkErr(err)
 		Spinner.Stop()
 		printSuccess(fmt.Sprintf("Dumped database to %s", localFile))
 	},
+}
+
+func taskLogs(sess *session.Session, task *ecs.Task) error {
+	ecsSvc := ecs.New(sess)
+	taskDefn, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
+		TaskDefinition: task.TaskDefinitionArn,
+	})
+	if err != nil {
+		return err
+	}
+	updatedTaskResp, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+		Cluster: task.ClusterArn,
+		Tasks:   []*string{task.TaskArn},
+	})
+	if err != nil {
+		return err
+	}
+	task = updatedTaskResp.Tasks[0]
+
+	containerDefn := taskDefn.TaskDefinition.ContainerDefinitions[0]
+	logConfig := containerDefn.LogConfiguration
+	taskArnParts := strings.Split(*task.TaskArn, "/")
+	taskID := taskArnParts[len(taskArnParts)-1]
+	sawConfig.Group = *logConfig.Options["awslogs-group"]
+	sawConfig.Start = task.StartedAt.Format(time.RFC3339)
+	sawConfig.Streams = []*cloudwatchlogs.LogStream{{
+		LogStreamName: aws.String(
+			fmt.Sprintf("%s/%s/%s",
+				*logConfig.Options["awslogs-stream-prefix"],
+				*containerDefn.Name,
+				taskID),
+		),
+	}}
+	newBlade(sess).GetEvents()
+	return nil
 }
 
 // dbLoadCmd represents the db load command
@@ -145,10 +181,19 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		)
 		Spinner.Suffix = fmt.Sprintf(" loading database %s", aurora.Faint(*task.TaskArn))
 		checkErr(err)
-		err = app.WaitForTaskStopped(task)
+		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
 		Spinner.Stop()
-		printSuccess(fmt.Sprintf("Loaded database dump from %s", args[0]))
+		// pg_restore can have inconsequential errors... don't assume failure, but notify user
+		if *exitCode != 0 && strings.Contains(app.Settings.DBUtils.Engine, "postgres") {
+			taskLogs(app.Session, task)
+			printWarning("check pg_restore output")
+		} else if *exitCode != 0 {
+			taskLogs(app.Session, task)
+			printError("database load failed")
+		} else {
+			printSuccess(fmt.Sprintf("loaded database dump from %s", args[0]))
+		}
 	},
 }
 
