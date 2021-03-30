@@ -95,6 +95,14 @@ var reviewappsCreateCmd = &cobra.Command{
 		} else {
 			databaseAddon = "enabled"
 		}
+		redisLambda, err := getStackOutput(stack, "RedisManagerLambdaArn")
+		checkErr(err)
+		var redisAddon string
+		if *redisLambda == "~" {
+			redisAddon = "disabled"
+		} else {
+			redisAddon = "enabled"
+		}
 		cfnSvc := cloudformation.New(a.Session)
 		_, err = createStackAndWait(cfnSvc, &cloudformation.CreateStackInput{
 			StackName:   aws.String(reviewAppStackName(a.Name, *a.ReviewApp)),
@@ -102,6 +110,7 @@ var reviewappsCreateCmd = &cobra.Command{
 			RoleARN:     cfnRoleArn,
 			Parameters: []*cloudformation.Parameter{
 				{ParameterKey: aws.String("DatabaseAddon"), ParameterValue: &databaseAddon},
+				{ParameterKey: aws.String("RedisAddon"), ParameterValue: &redisAddon},
 				{
 					ParameterKey:   aws.String("Name"),
 					ParameterValue: a.ReviewApp,

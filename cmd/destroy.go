@@ -240,7 +240,7 @@ var destroyClusterCmd = &cobra.Command{
 	},
 }
 
-// destroyAppCmd represents the destroy command
+// destroyAppCmd represents the destroy app command
 var destroyAppCmd = &cobra.Command{
 	Use:                   "app <name>",
 	Short:                 "destroy AWS resources used by the AppPack app",
@@ -254,6 +254,26 @@ var destroyAppCmd = &cobra.Command{
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("app %s", appName)
 		stack, err := confirmDeleteStack(cfnSvc, appStackName(appName), friendlyName)
+		checkErr(err)
+		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
+		checkErr(err)
+	},
+}
+
+// destroyPipelineCmd represents the destroy pipeline command
+var destroyPipelineCmd = &cobra.Command{
+	Use:                   "pipeline <name>",
+	Short:                 "destroy AWS resources used by the AppPack pipeline",
+	Long:                  "*Requires AWS credentials.*",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		pipelineName := args[0]
+		sess, err := awsSession()
+		checkErr(err)
+		cfnSvc := cloudformation.New(sess)
+		friendlyName := fmt.Sprintf("pipeline %s", pipelineName)
+		stack, err := confirmDeleteStack(cfnSvc, pipelineStackName(pipelineName), friendlyName)
 		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
 		checkErr(err)
@@ -289,6 +309,7 @@ func init() {
 	destroyCmd.AddCommand(destroyClusterCmd)
 	destroyCmd.AddCommand(destroyCustomDomainCmd)
 	destroyCmd.AddCommand(destroyAppCmd)
+	destroyCmd.AddCommand(destroyPipelineCmd)
 	destroyCmd.AddCommand(destroyRedisCmd)
 	destroyCmd.AddCommand(destroyDatabaseCmd)
 }
