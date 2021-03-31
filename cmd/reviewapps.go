@@ -69,6 +69,79 @@ var reviewappsStatusCmd = &cobra.Command{
 	},
 }
 
+// pipelineCfnParameters sets parameters for the review app based on output from the pipeline stack
+func pipelineCfnParameters(stack *cloudformation.Stack) ([]*cloudformation.Parameter, error) {
+	parameters := []*cloudformation.Parameter{}
+	databaseLambda, err := getStackOutput(stack, "DatabaseManagerLambdaArn")
+	if err != nil {
+		return nil, err
+	}
+	if *databaseLambda == "~" {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("DatabaseAddon"), ParameterValue: aws.String("disabled"),
+		})
+	} else {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("DatabaseAddon"), ParameterValue: aws.String("enabled"),
+		})
+	}
+	redisLambda, err := getStackOutput(stack, "RedisManagerLambdaArn")
+	if err != nil {
+		return nil, err
+	}
+	if *redisLambda == "~" {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("RedisAddon"), ParameterValue: aws.String("disabled"),
+		})
+	} else {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("RedisAddon"), ParameterValue: aws.String("enabled"),
+		})
+	}
+	privateS3Bucket, err := getStackOutput(stack, "PrivateS3Bucket")
+	if err != nil {
+		return nil, err
+	}
+	if *privateS3Bucket == "~" {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("PrivateS3BucketEnabled"), ParameterValue: aws.String("disabled"),
+		})
+	} else {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("PrivateS3BucketEnabled"), ParameterValue: aws.String("enabled"),
+		})
+	}
+	publicS3Bucket, err := getStackOutput(stack, "PublicS3Bucket")
+	if err != nil {
+		return nil, err
+	}
+	if *publicS3Bucket == "~" {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("PublicS3BucketEnabled"), ParameterValue: aws.String("disabled"),
+		})
+	} else {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("PublicS3BucketEnabled"), ParameterValue: aws.String("enabled"),
+		})
+	}
+
+	customTaskPolicyArn, err := getStackOutput(stack, "CustomTaskPolicyArn")
+	if err != nil {
+		return nil, err
+	}
+	if *customTaskPolicyArn == "~" {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("CustomTaskPolicy"), ParameterValue: aws.String("disabled"),
+		})
+	} else {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("CustomTaskPolicy"), ParameterValue: aws.String("enabled"),
+		})
+	}
+
+	return parameters, nil
+}
+
 // reviewappsCreateCmd represents the create command
 var reviewappsCreateCmd = &cobra.Command{
 	Use:                   "create <pipeline:pr-number>",
@@ -80,50 +153,35 @@ var reviewappsCreateCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(args[0])
 		checkErr(err)
-		if !a.IsReviewApp() {  // TODO: validate
+		if !a.IsReviewApp() { // TODO: validate
 			checkErr(fmt.Errorf("no pull request number set"))
 		}
 		stack, err := getPipelineStack(a)
 		checkErr(err)
 		cfnRoleArn, err := getStackOutput(stack, "ReviewAppCfnRoleArn")
 		checkErr(err)
-		databaseLambda, err := getStackOutput(stack, "DatabaseManagerLambdaArn")
+		parameters, err := pipelineCfnParameters(stack)
 		checkErr(err)
-		var databaseAddon string
-		if *databaseLambda == "~" {
-			databaseAddon = "disabled"
-		} else {
-			databaseAddon = "enabled"
-		}
-		redisLambda, err := getStackOutput(stack, "RedisManagerLambdaArn")
-		checkErr(err)
-		var redisAddon string
-		if *redisLambda == "~" {
-			redisAddon = "disabled"
-		} else {
-			redisAddon = "enabled"
-		}
+		parameters = append(parameters, []*cloudformation.Parameter{
+			{
+				ParameterKey:   aws.String("Name"),
+				ParameterValue: a.ReviewApp,
+			},
+			{
+				ParameterKey:   aws.String("PipelineStackName"),
+				ParameterValue: aws.String(pipelineStackName(a.Name)),
+			},
+			{
+				ParameterKey:   aws.String("LoadBalancerRulePriority"),
+				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-1)+1)),
+			},
+		}...)
 		cfnSvc := cloudformation.New(a.Session)
 		_, err = createStackAndWait(cfnSvc, &cloudformation.CreateStackInput{
-			StackName:   aws.String(reviewAppStackName(a.Name, *a.ReviewApp)),
-			TemplateURL: aws.String(getReleaseUrl("https://s3.amazonaws.com/apppack-cloudformations/latest/review-app.json")),
-			RoleARN:     cfnRoleArn,
-			Parameters: []*cloudformation.Parameter{
-				{ParameterKey: aws.String("DatabaseAddon"), ParameterValue: &databaseAddon},
-				{ParameterKey: aws.String("RedisAddon"), ParameterValue: &redisAddon},
-				{
-					ParameterKey:   aws.String("Name"),
-					ParameterValue: a.ReviewApp,
-				},
-				{
-					ParameterKey:   aws.String("PipelineStackName"),
-					ParameterValue: aws.String(pipelineStackName(a.Name)),
-				},
-				{
-					ParameterKey:   aws.String("LoadBalancerRulePriority"),
-					ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-1)+1)),
-				},
-			},
+			StackName:    aws.String(reviewAppStackName(a.Name, *a.ReviewApp)),
+			TemplateURL:  aws.String(getReleaseUrl("https://s3.amazonaws.com/apppack-cloudformations/latest/review-app.json")),
+			RoleARN:      cfnRoleArn,
+			Parameters:   parameters,
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 			Tags: []*cloudformation.Tag{
 				{Key: aws.String("apppack:appName"), Value: &a.Name},
