@@ -66,6 +66,9 @@ var logsCmd = &cobra.Command{
 			sawConfig.End = fmt.Sprintf("-%s", sawConfig.Start)
 		}
 		b := newBlade(a.Session)
+		if a.IsReviewApp() {
+			sawConfig.Prefix = fmt.Sprintf("pr%s-%s", *a.ReviewApp, sawConfig.Prefix)
+		}
 		if sawConfig.Prefix != "" {
 			streams := b.GetLogStreams()
 			if len(streams) == 0 {
@@ -93,7 +96,13 @@ var logsOpenCmd = &cobra.Command{
 		a.LoadSettings()
 		checkErr(err)
 		logGroupParam := strings.ReplaceAll(url.QueryEscape(a.Settings.LogGroup.Name), "%", "*")
-		queryParam := strings.ReplaceAll(url.QueryEscape("fields @timestamp, @message\n| sort @timestamp desc\n| limit 200"), "%", "*")
+		var query string
+		if a.IsReviewApp() {
+			query = fmt.Sprintf("fields @timestamp, @message\n| filter @logStream like /^pr%s-/\n| sort @timestamp desc\n| limit 200", *a.ReviewApp)
+		} else {
+			query = "fields @timestamp, @message\n| sort @timestamp desc\n| limit 200"
+		}
+		queryParam := strings.ReplaceAll(url.QueryEscape(query), "%", "*")
 		region := *a.Session.Config.Region
 		destinationURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudwatch/home#logsV2:logs-insights$3FqueryDetail$3D~(editorString~'%s~source~(~'%s))", region, queryParam, logGroupParam)
 		signinURL, err := a.GetConsoleURL(destinationURL)
