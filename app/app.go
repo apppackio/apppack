@@ -627,21 +627,22 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = a.LoadDeployStatus()
-	if err != nil {
-		return nil, err
-	}
 	ecsSvc := ecs.New(a.Session)
 	taskARNs := []*string{}
-	for proc := range a.DeployStatus.Processes {
-		listTaskOutput, err := ecsSvc.ListTasks(&ecs.ListTasksInput{
-			Family:  aws.String(fmt.Sprintf("%s-%s", a.Name, proc)),
-			Cluster: &a.Settings.Cluster.ARN,
-		})
-		if err != nil {
-			return nil, err
+	input := ecs.ListTasksInput{
+		Cluster: &a.Settings.Cluster.ARN,
+	}
+	err = ecsSvc.ListTasksPages(&input, func(resp *ecs.ListTasksOutput, lastPage bool) bool {
+		for _, taskARN := range resp.TaskArns {
+			if taskARN == nil {
+				continue
+			}
+			taskARNs = append(taskARNs, taskARN)
 		}
-		taskARNs = append(taskARNs, listTaskOutput.TaskArns...)
+		return !lastPage
+	})
+	if err != nil {
+		return nil, err
 	}
 	describeTasksOutput, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
 		Tasks:   taskARNs,
@@ -651,7 +652,31 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	return describeTasksOutput.Tasks, nil
+	appTasks := []*ecs.Task{}
+	for _, task := range describeTasksOutput.Tasks {
+		isApp := false
+		isReviewApp := false
+		for _, t := range task.Tags {
+			if *t.Key == "apppack:appName" && *t.Value == a.Name {
+				isApp = true
+			}
+			if a.IsReviewApp() {
+				if *t.Key == "apppack:reviewApp" && *t.Value == fmt.Sprintf("pr/%s", *a.ReviewApp) {
+					isReviewApp = true
+				}
+			}
+		}
+		if isApp {
+			if a.IsReviewApp() {
+				if isReviewApp {
+					appTasks = append(appTasks, task)
+				}
+			} else {
+				appTasks = append(appTasks, task)
+			}
+		}
+	}
+	return appTasks, nil
 }
 
 func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
