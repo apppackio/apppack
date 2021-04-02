@@ -73,7 +73,7 @@ var dbShellCmd = &cobra.Command{
 		checkErr(err)
 		family, exec, err := a.DBShellTaskInfo()
 		checkErr(err)
-		StartInteractiveShell(a, family, aws.String(fmt.Sprintf("entrypoint.sh %s", *exec)))
+		StartInteractiveShell(a, family, aws.String(fmt.Sprintf("entrypoint.sh %s", *exec)), &ecs.TaskOverride{})
 	},
 }
 
@@ -177,6 +177,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		task, err := app.StartTask(
 			family,
 			[]string{"load-from-s3.sh", remoteFile},
+			&ecs.TaskOverride{},
 			true,
 		)
 		Spinner.Suffix = fmt.Sprintf(" loading database %s", aurora.Faint(*task.TaskArn))

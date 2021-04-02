@@ -186,6 +186,19 @@ func (a *App) IsReviewApp() bool {
 	return a.ReviewApp != nil
 }
 
+func (a *App) ShellTaskFamily() (*string, error) {
+	if a.IsReviewApp() {
+		return aws.String(fmt.Sprintf("%s-pr%s-shell", a.Name, *a.ReviewApp)), nil
+	}
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	settings := a.Settings
+
+	return &settings.Shell.TaskFamily, nil
+}
+
 func (a *App) GetReviewApps() ([]*ReviewApp, error) {
 	if !a.Pipeline {
 		return nil, fmt.Errorf("%s is not a pipeline and cannot have review apps", a.Name)
@@ -282,7 +295,7 @@ func (a *App) LoadSettings() error {
 }
 
 // StartTask start a new task on ECS
-func (a *App) StartTask(taskFamily *string, command []string, fargate bool) (*ecs.Task, error) {
+func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.TaskOverride, fargate bool) (*ecs.Task, error) {
 	ecsSvc := ecs.New(a.Session)
 	err := a.LoadSettings()
 	if err != nil {
@@ -316,14 +329,13 @@ func (a *App) StartTask(taskFamily *string, command []string, fargate bool) (*ec
 	startedBy := fmt.Sprintf("apppack-cli/shell/%s", *email)
 	runTaskArgs.TaskDefinition = taskDefn.TaskDefinition.TaskDefinitionArn
 	runTaskArgs.StartedBy = &startedBy
-	runTaskArgs.Overrides = &ecs.TaskOverride{
-		ContainerOverrides: []*ecs.ContainerOverride{
-			{
-				Name:    taskDefn.TaskDefinition.ContainerDefinitions[0].Name,
-				Command: cmd,
-			},
+	taskOverride.ContainerOverrides = []*ecs.ContainerOverride{
+		{
+			Name:    taskDefn.TaskDefinition.ContainerDefinitions[0].Name,
+			Command: cmd,
 		},
 	}
+	runTaskArgs.Overrides = taskOverride
 	ecsTaskOutput, err := ecsSvc.RunTask(&runTaskArgs)
 	if err != nil {
 		return nil, err
@@ -632,6 +644,7 @@ func (a *App) DBDump() (*ecs.Task, *s3.GetObjectInput, error) {
 	task, err := a.StartTask(
 		family,
 		[]string{"dump-to-s3.sh", fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)},
+		&ecs.TaskOverride{},
 		true,
 	)
 	if err != nil {

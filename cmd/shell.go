@@ -17,17 +17,21 @@ package cmd
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/logrusorgru/aurora"
 
 	"github.com/spf13/cobra"
 )
 
-func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string) {
+func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string, taskOverride *ecs.TaskOverride) {
 	task, err := a.StartTask(
 		taskFamily,
 		app.ShellBackgroundCommand,
+		taskOverride,
 		false,
 	)
 	checkErr(err)
@@ -47,6 +51,9 @@ func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string) {
 	checkErr(err)
 }
 
+var shellCpu float64
+var shellMem int
+
 // shellCmd represents the shell command
 var shellCmd = &cobra.Command{
 	Use:   "shell",
@@ -59,15 +66,20 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
-		err = a.LoadSettings()
+		taskFamily, err := a.ShellTaskFamily()
 		checkErr(err)
 		exec := "su --preserve-environment --pty --command '/cnb/lifecycle/launcher bash -l' heroku"
-		StartInteractiveShell(a, &a.Settings.Shell.TaskFamily, &exec)
+		StartInteractiveShell(a, taskFamily, &exec, &ecs.TaskOverride{
+			Cpu:    aws.String(fmt.Sprintf("%d", int(math.RoundToEven(shellCpu*1024)))),
+			Memory: aws.String(fmt.Sprintf("%d", shellMem)),
+		})
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(shellCmd)
 	shellCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
+	shellCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")
+	shellCmd.Flags().IntVar(&shellMem, "memory", 1024, "memory (in MB) available for task")
 	shellCmd.MarkPersistentFlagRequired("app-name")
 }
