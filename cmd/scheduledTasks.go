@@ -47,6 +47,9 @@ var scheduledTasksCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
+		if a.IsReviewApp() {
+			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
+		}
 		tasks, err := a.ScheduledTasks()
 		Spinner.Stop()
 		checkErr(err)
@@ -73,6 +76,9 @@ Be sure to wrap your command and schedule in quotes to ensure they are read as a
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
+		if a.IsReviewApp() {
+			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
+		}
 		tasks, err := a.CreateScheduledTask(schedule, command)
 		Spinner.Stop()
 		checkErr(err)
@@ -94,6 +100,9 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
+		if a.IsReviewApp() {
+			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
+		}
 		var idx int
 		var task *app.ScheduledTask
 		if len(args) > 0 {

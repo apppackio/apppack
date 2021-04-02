@@ -46,6 +46,9 @@ var psCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
+		if a.Pipeline && !a.IsReviewApp() {
+			checkErr(fmt.Errorf("pipelines don't directly run processes"))
+		}
 		tasks, err := a.DescribeTasks()
 		Spinner.Stop()
 		checkErr(err)
