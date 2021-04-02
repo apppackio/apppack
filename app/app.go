@@ -186,6 +186,24 @@ func (a *App) IsReviewApp() bool {
 	return a.ReviewApp != nil
 }
 
+func (a *App) ReviewAppSettings() (*Settings, error) {
+	if a.IsReviewApp() {
+		return nil, fmt.Errorf("only review apps have review app settings")
+	}
+
+	Item, err := ddbItem(a.Session, fmt.Sprintf("APP#%s:%s", a.Name, *a.ReviewApp), "settings")
+	if err != nil {
+		return nil, err
+	}
+	i := settingsItem{}
+
+	err = dynamodbattribute.UnmarshalMap(*Item, &i)
+	if err != nil {
+		return nil, err
+	}
+	return &i.Settings, nil
+}
+
 func (a *App) ShellTaskFamily() (*string, error) {
 	if a.IsReviewApp() {
 		return aws.String(fmt.Sprintf("%s-pr%s-shell", a.Name, *a.ReviewApp)), nil
@@ -197,6 +215,34 @@ func (a *App) ShellTaskFamily() (*string, error) {
 	settings := a.Settings
 
 	return &settings.Shell.TaskFamily, nil
+}
+
+// URL is used to lookup the app url from settings
+// pipelines need to do this for their review apps so it is passed in as an argument
+func (a *App) URL(reviewApp *string) (*string, error) {
+	var settings *Settings
+	var err error
+	if reviewApp != nil {
+		a.ReviewApp = reviewApp
+		settings, err = a.ReviewAppSettings()
+		if err != nil {
+			return nil, err
+		}
+		a.ReviewApp = nil
+	} else if a.IsReviewApp() {
+		settings, err = a.ReviewAppSettings()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err := a.LoadSettings()
+		if err != nil {
+			return nil, err
+		}
+		settings = a.Settings
+	}
+
+	return &settings.Domains[0], nil
 }
 
 func (a *App) GetReviewApps() ([]*ReviewApp, error) {
@@ -246,6 +292,9 @@ func (a *App) LoadECSConfig() error {
 // GetDeployStatus will get a DeployStatus value from DDB
 func (a *App) GetDeployStatus(buildARN string) (*DeployStatus, error) {
 	key := "DEPLOYSTATUS"
+	if a.IsReviewApp() {
+		key = strings.Join([]string{key, *a.ReviewApp}, "#")
+	}
 	if buildARN != "" {
 		key = strings.Join([]string{key, buildARN}, "#")
 	}
@@ -432,15 +481,28 @@ func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
 }
 
 // StartBuild starts a new CodeBuild run
-func (a *App) StartBuild() (*codebuild.Build, error) {
+func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 	codebuildSvc := codebuild.New(a.Session)
 	err := a.LoadSettings()
 	if err != nil {
 		return nil, err
 	}
-	build, err := codebuildSvc.StartBuild(&codebuild.StartBuildInput{
+	buildInput := codebuild.StartBuildInput{
 		ProjectName: &a.Settings.CodebuildProject.Name,
-	})
+	}
+	if a.IsReviewApp() {
+		buildInput.SourceVersion = aws.String(fmt.Sprintf("pr/%s", *a.ReviewApp))
+		if createReviewApp {
+			buildInput.EnvironmentVariablesOverride = []*codebuild.EnvironmentVariable{
+				{
+					Name:  aws.String("REVIEW_APP_STATUS"),
+					Value: aws.String("creating"),
+					Type:  aws.String("PLAINTEXT"),
+				},
+			}
+		}
+	}
+	build, err := codebuildSvc.StartBuild(&buildInput)
 	return build.Build, err
 }
 

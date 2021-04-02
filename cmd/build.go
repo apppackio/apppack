@@ -131,7 +131,7 @@ var buildStartCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
-		build, err := a.StartBuild()
+		build, err := a.StartBuild(false)
 		checkErr(err)
 		Spinner.Stop()
 		printSuccess("build started")

@@ -18,10 +18,12 @@ package cmd
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/apppackio/apppack/app"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/logrusorgru/aurora"
 
 	"github.com/spf13/cobra"
 )
@@ -63,8 +65,17 @@ var reviewappsStatusCmd = &cobra.Command{
 		reviewApps, err := a.GetReviewApps()
 		checkErr(err)
 		Spinner.Stop()
+		fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(fmt.Sprintf("%s review apps", a.Name))))
 		for _, r := range reviewApps {
-			fmt.Printf("%s (%s): %s\n", r.PullRequest, r.Branch, r.Status)
+			prNumber := strings.Split(r.PullRequest, "/")[1]
+			fmt.Printf("%s %s\n", aurora.White(fmt.Sprintf("#%s", prNumber)), aurora.Faint(r.Branch))
+			if r.Status == "created" {
+				url, err := a.URL(&prNumber)
+				checkErr(err)
+				fmt.Println(aurora.Blue(fmt.Sprintf("https://%s\n", *url)))
+			} else {
+				fmt.Printf("\n")
+			}
 		}
 	},
 }
@@ -176,8 +187,7 @@ var reviewappsCreateCmd = &cobra.Command{
 				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-1)+1)),
 			},
 		}...)
-		cfnSvc := cloudformation.New(a.Session)
-		_, err = createStackAndWait(cfnSvc, &cloudformation.CreateStackInput{
+		err = createStackOrChangeSet(a.Session, &cloudformation.CreateStackInput{
 			StackName:    aws.String(reviewAppStackName(a.Name, *a.ReviewApp)),
 			TemplateURL:  aws.String(getReleaseUrl("https://s3.amazonaws.com/apppack-cloudformations/latest/review-app.json")),
 			RoleARN:      cfnRoleArn,
@@ -189,37 +199,16 @@ var reviewappsCreateCmd = &cobra.Command{
 				//{Key: aws.String("apppack:cluster"), Value: aws.String("...")},
 				{Key: aws.String("apppack"), Value: aws.String("true")},
 			},
-		}, true)
+		}, false, fmt.Sprintf("review app #%s", *a.ReviewApp))
 		checkErr(err)
-		// codebuildSvc := codebuild.New(p.App.Session)
-		// err = p.App.LoadSettings()
-		// checkErr(err)
-		// ssmSvc := ssm.New(p.App.Session)
-		// parameterName := fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s", p.App.Name, pr)
-		// parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
-		// 	Name: &parameterName,
-		// })
-		// checkErr(err)
-		// r := pipeline.ReviewApp{}
-		// err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &r)
-		// checkErr(err)
-		// codebuildSvc.StartBuild(&codebuild.StartBuildInput{
-		// 	ProjectName:   &p.App.Settings.CodebuildProject.Name,
-		// 	SourceVersion: &r.PullRequest,
-		// 	EnvironmentVariablesOverride: []*codebuild.EnvironmentVariable{
-		// 		{
-		// 			Name:  aws.String("BRANCH"),
-		// 			Value: &r.Branch,
-		// 			Type:  aws.String("PLAINTEXT"),
-		// 		}, {
-		// 			Name:  aws.String("REVIEW_APP_STATUS"),
-		// 			Value: aws.String("creating"),
-		// 			Type:  aws.String("PLAINTEXT"),
-		// 		},
-		// 	},
-		// })
-		// Spinner.Stop()
-		printSuccess(fmt.Sprintf("deploying review app for PR #%s", *a.ReviewApp))
+		Spinner.Stop()
+		fmt.Println("triggering build...")
+		startSpinner()
+		build, err := a.StartBuild(true)
+		checkErr(err)
+		err = watchBuild(a, build)
+		checkErr(err)
+		Spinner.Stop()
 	},
 }
 
@@ -234,7 +223,7 @@ var reviewappsDestroyCmd = &cobra.Command{
 		startSpinner()
 		a, err := app.Init(args[0])
 		checkErr(err)
-		if !a.IsReviewApp() {  // TODO: validate
+		if !a.IsReviewApp() { // TODO: validate
 			checkErr(fmt.Errorf("no pull request number set"))
 		}
 		stackName := reviewAppStackName(a.Name, *a.ReviewApp)
