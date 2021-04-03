@@ -139,6 +139,11 @@ apppack ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
 		minMaxProcs := strings.Split(args[1], "-")
 		minProcesses, err := strconv.Atoi(minMaxProcs[0])
 		checkErr(err)
+		a, err := app.Init(AppName)
+		checkErr(err)
+		if a.IsReviewApp() {
+			checkErr(fmt.Errorf("scaling is not supported for review apps"))
+		}
 		if len(minMaxProcs) > 1 {
 			maxProcesses, err = strconv.Atoi(minMaxProcs[1])
 			out = fmt.Sprintf("%s will autoscale from %d to %d processes", processType, minProcesses, maxProcesses)
@@ -146,8 +151,6 @@ apppack ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
 			maxProcesses = minProcesses
 			out = fmt.Sprintf("%s will scale to %d processes", processType, minProcesses)
 		}
-		a, err := app.Init(AppName)
-		checkErr(err)
 		startSpinner()
 		err = a.ScaleProcess(processType, minProcesses, maxProcesses)
 		checkErr(err)

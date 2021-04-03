@@ -243,5 +243,4 @@ func init() {
 	reviewappsCreateCmd.Flags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
 	upgradeCmd.PersistentFlags().MarkHidden("release")
 	reviewappsCmd.AddCommand(reviewappsDestroyCmd)
-	//reviewappsCmd.AddCommand(configCmd)
 }

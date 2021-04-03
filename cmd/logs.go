@@ -93,6 +93,7 @@ var logsOpenCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		a, err := app.Init(AppName)
+		checkErr(err)
 		a.LoadSettings()
 		checkErr(err)
 		logGroupParam := strings.ReplaceAll(url.QueryEscape(a.Settings.LogGroup.Name), "%", "*")
