@@ -72,7 +72,7 @@ var reviewappsStatusCmd = &cobra.Command{
 			if r.Status == "created" {
 				url, err := a.URL(&prNumber)
 				checkErr(err)
-				fmt.Println(aurora.Blue(fmt.Sprintf("https://%s\n", *url)))
+				fmt.Println(aurora.Blue(*url))
 			} else {
 				fmt.Printf("\n")
 			}

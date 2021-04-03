@@ -242,7 +242,7 @@ func (a *App) URL(reviewApp *string) (*string, error) {
 		settings = a.Settings
 	}
 
-	return &settings.Domains[0], nil
+	return aws.String(fmt.Sprintf("https://%s", settings.Domains[0])), nil
 }
 
 func (a *App) GetReviewApps() ([]*ReviewApp, error) {
