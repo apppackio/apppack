@@ -45,17 +45,8 @@ func getPipelineStack(a *app.App) (*cloudformation.Stack, error) {
 
 // reviewappsCmd represents the reviewapps command
 var reviewappsCmd = &cobra.Command{
-	Use:                   "reviewapps",
-	Short:                 "manage review apps",
-	Long:                  ``,
-	DisableFlagsInUseLine: true,
-}
-
-// reviewappsStatusCmd represents the status command
-var reviewappsStatusCmd = &cobra.Command{
-	Use:                   "status <pipeline>",
+	Use:                   "reviewapps <pipeline>",
 	Short:                 "list available and deployed review apps",
-	Long:                  ``,
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -258,7 +249,6 @@ var reviewappsDestroyCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(reviewappsCmd)
-	reviewappsCmd.AddCommand(reviewappsStatusCmd)
 	reviewappsCmd.AddCommand(reviewappsCreateCmd)
 	reviewappsCreateCmd.Flags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
 	upgradeCmd.PersistentFlags().MarkHidden("release")
