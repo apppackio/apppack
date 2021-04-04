@@ -187,7 +187,7 @@ func (a *App) IsReviewApp() bool {
 }
 
 func (a *App) ReviewAppSettings() (*Settings, error) {
-	if a.IsReviewApp() {
+	if !a.IsReviewApp() {
 		return nil, fmt.Errorf("only review apps have review app settings")
 	}
 

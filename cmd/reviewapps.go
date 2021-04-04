@@ -54,7 +54,7 @@ var reviewappsCmd = &cobra.Command{
 // reviewappsStatusCmd represents the status command
 var reviewappsStatusCmd = &cobra.Command{
 	Use:                   "status <pipeline>",
-	Short:                 "",
+	Short:                 "list available and deployed review apps",
 	Long:                  ``,
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
@@ -135,6 +135,27 @@ func pipelineCfnParameters(stack *cloudformation.Stack) ([]*cloudformation.Param
 			ParameterKey: aws.String("PublicS3BucketEnabled"), ParameterValue: aws.String("enabled"),
 		})
 	}
+	ses, err := getStackOutput(stack, "SesDomain")
+	if err != nil {
+		return nil, err
+	}
+	if *ses == "~" {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("SesDomain"), ParameterValue: aws.String("disabled"),
+		})
+	} else {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey: aws.String("SesDomain"), ParameterValue: aws.String("enabled"),
+		})
+	}
+	sqs, err := getStackOutput(stack, "SQSQueueEnabled")
+	if err != nil {
+		return nil, err
+	}
+
+	parameters = append(parameters, &cloudformation.Parameter{
+		ParameterKey: aws.String("SQSQueueEnabled"), ParameterValue: sqs,
+	})
 
 	customTaskPolicyArn, err := getStackOutput(stack, "CustomTaskPolicyArn")
 	if err != nil {
@@ -156,8 +177,8 @@ func pipelineCfnParameters(stack *cloudformation.Stack) ([]*cloudformation.Param
 // reviewappsCreateCmd represents the create command
 var reviewappsCreateCmd = &cobra.Command{
 	Use:                   "create <pipeline:pr-number>",
-	Short:                 "",
-	Long:                  ``,
+	Short:                 "create a review app",
+	Long:                  `Creates a review app from a pull request on the pipeline repository and triggers the iniital build`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -215,8 +236,7 @@ var reviewappsCreateCmd = &cobra.Command{
 // reviewappsDestroyCmd represents the destroy command
 var reviewappsDestroyCmd = &cobra.Command{
 	Use:                   "destroy <pipeline:pr-number>",
-	Short:                 "",
-	Long:                  ``,
+	Short:                 "destroys the review app",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
