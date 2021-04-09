@@ -59,11 +59,12 @@ var reviewappsCmd = &cobra.Command{
 		fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(fmt.Sprintf("%s review apps", a.Name))))
 		for _, r := range reviewApps {
 			prNumber := strings.Split(r.PullRequest, "/")[1]
-			fmt.Printf("%s %s\n", aurora.White(fmt.Sprintf("#%s", prNumber)), aurora.Faint(r.Branch))
+			fmt.Printf("%s %s\n", aurora.White(fmt.Sprintf("#%s %s", prNumber, r.Title)), aurora.Faint(r.Branch))
 			if r.Status == "created" {
 				url, err := a.URL(&prNumber)
 				checkErr(err)
-				fmt.Println(aurora.Blue(*url))
+				indent := len(prNumber) + 1
+				fmt.Printf("%s %s\n\n", strings.Repeat(" ", indent), aurora.Underline(aurora.Blue(*url)))
 			} else {
 				fmt.Printf("\n")
 			}

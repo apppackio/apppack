@@ -63,6 +63,8 @@ type ReviewApp struct {
 	PullRequest string `json:"pull_request"`
 	Status      string `json:"status"`
 	Branch      string `json:"branch"`
+	Title       string `json:"title"`
+	URL         string `json:"url"`
 }
 type settingsItem struct {
 	PrimaryID   string   `json:"primary_id"`
