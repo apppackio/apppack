@@ -68,6 +68,9 @@ func getAppRole(IDToken string, name string) (*AppRole, error) {
 	appList, err := getAppListWithIDToken(IDToken)
 	if err != nil {
 		tokens, err := refreshTokens()
+		if err != nil {
+			return nil, err
+		}
 		appList, err = getAppListWithIDToken(tokens.IDToken)
 		if err != nil {
 			return nil, err
