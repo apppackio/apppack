@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/apppackio/apppack/app"
 	"github.com/aws/aws-sdk-go/aws"
@@ -186,6 +187,7 @@ var reviewappsCreateCmd = &cobra.Command{
 		checkErr(err)
 		parameters, err := pipelineCfnParameters(stack)
 		checkErr(err)
+		rand.Seed(time.Now().UnixNano())
 		parameters = append(parameters, []*cloudformation.Parameter{
 			{
 				ParameterKey:   aws.String("Name"),
@@ -197,7 +199,7 @@ var reviewappsCreateCmd = &cobra.Command{
 			},
 			{
 				ParameterKey:   aws.String("LoadBalancerRulePriority"),
-				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-1)+1)),
+				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-200)+200)),
 			},
 		}...)
 		err = createStackOrChangeSet(a.Session, &cloudformation.CreateStackInput{

@@ -982,7 +982,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 			},
 			{
 				ParameterKey:   aws.String("LoadBalancerRulePriority"),
-				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-1)+1)), // TODO: verify empty slot
+				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-200)+200)), // TODO: verify empty slot
 			},
 			{
 				ParameterKey:   aws.String("Name"),
