@@ -82,11 +82,52 @@ var appsCmd = &cobra.Command{
 	Short:                 "list the apps you have access to",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
 		apps, err := auth.AppList()
 		checkErr(err)
+		appGroups := make(map[string][]*auth.AppRole)
+		pipelineGroups := make(map[string][]*auth.AppRole)
 		for _, app := range apps {
-			fmt.Printf("%s\t%s\n", app.AppName, aurora.Faint(fmt.Sprintf("%s account:%s", app.Region, app.AccountID)))
+			key := fmt.Sprintf("%s%s", app.AccountID, app.Region)
+			if app.Pipeline {
+				val, ok := pipelineGroups[key]
+				if ok {
+					pipelineGroups[key] = append(val, app)
+				} else {
+					pipelineGroups[key] = []*auth.AppRole{app}
+				}
+			} else {
+				val, ok := appGroups[key]
+				if ok {
+					appGroups[key] = append(val, app)
+				} else {
+					appGroups[key] = []*auth.AppRole{app}
+				}
+			}
 		}
+		Spinner.Stop()
+		if len(appGroups) > 0 {
+			fmt.Printf("%s %s\n", aurora.Faint("==="), aurora.White("Apps"))
+			for _, group := range appGroups {
+				fmt.Println(aurora.Faint(fmt.Sprintf("Account: %s (%s)", group[0].AccountID, group[0].Region)))
+				for _, app := range group {
+					fmt.Printf("  %s\n", aurora.Green(app.AppName))
+				}
+			}
+		}
+		if len(appGroups) > 0 && len(pipelineGroups) > 0 {
+			fmt.Print("\n")
+		}
+		if len(pipelineGroups) > 0 {
+			fmt.Printf("%s %s\n", aurora.Faint("==="), aurora.White("Pipelines"))
+			for _, group := range pipelineGroups {
+				fmt.Println(aurora.Faint(fmt.Sprintf("Account: %s (%s)", group[0].AccountID, group[0].Region)))
+				for _, app := range group {
+					fmt.Printf("  %s\n", aurora.Green(app.AppName))
+				}
+			}
+		}
+
 	},
 }
 
