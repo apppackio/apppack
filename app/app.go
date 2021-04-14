@@ -103,16 +103,26 @@ type deployStatusItem struct {
 }
 
 type DeployStatus struct {
-	Phase       string             `json:"phase"`
-	Processes   map[string]Process `json:"processes"`
-	BuildID     string             `json:"build_id"`
-	LastUpdate  int64              `json:"last_update"`
-	Commit      string             `json:"commit"`
-	BuildNumber int                `json:"build_number"`
-	Failed      bool               `json:"failed"`
+	Phase       string    `json:"phase"`
+	Processes   []Process `json:"processes"`
+	BuildID     string    `json:"build_id"`
+	LastUpdate  int64     `json:"last_update"`
+	Commit      string    `json:"commit"`
+	BuildNumber int       `json:"build_number"`
+	Failed      bool      `json:"failed"`
+}
+
+func (d *DeployStatus) FindProcess(name string) (*Process, error) {
+	for _, p := range d.Processes {
+		if p.Name == name {
+			return &p, nil
+		}
+	}
+	return nil, fmt.Errorf("process '%s' not found", name)
 }
 
 type Process struct {
+	Name         string `json:"name"`
 	CPU          string `json:"cpu"`
 	Memory       string `json:"memory"`
 	MinProcesses int    `json:"min_processes"`

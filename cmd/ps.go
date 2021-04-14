@@ -70,7 +70,10 @@ var psCmd = &cobra.Command{
 		a.LoadDeployStatus()
 		// iterate over process types/tasks
 		for _, proc := range keys {
-			status := a.DeployStatus.Processes[proc]
+			status, err := a.DeployStatus.FindProcess(proc)
+			if err != nil {
+				fmt.Println(aurora.Yellow(fmt.Sprintf("No service found for process type %s", proc)))
+			}
 			fmt.Printf("%s %s %s ", aurora.Faint("==="), aurora.Green(proc), aurora.White(status.Command))
 			if status.MinProcesses == status.MaxProcesses {
 				fmt.Printf("(%s)\n", aurora.Yellow(fmt.Sprintf("%d", status.MinProcesses)))
