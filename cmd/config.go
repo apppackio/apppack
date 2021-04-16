@@ -159,7 +159,7 @@ func parameterIsManaged(ssmSvc *ssm.SSM, parameter *ssm.Parameter) (*bool, error
 		return nil, err
 	}
 	for _, tag := range resp.TagList {
-		if *tag.Key == "aws:cloudformation:stack-id" {
+		if *tag.Key == "aws:cloudformation:stack-id" || *tag.Key == "apppack:cloudformation:stack-id" {
 			return aws.Bool(true), nil
 		}
 	}
