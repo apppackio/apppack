@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -146,8 +147,9 @@ type ecsConfigItem struct {
 }
 
 type ECSConfig struct {
-	RunTaskArgs        ecs.RunTaskInput `locationName:"run_task_args"`
-	RunTaskArgsFargate ecs.RunTaskInput `locationName:"run_task_args_fargate"`
+	RunTaskArgs        ecs.RunTaskInput                `locationName:"run_task_args"`
+	RunTaskArgsFargate ecs.RunTaskInput                `locationName:"run_task_args_fargate"`
+	TaskDefinitionArgs ecs.RegisterTaskDefinitionInput `locationName:"task_definition_args"`
 }
 
 func ddbItem(sess *session.Session, primaryID string, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
@@ -786,40 +788,7 @@ type Scaling struct {
 }
 
 func (a *App) ResizeProcess(processType string, cpu int, memory int) error {
-	ssmSvc := ssm.New(a.Session)
-	parameterName := fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
-	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
-		Name: &parameterName,
-	})
-	var scaling map[string]*Scaling
-	if err != nil {
-		scaling = map[string]*Scaling{}
-	} else {
-		if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &scaling); err != nil {
-			return err
-		}
-	}
-	_, ok := scaling[processType]
-	if !ok {
-		scaling[processType] = &Scaling{
-			CPU:          1024,
-			Memory:       2048,
-			MinProcesses: 1,
-			MaxProcesses: 1,
-		}
-	}
-	scaling[processType].CPU = cpu
-	scaling[processType].Memory = memory
-	scalingJSON, err := json.Marshal(scaling)
-	if err != nil {
-		return err
-	}
-	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-		Name:      &parameterName,
-		Type:      aws.String("String"),
-		Value:     aws.String(fmt.Sprintf("%s", scalingJSON)),
-		Overwrite: aws.Bool(true),
-	})
+	err := a.SetScaleParameter(processType, nil, nil, &cpu, &memory)
 	if err != nil {
 		return err
 	}
@@ -827,6 +796,16 @@ func (a *App) ResizeProcess(processType string, cpu int, memory int) error {
 }
 
 func (a *App) ScaleProcess(processType string, minProcessCount int, maxProcessCount int) error {
+	err := a.SetScaleParameter(processType, &minProcessCount, &maxProcessCount, nil, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// SetScaleParameter updates process count and cpu/ram with any non-nil values provided
+// if it is not yet set, the defaults from ECSConfig will be used
+func (a *App) SetScaleParameter(processType string, minProcessCount *int, maxProcessCount *int, cpu *int, memory *int) error {
 	ssmSvc := ssm.New(a.Session)
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
@@ -842,15 +821,34 @@ func (a *App) ScaleProcess(processType string, minProcessCount int, maxProcessCo
 	}
 	_, ok := scaling[processType]
 	if !ok {
+		a.LoadECSConfig()
+		cpu, err := strconv.Atoi(*a.ECSConfig.TaskDefinitionArgs.Cpu)
+		if err != nil {
+			return err
+		}
+		mem, err := strconv.Atoi(*a.ECSConfig.TaskDefinitionArgs.Memory)
+		if err != nil {
+			return err
+		}
 		scaling[processType] = &Scaling{
-			CPU:          1024,
-			Memory:       2048,
+			CPU:          cpu,
+			Memory:       mem,
 			MinProcesses: 1,
 			MaxProcesses: 1,
 		}
 	}
-	scaling[processType].MinProcesses = minProcessCount
-	scaling[processType].MaxProcesses = maxProcessCount
+	if minProcessCount != nil {
+		scaling[processType].MinProcesses = *minProcessCount
+	}
+	if maxProcessCount != nil {
+		scaling[processType].MaxProcesses = *maxProcessCount
+	}
+	if cpu != nil {
+		scaling[processType].CPU = *cpu
+	}
+	if memory != nil {
+		scaling[processType].Memory = *memory
+	}
 	scalingJSON, err := json.Marshal(scaling)
 	if err != nil {
 		return err
