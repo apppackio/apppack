@@ -395,7 +395,18 @@ func AppList() ([]*AppRole, error) {
 	if err != nil {
 		return nil, err
 	}
-	return getAppListWithIDToken(tokens.IDToken)
+	appList, err := getAppListWithIDToken(tokens.IDToken)
+	if err != nil {
+		tokens, err := refreshTokens()
+		if err != nil {
+			return nil, err
+		}
+		appList, err = getAppListWithIDToken(tokens.IDToken)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return appList, err
 }
 
 func WhoAmI() (*string, error) {
