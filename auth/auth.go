@@ -195,18 +195,6 @@ func readUserInfoFromUserCache() (*UserInfo, error) {
 	return &obj, nil
 }
 
-func getUserInfo() (*UserInfo, error) {
-	token, err := readTokensFromUserCache()
-	if err != nil {
-		return nil, err
-	}
-	userInfo, err := getUserInfoWithAccessToken((*token).AccessToken)
-	if err != nil {
-		return nil, err
-	}
-	return userInfo, nil
-}
-
 func getUserInfoWithAccessToken(accessToken string) (*UserInfo, error) {
 	req, err := http.NewRequest("GET", userInfoURL, nil)
 	if err != nil {
@@ -223,7 +211,7 @@ func getUserInfoWithAccessToken(accessToken string) (*UserInfo, error) {
 	}
 	if resp.StatusCode != 200 {
 		if err != nil {
-			return nil, fmt.Errorf("Unable to retrieve user info. Status code %d", resp.StatusCode)
+			return nil, fmt.Errorf("unable to retrieve user info. Status code %d", resp.StatusCode)
 		}
 	}
 	err = writeToUserCache("user", contents)
@@ -253,7 +241,7 @@ func getAppListWithIDToken(IDToken string) ([]*AppRole, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Unable to retrieve app list. Status code %d", resp.StatusCode)
+		return nil, fmt.Errorf("unable to retrieve app list. Status code %d", resp.StatusCode)
 	}
 	//err = writeToUserCache("apps", contents)
 	//if err != nil {
