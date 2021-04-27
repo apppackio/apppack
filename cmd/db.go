@@ -171,6 +171,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 				Key:    getObjectInput.Key,
 				Body:   file,
 			})
+			checkErr(err)
 		}
 		family, err := app.DBDumpLoadFamily()
 		checkErr(err)

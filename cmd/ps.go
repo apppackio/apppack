@@ -149,6 +149,7 @@ apppack ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
 		}
 		if len(minMaxProcs) > 1 {
 			maxProcesses, err = strconv.Atoi(minMaxProcs[1])
+			checkErr(err)
 			out = fmt.Sprintf("%s will autoscale from %d to %d processes", processType, minProcesses, maxProcesses)
 		} else {
 			maxProcesses = minProcesses

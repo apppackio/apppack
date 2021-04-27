@@ -29,8 +29,6 @@ import (
 
 const ()
 
-var cfgFile string
-
 const (
 	timeFmt = "Jan 02, 2006 15:04:05 -0700"
 )

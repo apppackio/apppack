@@ -46,6 +46,7 @@ var initCmd = &cobra.Command{
 
 		fmt.Println("")
 		alreadyInstalled, err = stackExists(sess, fmt.Sprintf("apppack-region-%s", *sess.Config.Region))
+		checkErr(err)
 		if *alreadyInstalled {
 			fmt.Printf("It looks like you've already setup the %s region resources.\n", *sess.Config.Region)
 			fmt.Printf("Skipping %s\n", aurora.Bold("apppack create region"))
@@ -57,6 +58,7 @@ var initCmd = &cobra.Command{
 		fmt.Println("")
 		clusterName := cmd.Flags().Lookup("cluster-name").Value.String()
 		alreadyInstalled, err = stackExists(sess, fmt.Sprintf("apppack-cluster-%s", clusterName))
+		checkErr(err)
 		if *alreadyInstalled {
 			fmt.Printf("It looks like you've already setup a cluster named %s.\n", clusterName)
 			fmt.Printf("Skipping %s\n", aurora.Bold(fmt.Sprintf("apppack create cluster %s", clusterName)))

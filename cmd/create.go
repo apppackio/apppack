@@ -171,6 +171,7 @@ func retryStackCreation(cfnSvc *cloudformation.CloudFormation, stackID *string, 
 		return nil, err
 	}
 	stack, err := waitForCloudformationStack(cfnSvc, *stackID)
+	checkErr(err)
 	if *stack.StackStatus != "DELETE_COMPLETE" {
 		err = fmt.Errorf("Stack destruction failed: %s", *stack.StackName)
 		sentry.CaptureException(err)
@@ -375,7 +376,7 @@ func hostedZoneForDomain(sess *session.Session, dnsName string) (*route53.Hosted
 			return nil, err
 		}
 		for _, zone := range resp.HostedZones {
-			if isHostedZoneForDomain(dnsName, zone) && *zone.Config.PrivateZone != true {
+			if isHostedZoneForDomain(dnsName, zone) && !*zone.Config.PrivateZone {
 				err = checkHostedZone(r53Svc, zone)
 				if err != nil {
 					printError(fmt.Sprintf("%v", err))
@@ -550,26 +551,6 @@ func getArgValue(cmd *cobra.Command, answers *map[string]interface{}, name strin
 	return &flag.DefValue
 }
 
-func askForMissingArgs(cmd *cobra.Command, overrideQuestions *map[string]*survey.Question) (*map[string]interface{}, error) {
-	var questions []*survey.Question
-	cmd.LocalFlags().VisitAll(func(flag *pflag.Flag) {
-		if flag.Name != "help" {
-			var override *survey.Question
-			if overrideQuestions != nil {
-				override = (*overrideQuestions)[flag.Name]
-			} else {
-				override = nil
-			}
-			addQuestionFromFlag(flag, &questions, override)
-		}
-	})
-	answers := make(map[string]interface{})
-	if err := survey.Ask(questions, &answers); err != nil {
-		return nil, err
-	}
-	return &answers, nil
-}
-
 func stackFromDDBItem(sess *session.Session, secondaryID string) (*cloudformation.Stack, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
@@ -709,7 +690,7 @@ var accountCmd = &cobra.Command{
 				printSuccess("AppPack account created")
 				fmt.Println(aurora.Bold("Send the following information to support@apppack.io for account approval:"))
 				for _, output := range stack.Outputs {
-					fmt.Println(fmt.Sprintf("%s: %s", *output.OutputKey, *output.OutputValue))
+					fmt.Printf("%s: %s", *output.OutputKey, *output.OutputValue)
 				}
 
 			}

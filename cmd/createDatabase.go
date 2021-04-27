@@ -225,6 +225,7 @@ var createDatabaseCmd = &cobra.Command{
 			engine = getArgValue(cmd, &answers, "engine", false)
 			isAurora = isTruthy(getArgValue(cmd, &answers, "aurora", false))
 			engine, err = engineName(engine, isAurora)
+			checkErr(err)
 			version, err = getLatestRdsVersion(sess, engine)
 			checkErr(err)
 		}

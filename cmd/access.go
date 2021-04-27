@@ -32,7 +32,7 @@ func parameterValue(stack *cloudformation.Stack, key string) (*string, error) {
 			return p.ParameterValue, nil
 		}
 	}
-	return nil, fmt.Errorf("Cloudformation parameter %s not found", key)
+	return nil, fmt.Errorf("cloudformation parameter %s not found", key)
 }
 
 func replaceParameter(stack *cloudformation.Stack, key string, value *string) error {
@@ -42,7 +42,7 @@ func replaceParameter(stack *cloudformation.Stack, key string, value *string) er
 			return nil
 		}
 	}
-	return fmt.Errorf("Cloudformation parameter %s not found", key)
+	return fmt.Errorf("cloudformation parameter %s not found", key)
 }
 
 func validateEmail(email string) bool {
@@ -152,6 +152,7 @@ var accessRemoveCmd = &cobra.Command{
 		checkErr(err)
 		stack := stackOutput.Stacks[0]
 		usersCSV, err := parameterValue(stack, "AllowedUsers")
+		checkErr(err)
 		userList := splitAndTrimCSV(usersCSV)
 		idx := indexOf(userList, email)
 		if idx < 0 {

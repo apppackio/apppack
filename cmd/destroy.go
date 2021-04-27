@@ -27,10 +27,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type accountDetails struct {
-	StackID string `json:"stack_id"`
-}
-
 func getStackOutput(stack *cloudformation.Stack, name string) (*string, error) {
 	for _, output := range stack.Outputs {
 		if *output.OutputKey == name {
