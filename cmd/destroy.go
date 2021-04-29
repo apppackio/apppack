@@ -174,7 +174,7 @@ var destroyRedisCmd = &cobra.Command{
 		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		cfnSvc := cloudformation.New(sess)
-		friendlyName := fmt.Sprintf("app %s", args[0])
+		friendlyName := fmt.Sprintf("Redis stack %s", args[0])
 		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
 		checkErr(err)
 		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
