@@ -948,6 +948,13 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 	}
 	err = verifySourceCredentials(sess, repositoryType, !nonInteractive)
 	checkErr(err)
+	var fargateParameter string
+	if isTruthy(aws.String(cmd.Flags().Lookup("ec2").Value.String())) {
+		// TODO: verify cluster is EC2 compatible
+		fargateParameter = "disabled"
+	} else {
+		fargateParameter = "enabled"
+	}
 	rand.Seed(time.Now().UnixNano())
 
 	input := cloudformation.CreateStackInput{
@@ -1009,7 +1016,10 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 				ParameterKey:   aws.String("RepositoryUrl"),
 				ParameterValue: repositoryURL,
 			},
-
+			{
+				ParameterKey:   aws.String("Fargate"),
+				ParameterValue: &fargateParameter,
+			},
 			{
 				ParameterKey:   aws.String("AllowedUsers"),
 				ParameterValue: aws.String(strings.Trim(*(getArgValue(cmd, &answers, "users", true)), "[]")),
@@ -1124,6 +1134,7 @@ func init() {
 	createCmd.AddCommand(appCmd)
 	appCmd.Flags().SortFlags = false
 	appCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
+	appCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")
 	appCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	appCmd.Flags().StringP("branch", "b", "", "branch to setup for continuous deployment")
 	appCmd.Flags().StringP("domain", "d", "", "custom domain to route to app (optional)")
@@ -1142,6 +1153,7 @@ func init() {
 	createCmd.AddCommand(pipelineCmd)
 	pipelineCmd.Flags().SortFlags = false
 	pipelineCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
+	pipelineCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")
 	pipelineCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	pipelineCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
 	pipelineCmd.Flags().Bool("addon-private-s3", false, "setup private S3 bucket add-on")

@@ -97,14 +97,17 @@ var createClusterCmd = &cobra.Command{
 		if err == nil {
 			checkErr(fmt.Errorf("cluster %s already exists", clusterName))
 		}
-		Spinner.Suffix = " looking up EC2 instance types"
-		instanceClasses, err := instanceTypeNames(sess)
-		Spinner.Suffix = ""
-		checkErr(err)
-		addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, &survey.Question{
-			Name:   "instance-class",
-			Prompt: &survey.Select{Message: "select an instance class", Options: instanceClasses, FilterMessage: "", Default: "t3.medium"},
-		})
+		if isTruthy(aws.String(cmd.Flags().Lookup("ec2").Value.String())) {
+			Spinner.Suffix = " looking up EC2 instance types"
+			instanceClasses, err := instanceTypeNames(sess)
+			Spinner.Suffix = ""
+			checkErr(err)
+			addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, &survey.Question{
+				Name:   "instance-class",
+				Prompt: &survey.Select{Message: "select an instance class", Options: instanceClasses, FilterMessage: "", Default: "t3.medium"},
+			})
+			checkErr(err)
+		}
 		Spinner.Stop()
 		err = survey.Ask(questions, &answers)
 		checkErr(err)
@@ -157,6 +160,7 @@ func init() {
 	// All flags need to be added to `initCmd` as well so it can call this cmd
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
 	initCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
-	createClusterCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
-	initCmd.Flags().StringP("instance-class", "i", "t3.medium", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
+	createClusterCmd.Flags().BoolP("ec2", "e", false, "setup cluster with EC2 instances")
+	createClusterCmd.Flags().StringP("instance-class", "i", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
+	initCmd.Flags().StringP("instance-class", "i", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 }
