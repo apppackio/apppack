@@ -96,7 +96,13 @@ var psCmd = &cobra.Command{
 				cpu = cpu / 1024.0
 				buildNumber, err := getTag(t.Tags, "apppack:buildNumber")
 				checkErr(err)
-				fmt.Printf("%s: %s (%s) %s %s\n", name, strings.ToLower(*t.LastStatus), aurora.Bold(aurora.Cyan(fmt.Sprintf("%.2fcpu/%smem", cpu, *t.Memory))), aurora.Yellow(fmt.Sprintf("build #%s", *buildNumber)), aurora.Faint(fmt.Sprintf("%s (~ %s)", t.StartedAt.Local().Format("Jan 02, 2006 15:04:05 MST"), humanize.Time(*t.StartedAt))))
+				var startText string
+				if t.StartedAt == nil {
+					startText = ""
+				} else {
+					startText = fmt.Sprintf("%s (~ %s)", t.StartedAt.Local().Format("Jan 02, 2006 15:04:05 MST"), humanize.Time(*t.StartedAt))
+				}
+				fmt.Printf("%s: %s (%s) %s %s\n", name, strings.ToLower(*t.LastStatus), aurora.Bold(aurora.Cyan(fmt.Sprintf("%.2fcpu/%smem", cpu, *t.Memory))), aurora.Yellow(fmt.Sprintf("build #%s", *buildNumber)), aurora.Faint(startText))
 				indent := strings.Repeat(" ", len(name)+2)
 				fmt.Printf("%s%s\n", indent, aurora.Faint(*t.TaskArn))
 			}
