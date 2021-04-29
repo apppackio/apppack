@@ -18,7 +18,9 @@ package cmd
 import (
 	"fmt"
 	"math"
+	"strings"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/app"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ecs"
@@ -53,6 +55,8 @@ func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string, tas
 
 var shellCpu float64
 var shellMem int
+var shellRoot bool
+var shellLive bool
 
 // shellCmd represents the shell command
 var shellCmd = &cobra.Command{
@@ -68,7 +72,50 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 		checkErr(err)
 		taskFamily, err := a.ShellTaskFamily()
 		checkErr(err)
-		exec := "su --preserve-environment --pty --command '/cnb/lifecycle/launcher bash -l' heroku"
+		var exec string
+		if shellRoot {
+			exec = "bash -l"
+		} else {
+			exec = "su --preserve-environment --pty --command '/cnb/lifecycle/launcher bash -l' heroku"
+		}
+
+		if shellLive {
+			tasks, err := a.DescribeTasks()
+			checkErr(err)
+			taskList := []string{}
+			for _, t := range tasks {
+				tag, err := getTag(t.Tags, "apppack:processType")
+				if err != nil {
+					continue
+				}
+				arnParts := strings.Split(*t.TaskArn, "/")
+				taskList = append(taskList, fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1]))
+			}
+			answers := make(map[string]interface{})
+			questions := []*survey.Question{
+				{
+					Name: "task",
+					Prompt: &survey.Select{
+						Message: "Select task to connect to",
+						Options: taskList,
+					},
+				},
+			}
+			Spinner.Stop()
+			if err := survey.Ask(questions, &answers); err != nil {
+				checkErr(err)
+			}
+			startSpinner()
+			ecsSession, err := a.CreateEcsSession(
+				*tasks[answers["task"].(survey.OptionAnswer).Index],
+				exec,
+			)
+			checkErr(err)
+			Spinner.Stop()
+			err = a.ConnectToEcsSession(ecsSession)
+			checkErr(err)
+		}
+
 		StartInteractiveShell(a, taskFamily, &exec, &ecs.TaskOverride{
 			Cpu:    aws.String(fmt.Sprintf("%d", int(math.RoundToEven(shellCpu*1024)))),
 			Memory: aws.String(fmt.Sprintf("%d", shellMem)),
@@ -79,6 +126,8 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 func init() {
 	rootCmd.AddCommand(shellCmd)
 	shellCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
+	shellCmd.PersistentFlags().BoolVarP(&shellRoot, "root", "r", false, "open shell as root user")
+	shellCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
 	shellCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")
 	shellCmd.Flags().IntVar(&shellMem, "memory", 1024, "memory (in MB) available for task")
 	shellCmd.MarkPersistentFlagRequired("app-name")
