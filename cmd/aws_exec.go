@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	osexec "os/exec"
 	"os/signal"
@@ -65,17 +64,17 @@ func execEnvironment(command string, args []string, creds *credentials.Credentia
 
 	env := environ(os.Environ())
 
-	log.Println("Setting subprocess env: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY")
+	// log.Println("Setting subprocess env: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY")
 	env.Set("AWS_ACCESS_KEY_ID", val.AccessKeyID)
 	env.Set("AWS_SECRET_ACCESS_KEY", val.SecretAccessKey)
 
 	if val.SessionToken != "" {
-		log.Println("Setting subprocess env: AWS_SESSION_TOKEN, AWS_SECURITY_TOKEN")
+		// log.Println("Setting subprocess env: AWS_SESSION_TOKEN, AWS_SECURITY_TOKEN")
 		env.Set("AWS_SESSION_TOKEN", val.SessionToken)
 		env.Set("AWS_SECURITY_TOKEN", val.SessionToken)
 	}
 	if expiration, err := creds.ExpiresAt(); err == nil {
-		log.Println("Setting subprocess env: AWS_SESSION_EXPIRATION")
+		// log.Println("Setting subprocess env: AWS_SESSION_EXPIRATION")
 		env.Set("AWS_SESSION_EXPIRATION", expiration.UTC().Format(time.RFC3339))
 	}
 
@@ -107,7 +106,7 @@ func (e *environ) Set(key, val string) {
 }
 
 func execCmd(command string, args []string, env []string) error {
-	log.Printf("Starting child process: %s %s", command, strings.Join(args, " "))
+	// log.Printf("Starting child process: %s %s", command, strings.Join(args, " "))
 
 	cmd := osexec.Command(command, args...)
 	cmd.Stdin = os.Stdin
@@ -144,14 +143,14 @@ func supportsExecSyscall() bool {
 }
 
 func execSyscall(command string, args []string, env []string) error {
-	log.Printf("Exec command %s %s", command, strings.Join(args, " "))
+	// log.Printf("Exec command %s %s", command, strings.Join(args, " "))
 
 	argv0, err := osexec.LookPath(command)
 	if err != nil {
 		return fmt.Errorf("couldn't find the executable '%s': %w", command, err)
 	}
 
-	log.Printf("Found executable %s", argv0)
+	// log.Printf("Found executable %s", argv0)
 
 	argv := make([]string, 0, 1+len(args))
 	argv = append(argv, command)
@@ -166,7 +165,6 @@ var awsExecCmd = &cobra.Command{
 	Short:                 "run a local command with AWS credentials",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
 		if len(args) < 1 {
