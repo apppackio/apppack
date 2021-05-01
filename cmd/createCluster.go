@@ -161,6 +161,7 @@ func init() {
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
 	initCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
 	createClusterCmd.Flags().BoolP("ec2", "e", false, "setup cluster with EC2 instances")
+	initCmd.Flags().BoolP("ec2", "e", false, "setup cluster with EC2 instances")
 	createClusterCmd.Flags().StringP("instance-class", "i", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 	initCmd.Flags().StringP("instance-class", "i", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 }
