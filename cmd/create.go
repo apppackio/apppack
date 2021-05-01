@@ -690,7 +690,9 @@ var accountCmd = &cobra.Command{
 				printSuccess("AppPack account created")
 				fmt.Println(aurora.Bold("Send the following information to support@apppack.io for account approval:"))
 				for _, output := range stack.Outputs {
-					fmt.Printf("%s: %s", *output.OutputKey, *output.OutputValue)
+					if *output.OutputKey == "ExternalId" || *output.OutputKey == "AppPackRoleArn" {
+						fmt.Printf("%s: %s\n", *output.OutputKey, *output.OutputValue)
+					}
 				}
 
 			}
