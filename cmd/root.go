@@ -22,10 +22,13 @@ import (
 
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-isatty"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/briandowns/spinner"
 )
+
+var debug bool
 
 const ()
 
@@ -57,6 +60,12 @@ var rootCmd = &cobra.Command{
 	Long:                  `AppPack is a tool to manage applications deployed on AWS via AppPack.io`,
 	DisableAutoGenTag:     true,
 	DisableFlagsInUseLine: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if debug {
+			logrus.SetOutput(os.Stdout)
+			logrus.SetLevel(logrus.DebugLevel)
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -69,6 +78,7 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
 }
 
 func checkErr(err error) {
