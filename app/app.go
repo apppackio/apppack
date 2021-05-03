@@ -24,6 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
+	"github.com/sirupsen/logrus"
 )
 
 var maxLifetime = 12 * 60 * 60
@@ -136,6 +137,92 @@ type appItem struct {
 	PrimaryID   string `json:"primary_id"`
 	SecondaryID string `json:"secondary_id"`
 	App         App    `json:"value"`
+}
+
+type BuildPhaseDetail struct {
+	Arns  []string `json:"arns"`
+	Logs  string   `json:"logs"`
+	Start int64    `json:"start"`
+	End   int64    `json:"end"`
+	State string   `json:"state"`
+}
+
+type BuildStatus struct {
+	AppName     string           `json:"app"`
+	BuildNumber int              `json:"build_number"`
+	PRNumber    string           `json:"pr_number"`
+	Commit      string           `json:"commit"`
+	Build       BuildPhaseDetail `json:"build"`
+	Test        BuildPhaseDetail `json:"test"`
+	Finalize    BuildPhaseDetail `json:"finalize"`
+	Release     BuildPhaseDetail `json:"release"`
+	Postdeploy  BuildPhaseDetail `json:"postdeploy"`
+	Deploy      BuildPhaseDetail `json:"deploy"`
+}
+
+type BuildPhase struct {
+	Name  string
+	Phase *BuildPhaseDetail
+}
+
+func (b *BuildStatus) NamedPhases() [6]BuildPhase {
+	return [6]BuildPhase{
+		{Name: "Build", Phase: &b.Build},
+		{Name: "Test", Phase: &b.Test},
+		{Name: "Finalize", Phase: &b.Finalize},
+		{Name: "Release", Phase: &b.Release},
+		{Name: "Postdeploy", Phase: &b.Postdeploy},
+		{Name: "Deploy", Phase: &b.Deploy},
+	}
+}
+
+func (b *BuildStatus) NamedPhasesReversed() [6]BuildPhase {
+	return [6]BuildPhase{
+		{Name: "Deploy", Phase: &b.Deploy},
+		{Name: "Postdeploy", Phase: &b.Postdeploy},
+		{Name: "Release", Phase: &b.Release},
+		{Name: "Finalize", Phase: &b.Finalize},
+		{Name: "Test", Phase: &b.Test},
+		{Name: "Build", Phase: &b.Build},
+	}
+}
+
+func (b *BuildStatus) CurrentPhase() *BuildPhase {
+	for _, p := range b.NamedPhases() {
+		if p.Phase.State == "started" {
+			return &p
+		}
+	}
+	return nil
+}
+
+// NextActivePhase finds the next phase which already ran or is in progress
+func (b *BuildStatus) NextActivePhase(lastPhase *BuildPhase) *BuildPhase {
+	found := false
+	for _, p := range b.NamedPhases() {
+		if found && p.Phase.Start != 0 {
+			return &p
+		}
+		if !found && p.Name == lastPhase.Name {
+			found = true
+		}
+	}
+	if b.Deploy.End != 0 {
+		return nil
+	}
+	return lastPhase
+}
+
+func (b *BuildStatus) FinalPhase() (*BuildPhase, error) {
+	for _, p := range b.NamedPhasesReversed() {
+		if p.Phase.State == "started" {
+			return nil, fmt.Errorf("%s phase is still running", p.Name)
+		}
+		if p.Phase.State == "succeeded" || p.Phase.State == "failed" {
+			return &p, nil
+		}
+	}
+	return nil, fmt.Errorf("no phases completed")
 }
 
 // locationName is the tag used by aws-sdk internally
@@ -521,18 +608,25 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 }
 
 // BuildStatus checks the status of a CodeBuild run
-func (a *App) BuildStatus(build *codebuild.Build) (*DeployStatus, error) {
-	deployStatus, err := a.GetDeployStatus(*build.Arn)
+func (a *App) BuildStatus(build *codebuild.Build) (*BuildStatus, error) {
+	var pk string
+	if a.IsReviewApp() {
+		pk = fmt.Sprintf("APP#%s#%s#BUILD", a.Name, *a.ReviewApp)
+	} else {
+		pk = fmt.Sprintf("APP#%s#BUILD", a.Name)
+	}
+	item, err := ddbItem(a.Session, pk, fmt.Sprintf("%010d", *build.BuildNumber))
 	if err != nil {
-		deployStatus, err = a.GetDeployStatus("")
-		if err != nil || deployStatus.BuildID != *build.Arn {
-			return nil, fmt.Errorf("no status found for build #%d", *build.BuildNumber)
-		}
+		logrus.Debug(err)
+		return nil, fmt.Errorf("no status found for build #%d", *build.BuildNumber)
 	}
-	if deployStatus.Failed {
-		return nil, fmt.Errorf("build #%d failed in phase %s", *build.BuildNumber, deployStatus.Phase)
+	i := BuildStatus{}
+
+	err = dynamodbattribute.UnmarshalMap(*item, &i)
+	if err != nil {
+		return nil, err
 	}
-	return deployStatus, nil
+	return &i, nil
 }
 
 // ListBuilds lists recent CodeBuild runs
