@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
@@ -173,12 +175,14 @@ func watchBuild(a *app.App, build *codebuild.Build) error {
 		} else {
 			Spinner.Suffix = fmt.Sprintf(" %s running for %s", currentPhase.Name, strings.Replace(humanize.Time(lastUpdate), " ago", "", 1))
 		}
-		time.Sleep(5 * time.Second)
-		buildStatus, err = a.BuildStatus(build)
-		if err != nil {
-			return err
+		// sleep for a bit if we're not ready to move onto the next phase
+		if buildStatus.NextActivePhase(lastPhase) == lastPhase {
+			time.Sleep(5 * time.Second)
+			buildStatus, err = a.BuildStatus(build)
+			if err != nil {
+				return err
+			}
 		}
-
 	}
 	Spinner.Stop()
 	printSuccess(fmt.Sprintf("build #%d deployed successfully", *build.BuildNumber))
@@ -190,6 +194,41 @@ func logMarker(name string) string {
 }
 
 var stopTailing = make(chan bool, 1)
+
+func printLogLine(line string) {
+	Spinner.Stop()
+	if strings.HasPrefix(line, "===> ") {
+		fmt.Printf("%s\n", aurora.Green(line))
+	} else if strings.HasPrefix(line, "Unable to delete previous cache image: DELETE") {
+		// https://github.com/aws/containers-roadmap/issues/1229
+		logrus.WithFields(logrus.Fields{"line": line}).Debug("skipping inconsequential error")
+	} else {
+		fmt.Printf("%s\n", line)
+	}
+}
+
+func S3Log(sess *session.Session, logURL string) error {
+	s3Svc := s3.New(sess)
+	parts := strings.Split(strings.TrimPrefix(logURL, "s3://"), "/")
+	bucket := parts[0]
+	object := strings.Join(parts[1:], "/")
+	out, err := s3Svc.GetObject(&s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &object,
+	})
+	if err != nil {
+		return err
+	}
+	buf := new(strings.Builder)
+	_, err = io.Copy(buf, out.Body)
+	if err != nil {
+		return err
+	}
+	for _, l := range strings.Split(buf.String(), "\n") {
+		printLogLine(l)
+	}
+	return nil
+}
 
 func StreamEvents(sess *session.Session, logURL string, marker *string) error {
 	var lastSeenTime *int64
@@ -243,15 +282,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string) error {
 							return false
 						}
 					}
-					Spinner.Stop()
-					if strings.HasPrefix(message, "===> ") {
-						fmt.Printf("%s\n", aurora.Green(message))
-						// https://github.com/aws/containers-roadmap/issues/1229
-					} else if strings.HasPrefix(message, "Unable to delete previous cache image: DELETE") {
-						logrus.WithFields(logFields).Debug("skipping inconsequential error")
-					} else {
-						fmt.Printf("%s\n", message)
-					}
+					printLogLine(message)
 				} else {
 					if markerStart != nil {
 						if *markerStart == strings.TrimSuffix(message, "\n") {
@@ -311,6 +342,9 @@ func watchBuildPhase(a *app.App, build *codebuild.Build) error {
 	if err != nil {
 		return err
 	}
+	if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
+		return S3Log(a.Session, buildStatus.Build.Logs)
+	}
 	codebuildSvc := codebuild.New(a.Session)
 	buildLogTailing := false
 	for buildStatus.Build.State == "started" {
@@ -352,6 +386,9 @@ func watchTestPhase(a *app.App, build *codebuild.Build) error {
 	if err != nil {
 		return err
 	}
+	if strings.HasPrefix(buildStatus.Test.Logs, "s3://") {
+		return S3Log(a.Session, buildStatus.Test.Logs)
+	}
 	go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("test"))
 	for buildStatus.Test.State == "started" {
 		time.Sleep(5 * time.Second)
@@ -373,6 +410,9 @@ func watchReleasePhase(a *app.App, build *codebuild.Build) error {
 	ecsSvc := ecs.New(a.Session)
 	a.LoadSettings()
 	releaseLogTailing := false
+	if strings.HasPrefix(buildStatus.Release.Logs, "s3://") {
+		return S3Log(a.Session, buildStatus.Release.Logs)
+	}
 	for buildStatus.Release.State == "started" {
 		if len(buildStatus.Release.Arns) > 0 {
 			out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
