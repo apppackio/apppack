@@ -668,7 +668,22 @@ func (a *App) LastBuild() (*codebuild.Build, error) {
 	if len(buildList.Ids) == 0 {
 		return nil, fmt.Errorf("no builds have started for %s", a.Name)
 	}
-	builds, err := codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
+	var builds *codebuild.BatchGetBuildsOutput
+	if a.IsReviewApp() {
+		builds, err = codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
+			Ids: buildList.Ids,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range builds.Builds {
+			if *b.SourceVersion == fmt.Sprintf("pr/%s", *a.ReviewApp) {
+				return b, nil
+			}
+		}
+		return nil, fmt.Errorf("no recent builds found for pr/%s", *a.ReviewApp)
+	}
+	builds, err = codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
 		Ids: buildList.Ids[0:1],
 	})
 	if err != nil {
