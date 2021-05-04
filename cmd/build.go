@@ -137,6 +137,7 @@ func watchBuild(a *app.App, build *codebuild.Build) error {
 		if lastPhase == nil || lastPhase.Name != currentPhase.Name {
 			status = fmt.Sprintf("%s started", strings.Title(currentPhase.Name))
 			Spinner.Stop()
+			Spinner.Suffix = ""
 			fmt.Printf("%s\t%s\n", aurora.Yellow(status), aurora.Faint(time.Unix(currentPhase.Phase.Start, 0).Local().Format(timeFmt)))
 			startSpinner()
 			lastPhase = currentPhase

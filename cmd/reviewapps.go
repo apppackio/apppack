@@ -217,6 +217,7 @@ var reviewappsCreateCmd = &cobra.Command{
 		}, false, fmt.Sprintf("review app #%s", *a.ReviewApp))
 		checkErr(err)
 		Spinner.Stop()
+		Spinner.Suffix = ""
 		fmt.Println("triggering build...")
 		startSpinner()
 		build, err := a.StartBuild(true)
