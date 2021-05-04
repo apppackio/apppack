@@ -108,6 +108,9 @@ func watchBuild(a *app.App, build *codebuild.Build) error {
 			buildPhase := buildStatus.NamedPhases()[0]
 			currentPhase = &buildPhase
 		} else {
+			if lastPhase.Phase.State == "failed" {
+				return fmt.Errorf("%s failed at %s", lastPhase.Name, time.Unix(lastPhase.Phase.End, 0).Local().Format(timeFmt))
+			}
 			currentPhase = buildStatus.NextActivePhase(lastPhase)
 		}
 
