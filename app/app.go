@@ -611,7 +611,7 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 func (a *App) BuildStatus(build *codebuild.Build) (*BuildStatus, error) {
 	var pk string
 	if a.IsReviewApp() {
-		pk = fmt.Sprintf("APP#%s#%s#BUILD", a.Name, *a.ReviewApp)
+		pk = fmt.Sprintf("APP#%s:%s#BUILD", a.Name, *a.ReviewApp)
 	} else {
 		pk = fmt.Sprintf("APP#%s#BUILD", a.Name)
 	}
