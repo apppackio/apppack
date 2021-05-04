@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 
@@ -235,6 +236,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string) error {
 	var seenEventIDs map[string]bool
 	var markerStart *string
 	var markerStop *string
+	var errorRe *regexp.Regexp
 	markerFound := false
 	cloudwatchlogsSvc := cloudwatchlogs.New(sess)
 	parts := strings.Split(strings.TrimPrefix(logURL, "cloudwatch://"), "#")
@@ -249,6 +251,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string) error {
 	} else {
 		markerStart = aws.String(logMarker(fmt.Sprintf("%s-start", *marker)))
 		markerStop = aws.String(logMarker(fmt.Sprintf("%s-end", *marker)))
+		errorRe = regexp.MustCompile(`^[Container] .* Command did not exit successfully .*`)
 	}
 	clearSeenEventIds := func() {
 		seenEventIDs = make(map[string]bool)
@@ -273,14 +276,19 @@ func StreamEvents(sess *session.Session, logURL string, marker *string) error {
 			updateLastSeenTime(event.Timestamp)
 			if _, seen := seenEventIDs[*event.EventId]; !seen {
 				if markerFound {
-					if markerStop != nil {
-						if *markerStop == message {
-							logrus.WithFields(logrus.Fields{
-								"marker": *markerStop,
-							}).Debug("found log marker")
-							doneTailing = true
-							return false
-						}
+					if markerStop != nil && *markerStop == message {
+						logrus.WithFields(logrus.Fields{
+							"marker": *markerStop,
+						}).Debug("found log marker")
+						doneTailing = true
+						return false
+					}
+					if errorRe != nil && errorRe.FindStringIndex(message) != nil {
+						logrus.WithFields(logrus.Fields{
+							"error": message,
+						}).Debug("found error")
+						doneTailing = true
+						return false
 					}
 					printLogLine(message)
 				} else {
