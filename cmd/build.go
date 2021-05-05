@@ -141,7 +141,7 @@ func watchBuild(a *app.App, build *codebuild.Build) error {
 			status = fmt.Sprintf("%s started", strings.Title(currentPhase.Name))
 			Spinner.Stop()
 			Spinner.Suffix = ""
-			fmt.Printf("%s\t%s\n", aurora.Yellow(status), aurora.Faint(time.Unix(currentPhase.Phase.Start, 0).Local().Format(timeFmt)))
+			fmt.Printf("\n⚡️ %s\t%s\n", aurora.Yellow(status), aurora.Faint(time.Unix(currentPhase.Phase.Start, 0).Local().Format(timeFmt)))
 			startSpinner()
 			lastPhase = currentPhase
 			switch currentPhase.Name {
@@ -203,7 +203,7 @@ var stopTailing = make(chan bool, 1)
 func printLogLine(line string) {
 	Spinner.Stop()
 	if strings.HasPrefix(line, "===> ") {
-		fmt.Printf("%s\n", aurora.Green(line))
+		fmt.Printf("%s %s\n", aurora.Blue("===>"), aurora.White(strings.SplitN(line, " ", 2)[1]))
 	} else if strings.HasPrefix(line, "Unable to delete previous cache image: DELETE") {
 		// https://github.com/aws/containers-roadmap/issues/1229
 		logrus.WithFields(logrus.Fields{"line": line}).Debug("skipping inconsequential error")

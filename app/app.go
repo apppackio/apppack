@@ -597,7 +597,7 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 			buildInput.EnvironmentVariablesOverride = []*codebuild.EnvironmentVariable{
 				{
 					Name:  aws.String("REVIEW_APP_STATUS"),
-					Value: aws.String("creating"),
+					Value: aws.String("created"),
 					Type:  aws.String("PLAINTEXT"),
 				},
 			}
