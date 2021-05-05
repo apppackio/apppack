@@ -166,6 +166,13 @@ func watchBuild(a *app.App, build *codebuild.Build) error {
 				}
 				Spinner.Suffix = ""
 				startSpinner()
+			case "Postdeploy":
+				err = watchPostdeployPhase(a, build)
+				if err != nil {
+					return err
+				}
+				Spinner.Suffix = ""
+				startSpinner()
 			case "Deploy":
 				err = watchDeployPhase(a, build)
 				if err != nil {
@@ -438,6 +445,48 @@ func watchReleasePhase(a *app.App, build *codebuild.Build) error {
 			if status == "RUNNING" && !releaseLogTailing {
 				releaseLogTailing = true
 				go StreamEvents(a.Session, buildStatus.Release.Logs, nil)
+			}
+			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
+				stopTailing <- true
+				startSpinner()
+			}
+			Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
+		}
+		time.Sleep(5 * time.Second)
+		buildStatus, err = a.BuildStatus(build)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TODO DRY with watchReleasePhase. Combine to watchEcsTaskPhase
+func watchPostdeployPhase(a *app.App, build *codebuild.Build) error {
+	startSpinner()
+	buildStatus, err := a.BuildStatus(build)
+	if err != nil {
+		return err
+	}
+	ecsSvc := ecs.New(a.Session)
+	a.LoadSettings()
+	postdeployLogTailing := false
+	if strings.HasPrefix(buildStatus.Postdeploy.Logs, "s3://") {
+		return S3Log(a.Session, buildStatus.Postdeploy.Logs)
+	}
+	for buildStatus.Postdeploy.State == "started" {
+		if len(buildStatus.Postdeploy.Arns) > 0 {
+			out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+				Cluster: &a.Settings.Cluster.ARN,
+				Tasks:   []*string{&buildStatus.Postdeploy.Arns[0]},
+			})
+			if err != nil {
+				return err
+			}
+			status := *out.Tasks[0].LastStatus
+			if status == "RUNNING" && !postdeployLogTailing {
+				postdeployLogTailing = true
+				go StreamEvents(a.Session, buildStatus.Postdeploy.Logs, nil)
 			}
 			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 				stopTailing <- true
