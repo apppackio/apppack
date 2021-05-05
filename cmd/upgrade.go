@@ -77,11 +77,18 @@ func upgradeStack(stackName string, templateURL string) error {
 	checkErr(err)
 	Spinner.Stop()
 	fmt.Println(aurora.Faint(fmt.Sprintf("upgrading %s", *stackOutput.Stacks[0].StackId)))
+	var parameters []*cloudformation.Parameter
+	for _, p := range stackOutput.Stacks[0].Parameters {
+		parameters = append(parameters, &cloudformation.Parameter{
+			ParameterKey:     p.ParameterKey,
+			UsePreviousValue: aws.Bool(true),
+		})
+	}
 	startSpinner()
 	updateStackInput := cloudformation.UpdateStackInput{
 		StackName:    &stackName,
 		TemplateURL:  aws.String(getReleaseUrl(templateURL)),
-		Parameters:   stackOutput.Stacks[0].Parameters,
+		Parameters:   parameters,
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 	}
 	if createChangeSet {
