@@ -197,6 +197,9 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
+        name: Wait for steady state
+        run: sleep 60
+      -
         name: Destroy Redis
         run: |
             yes yes | ./bin/apppack destroy redis apppack \
