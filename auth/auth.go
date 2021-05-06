@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
 	awsconsoleurl "github.com/jkueh/go-aws-console-url"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -96,6 +97,7 @@ func getCredentials(appName string) (*sts.Credentials, *AppRole, error) {
 	sess := session.Must(session.NewSession())
 	svc := sts.New(sess)
 	duration := int64(900)
+	logrus.WithFields(logrus.Fields{"role": appRole.RoleARN}).Debug("assuming app role")
 	resp, err := svc.AssumeRoleWithWebIdentity(&sts.AssumeRoleWithWebIdentityInput{
 		RoleArn:          &appRole.RoleARN,
 		WebIdentityToken: &tokens.IDToken,
@@ -105,10 +107,12 @@ func getCredentials(appName string) (*sts.Credentials, *AppRole, error) {
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == sts.ErrCodeExpiredTokenException {
+				logrus.WithFields(logrus.Fields{"err": err}).Debug("id token expired")
 				tokens, err = refreshTokens()
 				if err != nil {
 					return nil, nil, err
 				}
+				logrus.WithFields(logrus.Fields{"role": appRole.RoleARN}).Debug("assuming app role")
 				resp, err = svc.AssumeRoleWithWebIdentity(&sts.AssumeRoleWithWebIdentityInput{
 					RoleArn:          &appRole.RoleARN,
 					WebIdentityToken: &tokens.IDToken,
@@ -139,7 +143,9 @@ func writeToUserCache(name string, data []byte) error {
 			return err
 		}
 	}
-	file, err := os.Create(filepath.Join(path, name))
+	filename := filepath.Join(path, name)
+	logrus.WithFields(logrus.Fields{"filename": filename}).Debug("writing to user cache")
+	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
@@ -160,7 +166,9 @@ func cacheFile(name string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	file, err := os.Open(filepath.Join(dir, cachePrefix, name))
+	filename := filepath.Join(dir, cachePrefix, name)
+	logrus.WithFields(logrus.Fields{"filename": filename}).Debug("reading from user cache")
+	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +204,7 @@ func readUserInfoFromUserCache() (*UserInfo, error) {
 }
 
 func getUserInfoWithAccessToken(accessToken string) (*UserInfo, error) {
+	logrus.WithFields(logrus.Fields{"url": userInfoURL}).Debug("fetching user info")
 	req, err := http.NewRequest("GET", userInfoURL, nil)
 	if err != nil {
 		return nil, err
@@ -227,6 +236,7 @@ func getUserInfoWithAccessToken(accessToken string) (*UserInfo, error) {
 }
 
 func getAppListWithIDToken(IDToken string) ([]*AppRole, error) {
+	logrus.WithFields(logrus.Fields{"url": appListURL}).Debug("fetching app list")
 	req, err := http.NewRequest("GET", appListURL, nil)
 	if err != nil {
 		return nil, err
@@ -289,6 +299,7 @@ func LoginInit() (*DeviceCodeResp, error) {
 	if err != nil {
 		return nil, err
 	}
+	logrus.WithFields(logrus.Fields{"url": deviceCodeURL}).Debug("fetching device code")
 	resp, err := http.Post(deviceCodeURL, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, err
@@ -306,6 +317,7 @@ func LoginInit() (*DeviceCodeResp, error) {
 }
 
 func tokenRequest(url string, jsonData []byte) (*Tokens, error) {
+	logrus.WithFields(logrus.Fields{"url": url}).Debug("fetching token")
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
@@ -351,6 +363,7 @@ func Logout() error {
 		return err
 	}
 	path := filepath.Join(dir, cachePrefix)
+	logrus.WithFields(logrus.Fields{"path": path}).Debug("emptying user cache")
 	err = os.RemoveAll(path)
 	if err != nil {
 		return err
@@ -363,6 +376,7 @@ func AwsSession(appName string) (*session.Session, *AppRole, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	logrus.WithFields(logrus.Fields{"access key": creds.AccessKeyId}).Debug("creating AWS session")
 	return session.Must(
 		session.NewSessionWithOptions(
 			session.Options{

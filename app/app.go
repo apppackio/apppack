@@ -241,6 +241,7 @@ type ECSConfig struct {
 
 func ddbItem(sess *session.Session, primaryID string, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
 	ddbSvc := dynamodb.New(sess)
+	logrus.WithFields(logrus.Fields{"primaryID": primaryID, "secondaryID": secondaryID}).Debug("DynamoDB GetItem")
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("apppack"),
 		Key: map[string]*dynamodb.AttributeValue{
@@ -256,7 +257,7 @@ func ddbItem(sess *session.Session, primaryID string, secondaryID string) (*map[
 		return nil, err
 	}
 	if result.Item == nil {
-		return nil, fmt.Errorf("Could not find DDB item %s %s", primaryID, secondaryID)
+		return nil, fmt.Errorf("could not find DDB item %s %s", primaryID, secondaryID)
 	}
 	return &result.Item, nil
 }
