@@ -67,7 +67,8 @@ var psCmd = &cobra.Command{
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		a.LoadDeployStatus()
+		err = a.LoadDeployStatus()
+		checkErr(err)
 		// iterate over process types/tasks
 		for _, proc := range keys {
 			status, err := a.DeployStatus.FindProcess(proc)
