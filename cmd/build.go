@@ -595,7 +595,17 @@ var buildStartCmd = &cobra.Command{
 // buildWaitCmd represents the start command
 var buildWaitCmd = &cobra.Command{
 	Use:                   "wait",
-	Short:                 "wait for the most recent build to be deployed",
+	Short:                 "wait is deprecated -- use `watch` instead",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		checkErr(fmt.Errorf("the `build wait` command is deprecated -- use `build watch` instead"))
+	},
+}
+
+// buildWaitCmd represents the start command
+var buildWatchCmd = &cobra.Command{
+	Use:                   "watch",
+	Short:                 "watch the progress of the most recent build",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
@@ -640,8 +650,11 @@ func init() {
 	buildCmd.MarkPersistentFlagRequired("app-name")
 
 	buildCmd.AddCommand(buildStartCmd)
-	buildStartCmd.Flags().BoolVarP(&watchBuildFlag, "wait", "w", false, "wait for build to complete")
+	buildStartCmd.Flags().BoolVarP(&watchBuildFlag, "watch", "w", false, "watch build process")
+	buildStartCmd.Flags().BoolVar(&watchBuildFlag, "wait", false, "watch build process")
+	buildStartCmd.Flags().MarkDeprecated("wait", "please use --watch instead")
 	buildCmd.AddCommand(buildListCmd)
 
 	buildCmd.AddCommand(buildWaitCmd)
+	buildCmd.AddCommand(buildWatchCmd)
 }
