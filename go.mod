@@ -7,6 +7,7 @@ require (
 	github.com/Netflix/go-expect v0.0.0-20201125194554-85d881c3777e // indirect
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2 // indirect
 	github.com/TylerBrock/saw v0.2.2
+	github.com/apppackio/saw v0.2.2 // indirect
 	github.com/aws/aws-sdk-go v1.38.1
 	github.com/briandowns/spinner v1.12.0
 	github.com/creack/pty v1.1.11 // indirect
@@ -36,4 +37,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
 
-replace github.com/TylerBrock/saw => github.com/apppackio/saw v0.2.3-0.20210411013207-80a4cce119b5
+replace github.com/TylerBrock/saw => github.com/apppackio/saw v0.2.3-0.20210507180802-f6559c287e6f
