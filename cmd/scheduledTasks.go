@@ -28,7 +28,7 @@ import (
 
 func printTasks(tasks []*app.ScheduledTask) {
 	if len(tasks) == 0 {
-		fmt.Printf("%s", aurora.Yellow("no scheduled tasks defined"))
+		fmt.Printf("%s\n", aurora.Yellow("no scheduled tasks defined"))
 		return
 	} else {
 		fmt.Printf("%s\n", aurora.Faint("Min\tHr\tDayMon\tMon\tDayWk\tYr"))
