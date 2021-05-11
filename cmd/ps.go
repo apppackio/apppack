@@ -38,6 +38,33 @@ func getTag(tags []*ecs.Tag, key string) (*string, error) {
 	return nil, fmt.Errorf("tag %s not found", key)
 }
 
+func printTask(t *ecs.Task, count *int) {
+	tag, err := getTag(t.Tags, "apppack:processType")
+	checkErr(err)
+	name := *tag
+	if count != nil {
+		name = fmt.Sprintf("%s.%d", name, count)
+	}
+
+	cpu, err := strconv.ParseFloat(*t.Cpu, 32)
+	checkErr(err)
+	cpu = cpu / 1024.0
+	buildNumber, err := getTag(t.Tags, "apppack:buildNumber")
+	checkErr(err)
+	var startText string
+	if t.StartedAt == nil {
+		startText = ""
+	} else {
+		startText = fmt.Sprintf("%s (~ %s)", t.StartedAt.Local().Format("Jan 02, 2006 15:04:05 MST"), humanize.Time(*t.StartedAt))
+	}
+	fmt.Printf("%s: %s (%s) %s %s\n", name, strings.ToLower(*t.LastStatus), aurora.Bold(aurora.Cyan(fmt.Sprintf("%.2fcpu/%smem", cpu, *t.Memory))), aurora.Yellow(fmt.Sprintf("build #%s", *buildNumber)), aurora.Faint(startText))
+	indent := strings.Repeat(" ", len(name)+2)
+	if *tag == "shell" {
+		fmt.Printf("%s%s\n", indent, aurora.Faint(fmt.Sprintf("started by: %s", *t.StartedBy)))
+	}
+	fmt.Printf("%s%s\n", indent, aurora.Faint(*t.TaskArn))
+}
+
 // psCmd represents the ps command
 var psCmd = &cobra.Command{
 	Use:                   "ps",
@@ -70,19 +97,25 @@ var psCmd = &cobra.Command{
 		sort.Strings(keys)
 		err = a.LoadDeployStatus()
 		checkErr(err)
+		extraProcs := []*ecs.Task{}
 		// iterate over process types/tasks
 		for _, proc := range keys {
 			status, err := a.DeployStatus.FindProcess(proc)
 			if err != nil {
-				fmt.Println(aurora.Yellow(fmt.Sprintf("No service found for process type %s", proc)))
+				logrus.WithFields(logrus.Fields{"err": err, "service": proc}).Debug("service not in deploy status")
 			}
+			tasks := grouped[proc]
+			if status == nil {
+				extraProcs = append(extraProcs, tasks...)
+				continue
+			}
+
 			fmt.Printf("%s %s %s ", aurora.Faint("==="), aurora.Green(proc), aurora.White(status.Command))
 			if status.MinProcesses == status.MaxProcesses {
 				fmt.Printf("(%s)\n", aurora.Yellow(fmt.Sprintf("%d", status.MinProcesses)))
 			} else {
 				fmt.Printf("(%s)\n", aurora.Yellow(fmt.Sprintf("%d - %d", status.MinProcesses, status.MaxProcesses)))
 			}
-			tasks := grouped[proc]
 			sort.SliceStable(tasks, func(i, j int) bool {
 				if tasks[i].StartedAt == nil {
 					return false
@@ -109,6 +142,12 @@ var psCmd = &cobra.Command{
 				fmt.Printf("%s%s\n", indent, aurora.Faint(*t.TaskArn))
 			}
 
+		}
+		if len(extraProcs) > 0 {
+			fmt.Printf("\n")
+		}
+		for _, t := range extraProcs {
+			printTask(t, nil)
 		}
 	},
 }
