@@ -37,7 +37,6 @@ func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string, tas
 		false,
 	)
 	checkErr(err)
-	checkErr(err)
 	Spinner.Stop()
 	fmt.Println(aurora.Faint(fmt.Sprintf("starting %s", *task.TaskArn)))
 	startSpinner()
