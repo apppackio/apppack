@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/dustin/go-humanize"
 	"github.com/logrusorgru/aurora"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -170,6 +171,22 @@ apppack ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
 	},
 }
 
+// execCmd represents the exec command
+var psExecCmd = &cobra.Command{
+	Use:   "exec -- <command>",
+	Short: "run an interactive command in the remote environment",
+	Long: `Run an interactive command in the remote environment
+
+Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html`,
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		a, err := app.Init(AppName)
+		checkErr(err)
+		interactiveCmd(a, strings.Join(args, " "))
+	},
+}
+
 var scaleCPU int
 var scaleMemory int
 
@@ -183,4 +200,9 @@ func init() {
 	psResizeCmd.Flags().IntVarP(&scaleMemory, "memory", "m", 2048, "memory in megabytes")
 
 	psCmd.AddCommand(psScaleCmd)
+	psCmd.AddCommand(psExecCmd)
+	psExecCmd.PersistentFlags().BoolVarP(&shellRoot, "root", "r", false, "open shell as root user")
+	psExecCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
+	psExecCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")
+	psExecCmd.Flags().IntVar(&shellMem, "memory", 1024, "memory (in MB) available for task")
 }

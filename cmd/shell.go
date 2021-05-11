@@ -58,6 +58,58 @@ var shellMem int
 var shellRoot bool
 var shellLive bool
 
+func interactiveCmd(a *app.App, cmd string) {
+	taskFamily, err := a.ShellTaskFamily()
+	checkErr(err)
+	var exec string
+	if shellRoot {
+		exec = cmd
+	} else {
+		exec = fmt.Sprintf("su --preserve-environment --pty --command '/cnb/lifecycle/launcher %s' heroku", cmd)
+	}
+
+	if shellLive {
+		tasks, err := a.DescribeTasks()
+		checkErr(err)
+		taskList := []string{}
+		for _, t := range tasks {
+			tag, err := getTag(t.Tags, "apppack:processType")
+			if err != nil {
+				continue
+			}
+			arnParts := strings.Split(*t.TaskArn, "/")
+			taskList = append(taskList, fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1]))
+		}
+		answers := make(map[string]interface{})
+		questions := []*survey.Question{
+			{
+				Name: "task",
+				Prompt: &survey.Select{
+					Message: "Select task to connect to",
+					Options: taskList,
+				},
+			},
+		}
+		Spinner.Stop()
+		if err := survey.Ask(questions, &answers); err != nil {
+			checkErr(err)
+		}
+		startSpinner()
+		ecsSession, err := a.CreateEcsSession(
+			*tasks[answers["task"].(survey.OptionAnswer).Index],
+			exec,
+		)
+		checkErr(err)
+		Spinner.Stop()
+		err = a.ConnectToEcsSession(ecsSession)
+		checkErr(err)
+	}
+	StartInteractiveShell(a, taskFamily, &exec, &ecs.TaskOverride{
+		Cpu:    aws.String(fmt.Sprintf("%d", int(math.RoundToEven(shellCpu*1024)))),
+		Memory: aws.String(fmt.Sprintf("%d", shellMem)),
+	})
+}
+
 // shellCmd represents the shell command
 var shellCmd = &cobra.Command{
 	Use:   "shell",
@@ -70,56 +122,7 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 		startSpinner()
 		a, err := app.Init(AppName)
 		checkErr(err)
-		taskFamily, err := a.ShellTaskFamily()
-		checkErr(err)
-		var exec string
-		if shellRoot {
-			exec = "bash -l"
-		} else {
-			exec = "su --preserve-environment --pty --command '/cnb/lifecycle/launcher bash -l' heroku"
-		}
-
-		if shellLive {
-			tasks, err := a.DescribeTasks()
-			checkErr(err)
-			taskList := []string{}
-			for _, t := range tasks {
-				tag, err := getTag(t.Tags, "apppack:processType")
-				if err != nil {
-					continue
-				}
-				arnParts := strings.Split(*t.TaskArn, "/")
-				taskList = append(taskList, fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1]))
-			}
-			answers := make(map[string]interface{})
-			questions := []*survey.Question{
-				{
-					Name: "task",
-					Prompt: &survey.Select{
-						Message: "Select task to connect to",
-						Options: taskList,
-					},
-				},
-			}
-			Spinner.Stop()
-			if err := survey.Ask(questions, &answers); err != nil {
-				checkErr(err)
-			}
-			startSpinner()
-			ecsSession, err := a.CreateEcsSession(
-				*tasks[answers["task"].(survey.OptionAnswer).Index],
-				exec,
-			)
-			checkErr(err)
-			Spinner.Stop()
-			err = a.ConnectToEcsSession(ecsSession)
-			checkErr(err)
-		}
-
-		StartInteractiveShell(a, taskFamily, &exec, &ecs.TaskOverride{
-			Cpu:    aws.String(fmt.Sprintf("%d", int(math.RoundToEven(shellCpu*1024)))),
-			Memory: aws.String(fmt.Sprintf("%d", shellMem)),
-		})
+		interactiveCmd(a, "bash -l")
 	},
 }
 
