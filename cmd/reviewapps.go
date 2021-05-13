@@ -47,7 +47,7 @@ func getPipelineStack(a *app.App) (*cloudformation.Stack, error) {
 // reviewappsCmd represents the reviewapps command
 var reviewappsCmd = &cobra.Command{
 	Use:                   "reviewapps <pipeline>",
-	Short:                 "list available and deployed review apps",
+	Short:                 "list deployed review apps",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -59,15 +59,13 @@ var reviewappsCmd = &cobra.Command{
 		Spinner.Stop()
 		fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(fmt.Sprintf("%s review apps", a.Name))))
 		for _, r := range reviewApps {
-			prNumber := strings.Split(r.PullRequest, "/")[1]
-			fmt.Printf("%s %s\n", aurora.White(fmt.Sprintf("#%s %s", prNumber, r.Title)), aurora.Faint(r.Branch))
 			if r.Status == "created" {
+				prNumber := strings.Split(r.PullRequest, "/")[1]
+				fmt.Printf("%s %s\n", aurora.White(fmt.Sprintf("#%s %s", prNumber, r.Title)), aurora.Faint(r.Branch))
 				url, err := a.URL(&prNumber)
 				checkErr(err)
 				indent := len(prNumber) + 1
 				fmt.Printf("%s %s\n\n", strings.Repeat(" ", indent), aurora.Underline(aurora.Blue(*url)))
-			} else {
-				fmt.Printf("\n")
 			}
 		}
 	},
