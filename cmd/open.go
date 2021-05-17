@@ -27,7 +27,7 @@ import (
 // openCmd represents the open command
 var openCmd = &cobra.Command{
 	Use:    "open",
-	Short:  "open the app in a browser"
+	Short:  "open the app in a browser",
 	Run: func(cmd *cobra.Command, args []string) {
 		a, err := app.Init(AppName)
 		checkErr(err)
