@@ -1,3 +1,4 @@
+---
 name: databases
 
 on:
@@ -42,6 +43,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   standard-mysql:
+    defaults:
+      shell: bash
     runs-on: ubuntu-latest
     needs: ["init"]
     steps:
@@ -68,6 +71,7 @@ jobs:
       -
         name: Destroy standard MySQL
         run: |
+            set -o pipefail
             yes yes | ./bin/apppack destroy database standard-mysql \
                           --region us-east-2
         if: always()
@@ -76,6 +80,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   standard-postgres:
+    defaults:
+      shell: bash
     runs-on: ubuntu-latest
     needs: ["init"]
     steps:
@@ -102,6 +108,7 @@ jobs:
       -
         name: Destroy standard Postgres
         run: |
+            set -o pipefail
             yes yes | ./bin/apppack destroy database standard-postgres \
                           --region us-east-2
         if: always()
@@ -110,6 +117,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   aurora-mysql:
+    defaults:
+      shell: bash
     runs-on: ubuntu-latest
     needs: ["init"]
     steps:
@@ -137,6 +146,7 @@ jobs:
       -
         name: Destroy Aurora MySQL
         run: |
+            set -o pipefail
             yes yes | ./bin/apppack destroy database aurora-mysql \
                           --region us-east-2
         if: always()
@@ -145,6 +155,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   aurora-postgres:
+    defaults:
+      shell: bash
     runs-on: ubuntu-latest
     needs: ["init"]
     steps:
@@ -170,6 +182,7 @@ jobs:
       -
         name: Destroy Aurora Postgres
         run: |
+            set -o pipefail
             yes yes | ./bin/apppack destroy database aurora-postgres \
                           --region us-east-2
         if: always()
@@ -177,39 +190,44 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  redis:
-    runs-on: ubuntu-latest
-    needs: ["init"]
-    steps:
-      -
-        uses: actions/download-artifact@master
-        with:
-          name: apppack
-          path: bin
-      -
-        name: Create Redis
-        run: |
-            chmod +x ./bin/apppack
-            ./bin/apppack create redis --region us-east-2 \
-                --non-interactive
-        timeout-minutes: 25
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      -
-        name: Wait for steady state
-        run: sleep 60
-      -
-        name: Destroy Redis
-        run: |
-            yes yes | ./bin/apppack destroy redis apppack \
-                          --region us-east-2
-        if: always()
-        timeout-minutes: 18
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+redis:
+  defaults:
+    shell: bash
+  runs-on: ubuntu-latest
+  needs: ["init"]
+  steps:
+    -
+      uses: actions/download-artifact@master
+      with:
+        name: apppack
+        path: bin
+    -
+      name: Create Redis
+      run: |
+          chmod +x ./bin/apppack
+          ./bin/apppack create redis --region us-east-2 \
+              --non-interactive
+      timeout-minutes: 25
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    -
+      name: Wait for steady state
+      run: sleep 60
+    -
+      name: Destroy Redis
+      run: |
+          set -o pipefail
+          yes yes | ./bin/apppack destroy redis apppack \
+                        --region us-east-2
+      if: always()
+      timeout-minutes: 18
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   destroy:
+    defaults:
+      shell: bash
     runs-on: ubuntu-latest
     if: always()
     needs:
@@ -227,6 +245,7 @@ jobs:
       -
         name: Destroy cluster
         run: |
+            set -o pipefail
             chmod +x ./bin/apppack
             yes yes | ./bin/apppack destroy cluster apppack --region us-east-2
         if: always()
@@ -236,7 +255,9 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy region
-        run: yes yes | ./bin/apppack destroy region --region us-east-2
+        run: |
+          set -o pipefail
+          yes yes | ./bin/apppack destroy region --region us-east-2
         if: always()
         timeout-minutes: 3
         env:
