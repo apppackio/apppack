@@ -635,6 +635,9 @@ var buildListCmd = &cobra.Command{
 		checkErr(err)
 		Spinner.Stop()
 		for _, build := range builds {
+			if a.IsReviewApp() && *build.SourceVersion != fmt.Sprintf("pr/%s", *a.ReviewApp) {
+				continue
+			}
 			commitLog, _ := a.GetBuildArtifact(build, "commit.txt")
 			err = printBuild(build, commitLog)
 			checkErr(err)
