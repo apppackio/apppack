@@ -157,6 +157,9 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		startSpinner()
 		app, err := app.Init(AppName)
 		checkErr(err)
+		Spinner.Stop()
+		confirmAction("This will destroy any data that is currently in the database.", AppName)
+		startSpinner()
 		if strings.HasPrefix(args[0], "s3://") {
 			remoteFile = args[0]
 		} else {

@@ -23,7 +23,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/rds"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
@@ -74,15 +73,11 @@ func confirmDeleteStack(cfnSvc *cloudformation.CloudFormation, stackName string,
 	if err != nil {
 		return nil, err
 	}
-	stackID := *stackOutput.Stacks[0].StackId
+	stack := *stackOutput.Stacks[0]
 	Spinner.Stop()
-	var confirm string
-	fmt.Printf("%s\nAre you sure you want to delete %s? yes/[%s] ", aurora.Faint(stackID), friendlyName, aurora.Bold("no"))
-	fmt.Scanln(&confirm)
-	if confirm != "yes" {
-		return nil, fmt.Errorf("aborting due to user input")
-	}
-	return stackOutput.Stacks[0], nil
+	confirmAction(fmt.Sprintf("This will permanently destroy all resources in the %s stack.", *stack.StackName), *stack.StackName)
+	startSpinner()
+	return &stack, nil
 }
 
 // deleteStack will delete a Clouformation Stack, optionally retrying for problematic stacks
