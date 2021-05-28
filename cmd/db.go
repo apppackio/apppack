@@ -91,7 +91,10 @@ var dbDumpCmd = &cobra.Command{
 		checkErr(err)
 		task, getObjectInput, err := app.DBDump()
 		checkErr(err)
-		Spinner.Suffix = fmt.Sprintf(" dumping database %s", aurora.Faint(*task.TaskArn))
+		Spinner.Stop()
+		fmt.Println(aurora.Faint(fmt.Sprintf("starting task %s", *task.TaskArn)))
+		startSpinner()
+		Spinner.Suffix = " dumping database"
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
 		if *exitCode != 0 {
@@ -184,7 +187,10 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			&ecs.TaskOverride{},
 			true,
 		)
-		Spinner.Suffix = fmt.Sprintf(" loading database %s", aurora.Faint(*task.TaskArn))
+		Spinner.Stop()
+		fmt.Println(aurora.Faint(fmt.Sprintf("starting task %s", *task.TaskArn)))
+		startSpinner()
+		Spinner.Suffix = " loading database"
 		checkErr(err)
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
