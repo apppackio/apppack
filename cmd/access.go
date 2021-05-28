@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/spf13/cobra"
 )
@@ -67,6 +69,30 @@ func indexOf(arr []string, item string) int {
 	return -1
 }
 
+
+func appOrPipelineStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
+	cfnSvc := cloudformation.New(sess)
+	stackName := appStackName(AppName)
+	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+		StackName: &stackName,
+	})
+	if err == nil {
+		return stackOutput.Stacks[0], nil
+	}
+	if aerr, ok := err.(awserr.Error); ok {
+		if aerr.Code() == "ValidationError" {
+			stackName = pipelineStackName(AppName)
+			stackOutput, err = cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+				StackName: &stackName,
+			})
+			if err == nil {
+				return stackOutput.Stacks[0], nil
+			}
+		}
+	}
+	return nil, err
+}
+
 // accessCmd represents the access command
 var accessCmd = &cobra.Command{
 	Use:                   "access",
@@ -76,13 +102,9 @@ var accessCmd = &cobra.Command{
 		startSpinner()
 		sess, err := awsSession()
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stackName := appStackName(AppName)
-		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: &stackName,
-		})
+		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
-		usersCSV, err := parameterValue(stackOutput.Stacks[0], "AllowedUsers")
+		usersCSV, err := parameterValue(stack, "AllowedUsers")
 		checkErr(err)
 		users := splitAndTrimCSV(usersCSV)
 		sort.Strings(users)
@@ -108,20 +130,15 @@ var accessAddCmd = &cobra.Command{
 		startSpinner()
 		sess, err := awsSession()
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stackName := appStackName(AppName)
-		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: &stackName,
-		})
+		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
-		stack := stackOutput.Stacks[0]
 		usersCSV, err := parameterValue(stack, "AllowedUsers")
 		checkErr(err)
 		usersCSV = aws.String(strings.Join([]string{*usersCSV, email}, ","))
 		err = replaceParameter(stack, "AllowedUsers", usersCSV)
 		checkErr(err)
 		_, err = updateStackAndWait(sess, &cloudformation.UpdateStackInput{
-			StackName:           &stackName,
+			StackName:           stack.StackName,
 			Parameters:          stack.Parameters,
 			UsePreviousTemplate: aws.Bool(true),
 			Capabilities:        []*string{aws.String("CAPABILITY_IAM")},
@@ -144,13 +161,8 @@ var accessRemoveCmd = &cobra.Command{
 		startSpinner()
 		sess, err := awsSession()
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stackName := appStackName(AppName)
-		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: &stackName,
-		})
+		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
-		stack := stackOutput.Stacks[0]
 		usersCSV, err := parameterValue(stack, "AllowedUsers")
 		checkErr(err)
 		userList := splitAndTrimCSV(usersCSV)
@@ -162,7 +174,7 @@ var accessRemoveCmd = &cobra.Command{
 		err = replaceParameter(stack, "AllowedUsers", &newUsersCSV)
 		checkErr(err)
 		_, err = updateStackAndWait(sess, &cloudformation.UpdateStackInput{
-			StackName:           &stackName,
+			StackName:           stack.StackName,
 			Parameters:          stack.Parameters,
 			UsePreviousTemplate: aws.Bool(true),
 			Capabilities:        []*string{aws.String("CAPABILITY_IAM")},
