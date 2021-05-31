@@ -72,7 +72,6 @@ jobs:
       -
         name: Destroy standard MySQL
         run: |
-            set -o pipefail
             yes apppack-database-standard-mysql | ./bin/apppack destroy database standard-mysql \
                           --region us-east-2
         if: always()
@@ -110,7 +109,6 @@ jobs:
       -
         name: Destroy standard Postgres
         run: |
-            set -o pipefail
             yes apppack-database-standard-postgres | ./bin/apppack destroy database standard-postgres \
                           --region us-east-2
         if: always()
@@ -149,7 +147,6 @@ jobs:
       -
         name: Destroy Aurora MySQL
         run: |
-            set -o pipefail
             yes apppack-database-aurora-mysql | ./bin/apppack destroy database aurora-mysql \
                           --region us-east-2
         if: always()
@@ -186,7 +183,6 @@ jobs:
       -
         name: Destroy Aurora Postgres
         run: |
-            set -o pipefail
             yes apppack-database-aurora-postgres | ./bin/apppack destroy database aurora-postgres \
                           --region us-east-2
         if: always()
@@ -222,7 +218,6 @@ redis:
     -
       name: Destroy Redis
       run: |
-          set -o pipefail
           yes apppack-redis-apppack | ./bin/apppack destroy redis apppack \
                         --region us-east-2
       if: always()
@@ -251,7 +246,6 @@ redis:
       -
         name: Destroy cluster
         run: |
-            set -o pipefail
             chmod +x ./bin/apppack
             yes apppack-cluster-apppack | ./bin/apppack destroy cluster apppack --region us-east-2
         if: always()
@@ -262,7 +256,6 @@ redis:
       -
         name: Destroy region
         run: |
-          set -o pipefail
           yes apppack-region-us-east-2 | ./bin/apppack destroy region --region us-east-2
         if: always()
         timeout-minutes: 3
