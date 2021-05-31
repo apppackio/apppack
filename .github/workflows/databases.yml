@@ -73,7 +73,7 @@ jobs:
         name: Destroy standard MySQL
         run: |
             set -o pipefail
-            yes yes | ./bin/apppack destroy database standard-mysql \
+            yes apppack-database-standard-mysql | ./bin/apppack destroy database standard-mysql \
                           --region us-east-2
         if: always()
         timeout-minutes: 15
@@ -111,7 +111,7 @@ jobs:
         name: Destroy standard Postgres
         run: |
             set -o pipefail
-            yes yes | ./bin/apppack destroy database standard-postgres \
+            yes apppack-database-standard-postgres | ./bin/apppack destroy database standard-postgres \
                           --region us-east-2
         if: always()
         timeout-minutes: 15
@@ -150,7 +150,7 @@ jobs:
         name: Destroy Aurora MySQL
         run: |
             set -o pipefail
-            yes yes | ./bin/apppack destroy database aurora-mysql \
+            yes apppack-database-aurora-mysql | ./bin/apppack destroy database aurora-mysql \
                           --region us-east-2
         if: always()
         timeout-minutes: 15
@@ -187,7 +187,7 @@ jobs:
         name: Destroy Aurora Postgres
         run: |
             set -o pipefail
-            yes yes | ./bin/apppack destroy database aurora-postgres \
+            yes apppack-database-aurora-postgres | ./bin/apppack destroy database aurora-postgres \
                           --region us-east-2
         if: always()
         timeout-minutes: 15
@@ -223,7 +223,7 @@ redis:
       name: Destroy Redis
       run: |
           set -o pipefail
-          yes yes | ./bin/apppack destroy redis apppack \
+          yes apppack-redis-apppack | ./bin/apppack destroy redis apppack \
                         --region us-east-2
       if: always()
       timeout-minutes: 18
@@ -253,7 +253,7 @@ redis:
         run: |
             set -o pipefail
             chmod +x ./bin/apppack
-            yes yes | ./bin/apppack destroy cluster apppack --region us-east-2
+            yes apppack-cluster-apppack | ./bin/apppack destroy cluster apppack --region us-east-2
         if: always()
         timeout-minutes: 8
         env:
@@ -263,7 +263,7 @@ redis:
         name: Destroy region
         run: |
           set -o pipefail
-          yes yes | ./bin/apppack destroy region --region us-east-2
+          yes apppack-region-us-east-2 | ./bin/apppack destroy region --region us-east-2
         if: always()
         timeout-minutes: 3
         env:

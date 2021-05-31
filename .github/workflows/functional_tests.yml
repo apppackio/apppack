@@ -79,7 +79,7 @@ jobs:
         name: Destroy app
         run: |
           set -o pipefail
-          yes yes | ./apppack destroy app app-test --region us-east-1
+          yes apppack-app-app-test | ./apppack destroy app app-test --region us-east-1
         if: always()
         timeout-minutes: 5
         env:
@@ -89,7 +89,7 @@ jobs:
         name: Destroy cluster
         run: |
           set -o pipefail
-          yes yes | ./apppack destroy cluster apppack --region us-east-1
+          yes apppack-cluster-apppack | ./apppack destroy cluster apppack --region us-east-1
         if: always()
         timeout-minutes: 10
         env:
@@ -99,7 +99,7 @@ jobs:
         name: Destroy region
         run: |
           set -o pipefail
-          yes yes | ./apppack destroy region --region us-east-1
+          yes apppack-region-us-east-1 | ./apppack destroy region --region us-east-1
         if: always()
         timeout-minutes: 3
         env:
@@ -109,7 +109,7 @@ jobs:
         name: Destroy account
         run: |
           set -o pipefail
-          yes yes | ./apppack destroy account --region us-east-1
+          yes apppack-account | ./apppack destroy account --region us-east-1
         if: always()
         timeout-minutes: 3
         env:
