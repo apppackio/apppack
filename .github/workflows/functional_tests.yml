@@ -8,9 +8,6 @@ on:
 
 jobs:
   functional-tests:
-    defaults:
-      run:
-        shell: bash
     runs-on: ubuntu-latest
     steps:
       -
@@ -26,8 +23,8 @@ jobs:
         run: go build
       -
         name: AppPack Init
+        shell: bash
         run: |
-            set -o pipefail
             ./apppack init --region us-east-1 \
                            --dockerhub-username $DOCKERHUB_USERNAME \
                            --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN \
@@ -41,8 +38,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Approve account
+        shell: bash
         run: |
-          set -eu -o pipefail
           export ROLE_ARN=$(grep AppPackRoleArn account_setup_output.txt | awk '{print $2}')
           export ACCOUNT_ID=$(echo $ROLE_ARN | cut -d: -f5)
           export EXTERNAL_ID=$(grep ExternalId account_setup_output.txt | awk '{print $2}')
@@ -114,8 +111,8 @@ jobs:
       -
         name: Disable account
         if: always()
+        shell: bash
         run: |
-          set -eu -o pipefail
           cat item.json
           aws dynamodb delete-item --table-name apppack --key '{
             "primary_id": {"S": "ACCT#'$(grep AppPackRoleArn account_setup_output.txt | awk '{print $2}' | cut -d: -f5)'"},
