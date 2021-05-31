@@ -44,7 +44,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   standard-mysql:
     defaults:
-      shell: bash
+      run:
+        shell: bash
     runs-on: ubuntu-latest
     needs: ["init"]
     steps:
@@ -81,7 +82,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   standard-postgres:
     defaults:
-      shell: bash
+      run:
+        shell: bash
     runs-on: ubuntu-latest
     needs: ["init"]
     steps:
@@ -118,7 +120,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   aurora-mysql:
     defaults:
-      shell: bash
+      run:
+        shell: bash
     runs-on: ubuntu-latest
     needs: ["init"]
     steps:
@@ -156,7 +159,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   aurora-postgres:
     defaults:
-      shell: bash
+      run:
+        shell: bash
     runs-on: ubuntu-latest
     needs: ["init"]
     steps:
@@ -192,7 +196,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 redis:
   defaults:
-    shell: bash
+    run:
+      shell: bash
   runs-on: ubuntu-latest
   needs: ["init"]
   steps:
@@ -227,7 +232,8 @@ redis:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   destroy:
     defaults:
-      shell: bash
+      run:
+        shell: bash
     runs-on: ubuntu-latest
     if: always()
     needs:

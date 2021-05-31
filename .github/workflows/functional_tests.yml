@@ -9,7 +9,8 @@ on:
 jobs:
   functional-tests:
     defaults:
-      shell: bash
+      run:
+        shell: bash
     runs-on: ubuntu-latest
     steps:
       -
