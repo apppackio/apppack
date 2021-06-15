@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -76,7 +77,11 @@ func upgradeStack(stackName string, templateURL string) error {
 	})
 	checkErr(err)
 	Spinner.Stop()
-	fmt.Println(aurora.Faint(fmt.Sprintf("upgrading %s", *stackOutput.Stacks[0].StackId)))
+	if createChangeSet {
+		fmt.Println(aurora.Faint(fmt.Sprintf("creating changeset for %s", *stackOutput.Stacks[0].StackId)))
+	} else {
+		fmt.Println(aurora.Faint(fmt.Sprintf("upgrading %s", *stackOutput.Stacks[0].StackId)))
+	}
 	var parameters []*cloudformation.Parameter
 	for _, p := range stackOutput.Stacks[0].Parameters {
 		parameters = append(parameters, &cloudformation.Parameter{
@@ -92,17 +97,21 @@ func upgradeStack(stackName string, templateURL string) error {
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 	}
 	if createChangeSet {
-		_, err = updateChangeSetAndWait(sess, &updateStackInput)
+		changeset, err := updateChangeSetAndWait(sess, &updateStackInput)
 		checkErr(err)
+		Spinner.Stop()
+		fmt.Println("View changeset at:", aurora.White(fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/changesets/changes?stackId=%s&changeSetId=%s", *sess.Config.Region, url.QueryEscape(*changeset.StackId), url.QueryEscape(*changeset.ChangeSetId))))
+		printSuccess("changeset created")
 	} else {
 		stack, err := updateStackAndWait(sess, &updateStackInput)
 		checkErr(err)
 		if *stack.StackStatus != "UPDATE_COMPLETE" {
 			checkErr(fmt.Errorf("stack upgrade failed: %s", *stack.StackStatus))
 		}
+		Spinner.Stop()
+		printSuccess("stack upgraded")
 	}
-	Spinner.Stop()
-	printSuccess("stack upgraded")
+
 	return nil
 }
 
