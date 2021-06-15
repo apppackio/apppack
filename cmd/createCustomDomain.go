@@ -107,7 +107,7 @@ var createCustomDomainCmd = &cobra.Command{
 	Short: "setup TLS certificate and point one or more domains to an AppPack Cluster",
 	Long: `*Requires AWS credentials.*
 	
-The domain(s) provided must all part of the same parent domain and a Route53 Hosted Zone must already be setup.`,
+The domain(s) provided must all be a part of the same parent domain and a Route53 Hosted Zone must already be setup.`,
 	Example:               "apppack create custom-domain example.com www.example.com",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {

@@ -858,7 +858,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 	checkErr(err)
 	if !nonInteractive {
 		questions := []*survey.Question{}
-		clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for app"))
+		clusterQuestion, err := makeClusterQuestion(sess, aws.String("cluster to install app into"))
 		checkErr(err)
 		questions = append(questions, clusterQuestion)
 		addQuestionFromFlag(cmd.Flags().Lookup("repository"), &questions, nil)
