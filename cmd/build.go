@@ -94,6 +94,7 @@ func retryBuildStatus(a *app.App, build *codebuild.Build, retries int) (*app.Bui
 func watchBuild(a *app.App, build *codebuild.Build) error {
 	var lastPhase *app.BuildPhase
 	var currentPhase *app.BuildPhase
+	var failedPhase *app.BuildPhase
 	var lastUpdate time.Time
 	var status string
 	startSpinner()
@@ -108,8 +109,9 @@ func watchBuild(a *app.App, build *codebuild.Build) error {
 			buildPhase := buildStatus.NamedPhases()[0]
 			currentPhase = &buildPhase
 		} else {
-			if lastPhase.Phase.State == "failed" {
-				return fmt.Errorf("%s failed at %s", lastPhase.Name, time.Unix(lastPhase.Phase.End, 0).Local().Format(timeFmt))
+			failedPhase = buildStatus.FirstFailedPhase()
+			if failedPhase != nil {
+				return fmt.Errorf("%s failed at %s", failedPhase.Name, time.Unix(failedPhase.Phase.End, 0).Local().Format(timeFmt))
 			}
 			currentPhase = buildStatus.NextActivePhase(lastPhase)
 		}

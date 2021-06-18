@@ -225,6 +225,15 @@ func (b *BuildStatus) FinalPhase() (*BuildPhase, error) {
 	return nil, fmt.Errorf("no phases completed")
 }
 
+func (b *BuildStatus) FirstFailedPhase() *BuildPhase {
+	for _, p := range b.NamedPhases() {
+		if p.Phase.State == "failed" {
+			return &p
+		}
+	}
+	return nil
+}
+
 // locationName is the tag used by aws-sdk internally
 // we can use it to load specific AWS Input types from our JSON
 type ecsConfigItem struct {
