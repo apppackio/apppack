@@ -231,6 +231,7 @@ func S3Log(sess *session.Session, logURL string) error {
 		Key:    &object,
 	})
 	if err != nil {
+		printWarning(fmt.Sprintf("unable to read log file: %s", logURL))
 		return err
 	}
 	buf := new(strings.Builder)

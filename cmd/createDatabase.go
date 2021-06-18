@@ -210,6 +210,7 @@ var createDatabaseCmd = &cobra.Command{
 			instanceClasses, err := listRDSInstanceClasses(sess, engine, version)
 			checkErr(err)
 			Spinner.Stop()
+			Spinner.Suffix = ""
 			addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, &survey.Question{
 				Name:   "instance-class",
 				Prompt: &survey.Select{Message: "select the instance class", Options: instanceClasses, FilterMessage: "", Default: "db.t3.medium"},
