@@ -207,8 +207,6 @@ func logMarker(name string) string {
 	return fmt.Sprintf("#*#*#*#*#*# apppack-%s #*#*#*#*#*#", name)
 }
 
-var stopTailing = make(chan bool, 1)
-
 func printLogLine(line string) {
 	Spinner.Stop()
 	if strings.HasPrefix(line, "===> ") {
@@ -245,7 +243,7 @@ func S3Log(sess *session.Session, logURL string) error {
 	return nil
 }
 
-func StreamEvents(sess *session.Session, logURL string, marker *string) error {
+func StreamEvents(sess *session.Session, logURL string, marker *string, stopTailing <-chan bool) error {
 	var lastSeenTime *int64
 	var seenEventIDs map[string]bool
 	var markerStart *string
@@ -369,6 +367,7 @@ func watchBuildPhase(a *app.App, build *codebuild.Build) error {
 	}
 	codebuildSvc := codebuild.New(a.Session)
 	buildLogTailing := false
+	stopTailing := make(chan bool)
 	for buildStatus.Build.State == "started" {
 		builds, err := codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
 			Ids: []*string{build.Id},
@@ -380,7 +379,7 @@ func watchBuildPhase(a *app.App, build *codebuild.Build) error {
 		if *build.CurrentPhase == "BUILD" {
 			if !buildLogTailing {
 				buildLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"))
+				go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"), stopTailing)
 			}
 		} else if *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD" {
 			startSpinner()
@@ -404,6 +403,7 @@ func watchBuildPhase(a *app.App, build *codebuild.Build) error {
 
 func watchTestPhase(a *app.App, build *codebuild.Build) error {
 	startSpinner()
+	stopTailing := make(chan bool)
 	buildStatus, err := a.BuildStatus(build)
 	if err != nil {
 		return err
@@ -411,7 +411,7 @@ func watchTestPhase(a *app.App, build *codebuild.Build) error {
 	if strings.HasPrefix(buildStatus.Test.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Test.Logs)
 	}
-	go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("test"))
+	go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("test"), stopTailing)
 	for buildStatus.Test.State == "started" {
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.BuildStatus(build)
@@ -425,6 +425,7 @@ func watchTestPhase(a *app.App, build *codebuild.Build) error {
 
 func watchReleasePhase(a *app.App, build *codebuild.Build) error {
 	startSpinner()
+	stopTailing := make(chan bool)
 	buildStatus, err := a.BuildStatus(build)
 	if err != nil {
 		return err
@@ -447,7 +448,7 @@ func watchReleasePhase(a *app.App, build *codebuild.Build) error {
 			status := *out.Tasks[0].LastStatus
 			if status == "RUNNING" && !releaseLogTailing {
 				releaseLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Release.Logs, nil)
+				go StreamEvents(a.Session, buildStatus.Release.Logs, nil, stopTailing)
 			}
 			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 				stopTailing <- true
@@ -461,12 +462,15 @@ func watchReleasePhase(a *app.App, build *codebuild.Build) error {
 			return err
 		}
 	}
+	logrus.Debug("loop end")
+	logrus.WithFields(logrus.Fields{"phase": "release"}).Debug("phase completed")
 	return nil
 }
 
 // TODO DRY with watchReleasePhase. Combine to watchEcsTaskPhase
 func watchPostdeployPhase(a *app.App, build *codebuild.Build) error {
 	startSpinner()
+	stopTailing := make(chan bool)
 	buildStatus, err := a.BuildStatus(build)
 	if err != nil {
 		return err
@@ -489,7 +493,7 @@ func watchPostdeployPhase(a *app.App, build *codebuild.Build) error {
 			status := *out.Tasks[0].LastStatus
 			if status == "RUNNING" && !postdeployLogTailing {
 				postdeployLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Postdeploy.Logs, nil)
+				go StreamEvents(a.Session, buildStatus.Postdeploy.Logs, nil, stopTailing)
 			}
 			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 				stopTailing <- true
