@@ -316,7 +316,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 				addSeenEventIDs(event.EventId)
 			}
 		}
-		return !lastPage
+		return false
 	}
 	input := cloudwatchlogs.FilterLogEventsInput{LogGroupName: &logGroup, LogStreamNames: []*string{&logStream}}
 	logrus.WithFields(logFields).Debug("starting log tail")
