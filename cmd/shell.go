@@ -18,7 +18,9 @@ package cmd
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/app"
@@ -28,6 +30,29 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// WaitForTaskRunning waits for a task to be running or complete
+func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
+	ecsSvc := ecs.New(a.Session)
+	status := ""
+	for status != "RUNNING" {
+		time.Sleep(2 * time.Second)
+		out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+			Cluster: &a.Settings.Cluster.ARN,
+			Tasks:   []*string{task.TaskArn},
+		})
+		if err != nil {
+			return err
+		}
+		status = *out.Tasks[0].LastStatus
+		if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
+			return fmt.Errorf("task is not running -- last status: %s", status)
+		}
+		Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
+	}
+	Spinner.Suffix = ""
+	return nil
+}
 
 func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string, taskOverride *ecs.TaskOverride) {
 	task, err := a.StartTask(
@@ -40,8 +65,7 @@ func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string, tas
 	Spinner.Stop()
 	fmt.Println(aurora.Faint(fmt.Sprintf("starting %s", *task.TaskArn)))
 	startSpinner()
-	err = a.WaitForTaskRunning(task)
-	checkErr(err)
+	checkErr(WaitForTaskRunning(a, task))
 	Spinner.Stop()
 	fmt.Println(aurora.Faint("waiting for SSM Agent to startup"))
 	startSpinner()

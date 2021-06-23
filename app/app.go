@@ -592,15 +592,6 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 	return ecsTaskOutput.Tasks[0], nil
 }
 
-// WaitForTaskRunning waits for a task to be running or complete
-func (a *App) WaitForTaskRunning(task *ecs.Task) error {
-	ecsSvc := ecs.New(a.Session)
-	return ecsSvc.WaitUntilTasksRunning(&ecs.DescribeTasksInput{
-		Cluster: task.ClusterArn,
-		Tasks:   []*string{task.TaskArn},
-	})
-}
-
 // WaitForTaskStopped waits for a task to be running or complete
 func (a *App) WaitForTaskStopped(task *ecs.Task) (*int64, error) {
 	ecsSvc := ecs.New(a.Session)
