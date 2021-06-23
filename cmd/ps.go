@@ -163,7 +163,10 @@ var psResizeCmd = &cobra.Command{
 		processType := args[0]
 		a, err := app.Init(AppName)
 		checkErr(err)
-		err = a.ResizeProcess(processType, scaleCPU, scaleMemory)
+		size, err := humanToECSSizeConfiguration(scaleCPU, scaleMemory)
+		checkErr(err)
+		checkErr(a.ValidateECSTaskSize(*size))
+		err = a.ResizeProcess(processType, size.CPU, size.Memory)
 		checkErr(err)
 		printSuccess(fmt.Sprintf("resizing %s", processType))
 	},
@@ -226,8 +229,8 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 	},
 }
 
-var scaleCPU int
-var scaleMemory int
+var scaleCPU float64
+var scaleMemory string
 
 func init() {
 	rootCmd.AddCommand(psCmd)
@@ -235,13 +238,13 @@ func init() {
 	psCmd.MarkPersistentFlagRequired("app-name")
 
 	psCmd.AddCommand(psResizeCmd)
-	psResizeCmd.Flags().IntVarP(&scaleCPU, "cpu", "c", 1024, "CPU shares where 1024 is 1 full CPU")
-	psResizeCmd.Flags().IntVarP(&scaleMemory, "memory", "m", 2048, "memory in megabytes")
+	psResizeCmd.Flags().Float64Var(&scaleCPU, "cpu", 0.5, "CPU cores available for process")
+	psResizeCmd.Flags().StringVar(&scaleMemory, "memory", "1G", "memory (e.g. '2G', '512M') available for process")
 
 	psCmd.AddCommand(psScaleCmd)
 	psCmd.AddCommand(psExecCmd)
 	psExecCmd.PersistentFlags().BoolVarP(&shellRoot, "root", "r", false, "open shell as root user")
 	psExecCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
 	psExecCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")
-	psExecCmd.Flags().IntVar(&shellMem, "memory", 1024, "memory (in MB) available for task")
+	psExecCmd.Flags().StringVar(&shellMem, "memory", "1G", "memory (e.g. '2G', '512M') available for task")
 }

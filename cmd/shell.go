@@ -53,13 +53,51 @@ func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string, tas
 }
 
 var shellCpu float64
-var shellMem int
+var shellMem string
 var shellRoot bool
 var shellLive bool
+
+func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfiguration, error) {
+	var memoryInMB int
+	var memoryInGB int
+	var err error
+	fargateCPU := int(math.RoundToEven(cpu * 1024))
+	if strings.HasSuffix(memory, "G") {
+		memoryInGB, err = strconv.Atoi(memory[:len(memory)-1])
+		if err != nil {
+			return nil, err
+		}
+		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInGB * 1024}, nil
+	} else if strings.HasSuffix(memory, "GB") {
+		memoryInGB, err = strconv.Atoi(memory[:len(memory)-2])
+		if err != nil {
+			return nil, err
+		}
+		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInGB * 1024}, nil
+
+	} else if strings.HasSuffix(memory, "M") {
+		memoryInMB, err = strconv.Atoi(memory[:len(memory)-1])
+		if err != nil {
+			return nil, err
+		}
+		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInMB}, nil
+	} else if strings.HasSuffix(memory, "MB") {
+		memoryInMB, err = strconv.Atoi(memory[:len(memory)-2])
+		if err != nil {
+			return nil, err
+		}
+		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInMB}, nil
+	} else {
+		return nil, fmt.Errorf("unexpected memory format -- it must end in 'M' (for MB) or 'G' (for GB)")
+	}
+}
 
 func interactiveCmd(a *app.App, cmd string) {
 	taskFamily, err := a.ShellTaskFamily()
 	checkErr(err)
+	size, err := humanToECSSizeConfiguration(shellCpu, shellMem)
+	checkErr(err)
+	checkErr(a.ValidateECSTaskSize(*size))
 	var exec string
 	if shellRoot {
 		exec = cmd
@@ -104,8 +142,8 @@ func interactiveCmd(a *app.App, cmd string) {
 		checkErr(err)
 	}
 	StartInteractiveShell(a, taskFamily, &exec, &ecs.TaskOverride{
-		Cpu:    aws.String(fmt.Sprintf("%d", int(math.RoundToEven(shellCpu*1024)))),
-		Memory: aws.String(fmt.Sprintf("%d", shellMem)),
+		Cpu:    aws.String(fmt.Sprintf("%d", size.CPU)),
+		Memory: aws.String(fmt.Sprintf("%d", size.Memory)),
 	})
 }
 
@@ -131,6 +169,6 @@ func init() {
 	shellCmd.PersistentFlags().BoolVarP(&shellRoot, "root", "r", false, "open shell as root user")
 	shellCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
 	shellCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")
-	shellCmd.Flags().IntVar(&shellMem, "memory", 1024, "memory (in MB) available for task")
+	shellCmd.Flags().StringVar(&shellMem, "memory", "1G", "memory (e.g. '2G', '512M') available for task")
 	shellCmd.MarkPersistentFlagRequired("app-name")
 }

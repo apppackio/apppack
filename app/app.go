@@ -248,6 +248,64 @@ type ECSConfig struct {
 	TaskDefinitionArgs ecs.RegisterTaskDefinitionInput `locationName:"task_definition_args"`
 }
 
+type ECSSizeConfiguration struct {
+	CPU    int
+	Memory int
+}
+
+var FargateSupportedConfigurations = []ECSSizeConfiguration{
+	{CPU: 256, Memory: 512},
+	{CPU: 256, Memory: 1024},
+	{CPU: 256, Memory: 2 * 1024},
+	{CPU: 512, Memory: 1024},
+	{CPU: 512, Memory: 2 * 1024},
+	{CPU: 512, Memory: 3 * 1024},
+	{CPU: 512, Memory: 4 * 1024},
+	{CPU: 1024, Memory: 2 * 1024},
+	{CPU: 1024, Memory: 3 * 1024},
+	{CPU: 1024, Memory: 4 * 1024},
+	{CPU: 1024, Memory: 5 * 1024},
+	{CPU: 1024, Memory: 6 * 1024},
+	{CPU: 1024, Memory: 7 * 1024},
+	{CPU: 1024, Memory: 8 * 1024},
+	{CPU: 2 * 1024, Memory: 4 * 1024},
+	{CPU: 2 * 1024, Memory: 5 * 1024},
+	{CPU: 2 * 1024, Memory: 6 * 1024},
+	{CPU: 2 * 1024, Memory: 7 * 1024},
+	{CPU: 2 * 1024, Memory: 8 * 1024},
+	{CPU: 2 * 1024, Memory: 9 * 1024},
+	{CPU: 2 * 1024, Memory: 10 * 1024},
+	{CPU: 2 * 1024, Memory: 11 * 1024},
+	{CPU: 2 * 1024, Memory: 12 * 1024},
+	{CPU: 2 * 1024, Memory: 13 * 1024},
+	{CPU: 2 * 1024, Memory: 14 * 1024},
+	{CPU: 2 * 1024, Memory: 15 * 1024},
+	{CPU: 2 * 1024, Memory: 16 * 1024},
+	{CPU: 4 * 1024, Memory: 8 * 1024},
+	{CPU: 4 * 1024, Memory: 9 * 1024},
+	{CPU: 4 * 1024, Memory: 10 * 1024},
+	{CPU: 4 * 1024, Memory: 11 * 1024},
+	{CPU: 4 * 1024, Memory: 12 * 1024},
+	{CPU: 4 * 1024, Memory: 13 * 1024},
+	{CPU: 4 * 1024, Memory: 14 * 1024},
+	{CPU: 4 * 1024, Memory: 15 * 1024},
+	{CPU: 4 * 1024, Memory: 16 * 1024},
+	{CPU: 4 * 1024, Memory: 17 * 1024},
+	{CPU: 4 * 1024, Memory: 18 * 1024},
+	{CPU: 4 * 1024, Memory: 19 * 1024},
+	{CPU: 4 * 1024, Memory: 20 * 1024},
+	{CPU: 4 * 1024, Memory: 21 * 1024},
+	{CPU: 4 * 1024, Memory: 22 * 1024},
+	{CPU: 4 * 1024, Memory: 23 * 1024},
+	{CPU: 4 * 1024, Memory: 24 * 1024},
+	{CPU: 4 * 1024, Memory: 25 * 1024},
+	{CPU: 4 * 1024, Memory: 26 * 1024},
+	{CPU: 4 * 1024, Memory: 27 * 1024},
+	{CPU: 4 * 1024, Memory: 28 * 1024},
+	{CPU: 4 * 1024, Memory: 29 * 1024},
+	{CPU: 4 * 1024, Memory: 30 * 1024},
+}
+
 func ddbItem(sess *session.Session, primaryID string, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
 	ddbSvc := dynamodb.New(sess)
 	logrus.WithFields(logrus.Fields{"primaryID": primaryID, "secondaryID": secondaryID}).Debug("DynamoDB GetItem")
@@ -295,6 +353,34 @@ func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error)
 
 func (a *App) IsReviewApp() bool {
 	return a.ReviewApp != nil
+}
+
+func (a *App) IsFargate() (bool, error) {
+	err := a.LoadECSConfig()
+	if err != nil {
+		return false, err
+	}
+	return *a.ECSConfig.RunTaskArgs.LaunchType == "FARGATE", nil
+}
+
+func (a *App) ValidateECSTaskSize(size ECSSizeConfiguration) error {
+	fargate, err := a.IsFargate()
+	if err != nil {
+		return err
+	}
+	if fargate {
+		logrus.Debug("fargate task detected")
+		for _, supported := range FargateSupportedConfigurations {
+			if supported.CPU == size.CPU && supported.Memory == size.Memory {
+				return nil
+			}
+		}
+	} else {
+		if size.CPU >= 128 && size.CPU <= 10240 {
+			return nil
+		}
+	}
+	return fmt.Errorf("unsupported cpu/memory configuration -- see https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html")
 }
 
 func (a *App) ReviewAppSettings() (*Settings, error) {
