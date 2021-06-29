@@ -32,7 +32,7 @@ var initCmd = &cobra.Command{
 		checkErr(err)
 		fmt.Print(aurora.Faint("==="), aurora.Bold(aurora.Blue("Welcome to AppPack!")), " 🎉\n\n")
 		fmt.Println("This will step you through the intial AppPack setup process.")
-		fmt.Println("Before getting started, make sure you've taken care of the prerequisites (https://docs.apppack.io/setup/#prerequisites).")
+		fmt.Println("Before getting started, make sure you've taken care of the prerequisites (https://docs.apppack.io/tutorials/initial-setup/#prerequisites).")
 		fmt.Printf("This process should take less than 10 minutes. After that, you'll be ready to start installing apps on your cluster.\n\n")
 		alreadyInstalled, err := hasApppackOIDC(sess)
 		checkErr(err)
