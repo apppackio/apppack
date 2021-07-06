@@ -157,7 +157,7 @@ var psResizeCmd = &cobra.Command{
 	Use:                   "resize <process_type>",
 	Short:                 "resize (CPU/memory) the process for a given type",
 	DisableFlagsInUseLine: true,
-	Example:               "apppack resize web --cpu 2048 --memory 4096",
+	Example:               "apppack -a my-app resize web --cpu 2048 --memory 4096",
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		processType := args[0]
@@ -180,8 +180,8 @@ var psScaleCmd = &cobra.Command{
 
 ` + "`<process_count>`" + ` can either be a single number, e.g. 2 or a range, e.g. 1-5. When
 a range is provided, the process will autoscale within that range based on CPU usage.`,
-	Example: `apppack ps scale web 3  # run 3 web processes
-apppack ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
+	Example: `apppack -a my-app ps scale web 3  # run 3 web processes
+apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
