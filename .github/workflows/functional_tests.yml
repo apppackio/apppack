@@ -63,6 +63,16 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Verify user
+        run: |
+          echo "Waiting for user to get created..."
+          sleep 60
+          test $(aws dynamodb get-item --table-name apppack --key '{"primary_id": {"S": "USER#user@apppack.io"}, "secondary_id": {"S": "891426818781#app-test"}}' --query Item) != "null"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.APPPACK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
       # TODO: authorize CLI
       # -
       #   name: Deploy app
