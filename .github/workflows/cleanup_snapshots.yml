@@ -1,0 +1,40 @@
+---
+name: Cleanup RDS snapshots
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '11 1 * * 1'
+
+jobs:
+  cleanup-db-snapshots:
+    runs-on: ubuntu-latest
+    container: amazon/aws-cli
+    timeout-minutes: 10
+
+    steps:
+      - name: Cleanup DB Snapshots
+        run: |
+          for s in $(aws rds describe-db-snapshots --filter Name=snapshot-type,Values=manual --query DBSnapshots[].DBSnapshotIdentifier --output text); do
+            aws rds delete-db-snapshot --db-snapshot-identifier "$s";
+          done
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-2
+
+  cleanup-cluster-snapshots:
+    runs-on: ubuntu-latest
+    container: amazon/aws-cli
+    timeout-minutes: 10
+
+    steps:
+      - name: Cleanup Cluster Snapshots
+        run: |
+          for s in $(aws rds describe-db-cluster-snapshots --filter Name=snapshot-type,Values=manual --query DBClusterSnapshots[].DBClusterSnapshotIdentifier --output text); do
+            aws rds delete-db-cluster-snapshot --db-cluster-snapshot-identifier "$s";
+          done
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-2
