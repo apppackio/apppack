@@ -199,7 +199,17 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Wait for steady state
-        run: sleep 90
+        run: |
+          # destroy fails if replication group is not available
+          ID="$(aws cloudformation describe-stacks --stack apppack-redis-apppack --output text --query Stacks[0].Outputs | grep Endpoint | cut -f2 -d.)"
+          until [ "$(aws elasticache describe-replication-groups --replication-group $ID --query ReplicationGroups[0].Status --output text)" = "available" ]; do
+            echo "waiting for replication group to become available..."
+            sleep 10
+          done
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy Redis
         run: |
