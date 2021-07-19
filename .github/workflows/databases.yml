@@ -200,6 +200,7 @@ jobs:
       -
         name: Wait for steady state
         run: |
+          set -eufx -o pipefail
           # destroy fails if replication group is not available
           ID="$(aws cloudformation describe-stacks --stack apppack-redis-apppack --output text --query Stacks[0].Outputs | grep Endpoint | cut -f2 -d.)"
           until [ "$(aws elasticache describe-replication-groups --replication-group $ID --query ReplicationGroups[0].Status --output text)" = "available" ]; do
