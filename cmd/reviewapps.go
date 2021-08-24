@@ -87,11 +87,11 @@ func pipelineCfnParameters(stack *cloudformation.Stack) ([]*cloudformation.Param
 			ParameterKey: aws.String("DatabaseAddon"), ParameterValue: aws.String("enabled"),
 		})
 	}
-	redisLambda, err := getStackOutput(stack, "RedisManagerLambdaArn")
+	redisStackName, err := getStackParameter(stack, "RedisStackName")
 	if err != nil {
 		return nil, err
 	}
-	if *redisLambda == "~" {
+	if *redisStackName == "" {
 		parameters = append(parameters, &cloudformation.Parameter{
 			ParameterKey: aws.String("RedisAddon"), ParameterValue: aws.String("disabled"),
 		})

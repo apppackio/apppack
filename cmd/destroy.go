@@ -35,6 +35,15 @@ func getStackOutput(stack *cloudformation.Stack, name string) (*string, error) {
 	return nil, fmt.Errorf("stack %s does not have an output named %s", *stack.StackName, name)
 }
 
+func getStackParameter(stack *cloudformation.Stack, name string) (*string, error) {
+	for _, parameter := range stack.Parameters {
+		if *parameter.ParameterKey == name {
+			return parameter.ParameterValue, nil
+		}
+	}
+	return nil, fmt.Errorf("stack %s does not have a parameter named %s", *stack.StackName, name)
+}
+
 func setRdsDeletionProtection(sess *session.Session, stack *cloudformation.Stack, protected bool) error {
 	rdsSvc := rds.New(sess)
 	DBID, err := getStackOutput(stack, "DBId")
