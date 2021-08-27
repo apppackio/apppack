@@ -157,7 +157,7 @@ var psResizeCmd = &cobra.Command{
 	Use:                   "resize <process_type>",
 	Short:                 "resize (CPU/memory) the process for a given type",
 	DisableFlagsInUseLine: true,
-	Example:               "apppack -a my-app resize web --cpu 2048 --memory 4096",
+	Example:               "apppack -a my-app resize web --cpu 2 --memory 4G",
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		processType := args[0]
