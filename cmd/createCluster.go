@@ -17,16 +17,49 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/spf13/cobra"
 )
+
+// splitSubnet takes a CIDR string and splits it up into two groups of 3 comma-separated subnets
+func splitSubnet(cidrStr string) (*string, *string, error) {
+	maxSubnetMask := 24
+	minSubnetMask := 16
+	_, clusterCIDR, err := net.ParseCIDR(cidrStr)
+	if err != nil {
+		return nil, nil, err
+	}
+	mask, _ := clusterCIDR.Mask.Size()
+	if mask < minSubnetMask || mask > maxSubnetMask {
+		return nil, nil, fmt.Errorf("valid subnet mask range is %d-%d", minSubnetMask, maxSubnetMask)
+	}
+	subnetMask := net.CIDRMask(mask+4, 32)
+	subnets := []*net.IPNet{}
+	subnets = append(subnets, &net.IPNet{IP: clusterCIDR.IP, Mask: subnetMask})
+	prefix, _ := subnetMask.Size()
+	for i := 0; i < 8; i++ {
+		nextCIDR, _ := cidr.NextSubnet(subnets[i], prefix)
+		subnets = append(subnets, nextCIDR)
+	}
+	publicSubnets := []string{}
+	for i := 0; i < 3; i++ {
+		publicSubnets = append(publicSubnets, subnets[i].String())
+	}
+	privateSubnets := []string{}
+	for i := 6; i < 9; i++ {
+		privateSubnets = append(privateSubnets, subnets[i].String())
+	}
+	return aws.String(strings.Join(publicSubnets, ",")), aws.String(strings.Join(privateSubnets, ",")), nil
+}
 
 func ec2InstanceTypes(sess *session.Session) ([]*ec2.InstanceTypeInfo, error) {
 	ec2Svc := ec2.New(sess)
@@ -119,6 +152,9 @@ var createClusterCmd = &cobra.Command{
 		zone, err := hostedZoneForDomain(sess, *domain)
 		zoneID := strings.Split(*zone.Id, "/")[2]
 		checkErr(err)
+		vpcCIDR := getArgValue(cmd, &answers, "cidr", true)
+		publicSubnets, privateSubnets, err := splitSubnet(*vpcCIDR)
+		checkErr(err)
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf("apppack-cluster-%s", clusterName)),
 			TemplateURL: aws.String(getReleaseUrl(clusterFormationURL)),
@@ -126,6 +162,18 @@ var createClusterCmd = &cobra.Command{
 				{
 					ParameterKey:   aws.String("Name"),
 					ParameterValue: &clusterName,
+				},
+				{
+					ParameterKey:   aws.String("Cidr"),
+					ParameterValue: vpcCIDR,
+				},
+				{
+					ParameterKey:   aws.String("PublicSubnetCidrs"),
+					ParameterValue: publicSubnets,
+				},
+				{
+					ParameterKey:   aws.String("PrivateSubnetCidrs"),
+					ParameterValue: privateSubnets,
 				},
 				{
 					ParameterKey: aws.String("AvailabilityZones"),
@@ -164,4 +212,6 @@ func init() {
 	initCmd.Flags().BoolP("ec2", "e", false, "setup cluster with EC2 instances")
 	createClusterCmd.Flags().StringP("instance-class", "i", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 	initCmd.Flags().StringP("instance-class", "i", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
+	createClusterCmd.Flags().StringP("cidr", "c", "10.100.0.0/16", "network CIDR for VPC")
+	initCmd.Flags().StringP("cidr", "c", "10.100.0.0/16", "network CIDR for VPC")
 }
