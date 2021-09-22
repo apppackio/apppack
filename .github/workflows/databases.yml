@@ -203,7 +203,7 @@ jobs:
           # destroy fails if replication group is not available
           ID="$(aws cloudformation describe-stacks --stack apppack-redis-apppack --output text --query Stacks[0].Outputs | grep Endpoint | cut -f2 -d.)"
           sleep 10
-          until [ "$(aws elasticache describe-replication-groups --replication-group $ID --query ReplicationGroups[0].Status --output text)" = "available" ]; do
+          until [ "$(aws elasticache describe-replication-groups --replication-group-id $ID --query ReplicationGroups[0].Status --output text)" = "available" ]; do
             echo "waiting for replication group to become available..."
             sleep 10
           done
@@ -215,8 +215,12 @@ jobs:
       -
         name: Destroy Redis
         run: |
+            ID="$(aws cloudformation describe-stacks --stack apppack-redis-apppack --output text --query Stacks[0].Outputs | grep Endpoint | cut -f2 -d.)"
+            # debugging stack deletion failures
+            aws elasticache describe-replication-groups --replication-group-id $ID
             yes apppack-redis-apppack | ./bin/apppack destroy redis apppack \
-                          --region us-east-2
+                          --region us-east-2; \
+            aws elasticache describe-replication-groups --replication-group-id $ID
         if: always()
         timeout-minutes: 18
         env:
