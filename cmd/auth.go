@@ -44,7 +44,10 @@ var loginCmd = &cobra.Command{
 		checkErr(err)
 		data := *dataPtr
 		fmt.Println("Your verification code is", data.UserCode)
-		browser.OpenURL(data.VerificationURIComplete)
+		err = browser.OpenURL(data.VerificationURIComplete)
+		if err != nil {
+			fmt.Printf("URL: %s\n", aurora.White(data.VerificationURIComplete))
+		}
 		pauseUntilEnter("Finish verification in your web browser then press ENTER to continue.")
 		userInfo, err := auth.LoginComplete(data.DeviceCode)
 		checkErr(err)
