@@ -102,7 +102,13 @@ var dbDumpCmd = &cobra.Command{
 			printError("database dump failed")
 			return
 		}
-		localFile := fmt.Sprintf("%s.dump", app.Name)
+		var extension string
+		if strings.HasSuffix(*getObjectInput.Key, ".sql.gz") {
+			extension = "sql.gz"
+		} else {
+			extension = "dump"
+		}
+		localFile := fmt.Sprintf("%s.%s", app.Name, extension)
 		err = downloadFile(app.Session, getObjectInput, localFile)
 		checkErr(err)
 		Spinner.Stop()
