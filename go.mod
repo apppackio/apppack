@@ -3,18 +3,19 @@ module github.com/apppackio/apppack
 go 1.16
 
 require (
-	github.com/AlecAivazis/survey/v2 v2.2.12
+	github.com/AlecAivazis/survey/v2 v2.3.2
 	github.com/Netflix/go-expect v0.0.0-20201125194554-85d881c3777e // indirect
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2 // indirect
 	github.com/TylerBrock/saw v0.2.2
 	github.com/apparentlymart/go-cidr v1.1.0
-	github.com/aws/aws-sdk-go v1.38.36
+	github.com/aws/aws-sdk-go v1.40.51
 	github.com/briandowns/spinner v1.13.0
+	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
 	github.com/creack/pty v1.1.11 // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/getsentry/sentry-go v0.10.0
-	github.com/google/uuid v1.2.0
+	github.com/getsentry/sentry-go v0.11.0
+	github.com/google/uuid v1.3.0
 	github.com/hinshun/vt10x v0.0.0-20180809195222-d55458df857c // indirect
 	github.com/hokaccha/go-prettyjson v0.0.0-20190818114111-108c894c2c0e // indirect
 	github.com/jkueh/go-aws-console-url v0.0.1
@@ -24,17 +25,14 @@ require (
 	github.com/mattn/go-colorable v0.1.10 // indirect
 	github.com/mattn/go-isatty v0.0.14
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
-	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4
+	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/cobra v1.1.3
+	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/crypto v0.0.0-20201208171446-5f87f3452ae9 // indirect
-	golang.org/x/net v0.0.0-20201209123823-ac852fbbde11 // indirect
 	golang.org/x/sys v0.0.0-20210927094055-39ccf1dd6fa6 // indirect
-	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
-	golang.org/x/text v0.3.4 // indirect
+	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
+	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
 
 replace github.com/TylerBrock/saw => github.com/apppackio/saw v0.2.3-0.20210507180802-f6559c287e6f
