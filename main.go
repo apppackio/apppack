@@ -16,11 +16,13 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/apppackio/apppack/cmd"
-	sentry "github.com/getsentry/sentry-go"
+	"github.com/getsentry/sentry-go"
+	"github.com/logrusorgru/aurora"
 )
 
 var SentryDSN = ""
@@ -31,9 +33,15 @@ func main() {
 		if err != nil {
 			log.Fatalf("sentry.Init: %s", err)
 		}
-		// Flush buffered events before the program terminates.
-		// Set the timeout to the maximum duration the program can afford to wait.
-		defer sentry.Flush(2 * time.Second)
+		defer func() {
+			if err := recover(); err != nil {
+				fmt.Println(aurora.Faint(fmt.Sprintf("%v", err)))
+				fmt.Println(aurora.Red("✖"), "Something went wrong. Please retry.")
+				fmt.Println("  Contact support if the issue persists.")
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 3)
+			}
+		}()
 	}
 	cmd.Execute()
 }
