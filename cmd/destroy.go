@@ -171,6 +171,7 @@ var destroyRedisCmd = &cobra.Command{
 	Use:                   "redis <name>",
 	Short:                 "destroy AWS resources used by an AppPack Redis instance",
 	Long:                  "*Requires AWS credentials.*",
+	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		stackName := fmt.Sprintf(redisStackNameTmpl, args[0])
@@ -197,6 +198,7 @@ var destroyDatabaseCmd = &cobra.Command{
 	Use:                   "database <name>",
 	Short:                 "destroy AWS resources used by an AppPack Database",
 	Long:                  "*Requires AWS credentials.*",
+	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
