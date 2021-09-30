@@ -54,7 +54,7 @@ func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
 	return nil
 }
 
-func StartInteractiveShell(a *app.App, taskFamily *string, shellCmd *string, taskOverride *ecs.TaskOverride) {
+func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskOverride *ecs.TaskOverride) {
 	task, err := a.StartTask(
 		taskFamily,
 		app.ShellBackgroundCommand,

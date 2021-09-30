@@ -184,7 +184,7 @@ func retryStackCreation(cfnSvc *cloudformation.CloudFormation, stackID *string, 
 	return createStackAndWait(cfnSvc, input, false)
 }
 
-func cloudformationStackURL(region *string, stackID *string) string {
+func cloudformationStackURL(region, stackID *string) string {
 	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
 }
 
@@ -338,7 +338,7 @@ func getDDBClusterItem(sess *session.Session, cluster *string, addon string, nam
 	return &i.Stack, nil
 }
 
-func ddbClusterQuery(sess *session.Session, cluster *string, addon *string) (*[]map[string]*dynamodb.AttributeValue, error) {
+func ddbClusterQuery(sess *session.Session, cluster, addon *string) (*[]map[string]*dynamodb.AttributeValue, error) {
 	ddbSvc := dynamodb.New(sess)
 	result, err := ddbSvc.Query(&dynamodb.QueryInput{
 		TableName:              aws.String("apppack"),
@@ -661,7 +661,7 @@ var accountCmd = &cobra.Command{
 			Parameters: []*cloudformation.Parameter{
 				{
 					ParameterKey:   aws.String("AppPackRoleExternalId"),
-					ParameterValue: aws.String(strings.Replace(uuid.New().String(), "-", "", -1)),
+					ParameterValue: aws.String(strings.ReplaceAll(uuid.New().String(), "-", "")),
 				},
 			},
 			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
@@ -984,7 +984,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 			},
 			{
 				ParameterKey:   aws.String("AppPackRoleExternalId"),
-				ParameterValue: aws.String(strings.Replace(uuid.New().String(), "-", "", -1)),
+				ParameterValue: aws.String(strings.ReplaceAll(uuid.New().String(), "-", "")),
 			},
 			{
 				ParameterKey:   aws.String("PrivateS3BucketEnabled"),

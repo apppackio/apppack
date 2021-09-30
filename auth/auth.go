@@ -65,7 +65,7 @@ type AppRole struct {
 	Pipeline  bool   `json:"pipeline"`
 }
 
-func getAppRole(IDToken string, name string) (*AppRole, error) {
+func getAppRole(IDToken, name string) (*AppRole, error) {
 	appList, err := getAppListWithIDToken(IDToken)
 	if err != nil {
 		tokens, err := refreshTokens()

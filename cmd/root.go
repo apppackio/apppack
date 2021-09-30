@@ -102,7 +102,7 @@ func printWarning(text string) {
 	fmt.Println(aurora.Yellow(fmt.Sprintf("⚠  %s", text)))
 }
 
-func confirmAction(message string, text string) {
+func confirmAction(message, text string) {
 	printWarning(fmt.Sprintf("%s\n   Are you sure you want to continue?", message))
 	fmt.Printf("\nType %s to confirm.\n%s ", aurora.Faint(text), aurora.White(">"))
 	var confirm string

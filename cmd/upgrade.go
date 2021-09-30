@@ -67,7 +67,7 @@ func updateStackAndWait(sess *session.Session, stackInput *cloudformation.Update
 	return waitForCloudformationStack(cfnSvc, *stackInput.StackName)
 }
 
-func upgradeStack(stackName string, templateURL string) error {
+func upgradeStack(stackName, templateURL string) error {
 	startSpinner()
 	sess, err := awsSession()
 	checkErr(err)

@@ -28,7 +28,7 @@ import (
 var SentryDSN = ""
 
 func main() {
-	if len(SentryDSN) > 0 {
+	if SentryDSN != "" {
 		err := sentry.Init(sentry.ClientOptions{Dsn: SentryDSN})
 		if err != nil {
 			log.Fatalf("sentry.Init: %s", err)

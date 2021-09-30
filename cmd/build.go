@@ -38,7 +38,7 @@ import (
 const indentStr = "    "
 
 func indent(text, indent string) string {
-	if len(text) == 0 {
+	if text == "" {
 		return indent
 	}
 	if text[len(text)-1:] == "\n" {
@@ -72,7 +72,7 @@ func printBuild(build *codebuild.Build, commitLog []byte) error {
 	} else {
 		fmt.Println(aurora.Faint(fmt.Sprintf("%sstarted %s ~ %s", indentStr, build.StartTime.Local().Format(timeFmt), humanize.Time(*build.StartTime))))
 	}
-	fmt.Println(indent(fmt.Sprintf("%s", commitLog), indentStr))
+	fmt.Println(indent(string(commitLog), indentStr))
 	return nil
 }
 
@@ -130,13 +130,11 @@ func watchBuild(a *app.App, build *codebuild.Build) error {
 			}
 			if finalPhase.Name == "Deploy" {
 				break
-			} else {
-				time.Sleep(5 * time.Second)
-				continue
 			}
-		} else {
-			logrus.WithFields(logrus.Fields{"phase": currentPhase.Name}).Debug("current phase")
+			time.Sleep(5 * time.Second)
+			continue
 		}
+		logrus.WithFields(logrus.Fields{"phase": currentPhase.Name}).Debug("current phase")
 		lastUpdate = time.Unix(currentPhase.Phase.Start, 0)
 		// phase changed since last iteration
 		if lastPhase == nil || lastPhase.Name != currentPhase.Name {
@@ -307,14 +305,12 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 						return false
 					}
 					printLogLine(message)
-				} else {
-					if markerStart != nil {
-						if *markerStart == strings.TrimSuffix(message, "\n") {
-							logrus.WithFields(logrus.Fields{
-								"marker": *markerStart,
-							}).Debug("found log marker")
-							markerFound = true
-						}
+				} else if markerStart != nil {
+					if *markerStart == strings.TrimSuffix(message, "\n") {
+						logrus.WithFields(logrus.Fields{
+							"marker": *markerStart,
+						}).Debug("found log marker")
+						markerFound = true
 					}
 				}
 				addSeenEventIDs(event.EventId)
@@ -387,7 +383,7 @@ func watchBuildPhase(a *app.App, build *codebuild.Build) error {
 			}
 		} else if *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD" {
 			startSpinner()
-			Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", strings.Title(strings.ToLower(strings.Replace(*build.CurrentPhase, "_", " ", -1))))
+			Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", strings.Title(strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " "))))
 		} else {
 			logrus.WithFields(logrus.Fields{"phase": *build.CurrentPhase}).Debug("watch build stopped")
 			if buildLogTailing {

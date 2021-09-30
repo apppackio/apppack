@@ -74,7 +74,7 @@ func setRdsDeletionProtection(sess *session.Session, stack *cloudformation.Stack
 }
 
 // confirmDeleteStack will prompt the user to confirm stack deletion and return a Stack object
-func confirmDeleteStack(cfnSvc *cloudformation.CloudFormation, stackName string, friendlyName string) (*cloudformation.Stack, error) {
+func confirmDeleteStack(cfnSvc *cloudformation.CloudFormation, stackName, friendlyName string) (*cloudformation.Stack, error) {
 	startSpinner()
 	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: &stackName,
@@ -90,7 +90,7 @@ func confirmDeleteStack(cfnSvc *cloudformation.CloudFormation, stackName string,
 }
 
 // deleteStack will delete a Clouformation Stack, optionally retrying for problematic stacks
-func deleteStack(cfnSvc *cloudformation.CloudFormation, stackID string, friendlyName string, retry bool) error {
+func deleteStack(cfnSvc *cloudformation.CloudFormation, stackID, friendlyName string, retry bool) error {
 	startSpinner()
 	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
 		StackName: &stackID,

@@ -29,7 +29,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func reviewAppStackName(pipeline string, prNumber string) string {
+func reviewAppStackName(pipeline, prNumber string) string {
 	return fmt.Sprintf("apppack-reviewapp-%s%s", pipeline, prNumber)
 }
 

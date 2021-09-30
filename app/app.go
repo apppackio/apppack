@@ -133,12 +133,6 @@ type Process struct {
 	Command      string `json:"command"`
 }
 
-type appItem struct {
-	PrimaryID   string `json:"primary_id"`
-	SecondaryID string `json:"secondary_id"`
-	App         App    `json:"value"`
-}
-
 type BuildPhaseDetail struct {
 	Arns  []string `json:"arns"`
 	Logs  string   `json:"logs"`
@@ -306,7 +300,7 @@ var FargateSupportedConfigurations = []ECSSizeConfiguration{
 	{CPU: 4 * 1024, Memory: 30 * 1024},
 }
 
-func ddbItem(sess *session.Session, primaryID string, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
+func ddbItem(sess *session.Session, primaryID, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
 	ddbSvc := dynamodb.New(sess)
 	logrus.WithFields(logrus.Fields{"primaryID": primaryID, "secondaryID": secondaryID}).Debug("DynamoDB GetItem")
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
@@ -375,10 +369,8 @@ func (a *App) ValidateECSTaskSize(size ECSSizeConfiguration) error {
 				return nil
 			}
 		}
-	} else {
-		if size.CPU >= 128 && size.CPU <= 10240 {
-			return nil
-		}
+	} else if size.CPU >= 128 && size.CPU <= 10240 {
+		return nil
 	}
 	return fmt.Errorf("unsupported cpu/memory configuration -- see https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html")
 }
@@ -814,7 +806,7 @@ func (a *App) GetConfig() ([]*ssm.Parameter, error) {
 }
 
 // SetConfig sets a config value for the app
-func (a *App) SetConfig(key string, value string, overwrite bool) error {
+func (a *App) SetConfig(key, value string, overwrite bool) error {
 	parameterName := fmt.Sprintf("%s%s", a.ConfigPrefix(), key)
 	ssmSvc := ssm.New(a.Session)
 	_, err := ssmSvc.PutParameter(&ssm.PutParameterInput{
@@ -983,7 +975,7 @@ type Scaling struct {
 	MaxProcesses int `json:"max_processes"`
 }
 
-func (a *App) ResizeProcess(processType string, cpu int, memory int) error {
+func (a *App) ResizeProcess(processType string, cpu, memory int) error {
 	err := a.SetScaleParameter(processType, nil, nil, &cpu, &memory)
 	if err != nil {
 		return err
@@ -991,7 +983,7 @@ func (a *App) ResizeProcess(processType string, cpu int, memory int) error {
 	return nil
 }
 
-func (a *App) ScaleProcess(processType string, minProcessCount int, maxProcessCount int) error {
+func (a *App) ScaleProcess(processType string, minProcessCount, maxProcessCount int) error {
 	err := a.SetScaleParameter(processType, &minProcessCount, &maxProcessCount, nil, nil)
 	if err != nil {
 		return err
@@ -1001,7 +993,7 @@ func (a *App) ScaleProcess(processType string, minProcessCount int, maxProcessCo
 
 // SetScaleParameter updates process count and cpu/ram with any non-nil values provided
 // if it is not yet set, the defaults from ECSConfig will be used
-func (a *App) SetScaleParameter(processType string, minProcessCount *int, maxProcessCount *int, cpu *int, memory *int) error {
+func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessCount, cpu, memory *int) error {
 	ssmSvc := ssm.New(a.Session)
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
@@ -1010,10 +1002,8 @@ func (a *App) SetScaleParameter(processType string, minProcessCount *int, maxPro
 	var scaling map[string]*Scaling
 	if err != nil {
 		scaling = map[string]*Scaling{}
-	} else {
-		if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &scaling); err != nil {
-			return err
-		}
+	} else if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &scaling); err != nil {
+		return err
 	}
 	_, ok := scaling[processType]
 	if !ok {
@@ -1052,7 +1042,7 @@ func (a *App) SetScaleParameter(processType string, minProcessCount *int, maxPro
 	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Type:      aws.String("String"),
-		Value:     aws.String(fmt.Sprintf("%s", scalingJSON)),
+		Value:     aws.String(string(scalingJSON)),
 		Overwrite: aws.Bool(true),
 	})
 	if err != nil {
@@ -1076,16 +1066,14 @@ func (a *App) ScheduledTasks() ([]*ScheduledTask, error) {
 	var tasks []*ScheduledTask
 	if err != nil {
 		tasks = []*ScheduledTask{}
-	} else {
-		if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &tasks); err != nil {
-			return nil, err
-		}
+	} else if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &tasks); err != nil {
+		return nil, err
 	}
 	return tasks, nil
 }
 
 // CreateScheduledTask adds a scheduled task for the app
-func (a *App) CreateScheduledTask(schedule string, command string) ([]*ScheduledTask, error) {
+func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, error) {
 	if err := a.ValidateCronString(schedule); err != nil {
 		return nil, err
 	}
@@ -1105,10 +1093,13 @@ func (a *App) CreateScheduledTask(schedule string, command string) ([]*Scheduled
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
 	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
-		Value:     aws.String(fmt.Sprintf("%s", tasksBytes)),
+		Value:     aws.String(string(tasksBytes)),
 		Overwrite: aws.Bool(true),
 		Type:      aws.String("String"),
 	})
+	if err != nil {
+		return nil, err
+	}
 	return tasks, nil
 }
 
@@ -1131,10 +1122,13 @@ func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
 	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
-		Value:     aws.String(fmt.Sprintf("%s", tasksBytes)),
+		Value:     aws.String(string(tasksBytes)),
 		Overwrite: aws.Bool(true),
 		Type:      aws.String("String"),
 	})
+	if err != nil {
+		return nil, err
+	}
 	return taskToDelete, nil
 }
 

@@ -105,7 +105,7 @@ func (e *environ) Set(key, val string) {
 	*e = append(*e, key+"="+val)
 }
 
-func execCmd(command string, args []string, env []string) error {
+func execCmd(command string, args, env []string) error {
 	// log.Printf("Starting child process: %s %s", command, strings.Join(args, " "))
 
 	cmd := osexec.Command(command, args...)
@@ -142,7 +142,7 @@ func supportsExecSyscall() bool {
 	return runtime.GOOS == "linux" || runtime.GOOS == "darwin" || runtime.GOOS == "freebsd" || runtime.GOOS == "openbsd"
 }
 
-func execSyscall(command string, args []string, env []string) error {
+func execSyscall(command string, args, env []string) error {
 	// log.Printf("Exec command %s %s", command, strings.Join(args, " "))
 
 	argv0, err := osexec.LookPath(command)

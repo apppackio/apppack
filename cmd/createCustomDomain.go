@@ -29,7 +29,7 @@ import (
 )
 
 func customDomainStackName(domain string) string {
-	return fmt.Sprintf("apppack-customdomain-%s", strings.Replace(strings.TrimSuffix(domain, "."), ".", "-", -1))
+	return fmt.Sprintf("apppack-customdomain-%s", strings.ReplaceAll(strings.TrimSuffix(domain, "."), ".", "-"))
 }
 
 // appList gets a list of app names from DynamoDB

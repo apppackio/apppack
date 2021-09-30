@@ -107,7 +107,7 @@ func instanceNameWeight(name string) string {
 	return name
 }
 
-func listRDSInstanceClasses(sess *session.Session, engine *string, version *string) ([]string, error) {
+func listRDSInstanceClasses(sess *session.Session, engine, version *string) ([]string, error) {
 	rdsSvc := rds.New(sess)
 	var instanceClassResults []*rds.OrderableDBInstanceOption
 
