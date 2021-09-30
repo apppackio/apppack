@@ -202,7 +202,6 @@ jobs:
         run: |
           # destroy fails if replication group is not available
           ID="$(aws cloudformation describe-stacks --stack apppack-redis-apppack --output text --query Stacks[0].Outputs | grep Endpoint | cut -f2 -d.)"
-          sleep 10
           until [ "$(aws elasticache describe-replication-groups --replication-group-id $ID --query ReplicationGroups[0].Status --output text)" = "available" ]; do
             echo "waiting for replication group to become available..."
             sleep 10
