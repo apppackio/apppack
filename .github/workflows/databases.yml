@@ -218,7 +218,7 @@ jobs:
             # debugging stack deletion failures
             aws elasticache describe-replication-groups --replication-group-id $ID
             yes apppack-redis-apppack | ./bin/apppack destroy redis apppack \
-                          --region us-east-2; \
+                          --region us-east-2 || \
             aws elasticache describe-replication-groups --replication-group-id $ID
         if: always()
         timeout-minutes: 18
