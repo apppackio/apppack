@@ -134,10 +134,27 @@ var appsCmd = &cobra.Command{
 	},
 }
 
+// accountsCmd represents the accounts command
+var accountsCmd = &cobra.Command{
+	Use:                   "accounts",
+	Short:                 "list the accounts you have admin access to",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		accounts, err := auth.AccountList()
+		Spinner.Stop()
+		checkErr(err)
+		for _, account := range accounts {
+			fmt.Println(account.Alias, account.AccountID)
+		}
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(loginCmd)
 	authCmd.AddCommand(logoutCmd)
 	authCmd.AddCommand(whoAmICmd)
 	authCmd.AddCommand(appsCmd)
+	authCmd.AddCommand(accountsCmd)
 }

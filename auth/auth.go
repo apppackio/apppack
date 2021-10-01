@@ -22,16 +22,17 @@ import (
 )
 
 const (
-	auth0AppURL   = "https://auth.apppack.io"
-	deviceCodeURL = "https://auth.apppack.io/oauth/device/code"
-	oauthTokenURL = "https://auth.apppack.io/oauth/token"
-	userInfoURL   = "https://auth.apppack.io/userinfo"
-	appListURL    = "https://api.apppack.io/apps"
-	clientID      = "x15zAd2hgdbugNWSZz2mP2k5jcZfNFk3"
-	scope         = "openid profile email offline_access"
-	audience      = "https://paaws.lloop.us"
-	grantType     = "urn:ietf:params:oauth:grant-type:device_code"
-	cachePrefix   = "io.apppack"
+	auth0AppURL    = "https://auth.apppack.io"
+	deviceCodeURL  = "https://auth.apppack.io/oauth/device/code"
+	oauthTokenURL  = "https://auth.apppack.io/oauth/token"
+	userInfoURL    = "https://auth.apppack.io/userinfo"
+	appListURL     = "https://api.apppack.io/apps"
+	accountListURL = "https://api.apppack.io/accounts"
+	clientID       = "x15zAd2hgdbugNWSZz2mP2k5jcZfNFk3"
+	scope          = "openid profile email offline_access"
+	audience       = "https://paaws.lloop.us"
+	grantType      = "urn:ietf:params:oauth:grant-type:device_code"
+	cachePrefix    = "io.apppack"
 )
 
 type Tokens struct {
@@ -63,6 +64,12 @@ type AppRole struct {
 	AppName   string `json:"name"`
 	Region    string `json:"region"`
 	Pipeline  bool   `json:"pipeline"`
+}
+
+type AccountRole struct {
+	RoleARN   string `json:"role_arn"`
+	AccountID string `json:"account_id"`
+	Alias     string `json:"alias"`
 }
 
 func getAppRole(IDToken, name string) (*AppRole, error) {
@@ -265,6 +272,38 @@ func getAppListWithIDToken(IDToken string) ([]*AppRole, error) {
 	return appList, nil
 }
 
+func getAccountListWithIDToken(IDToken string) ([]*AccountRole, error) {
+	logrus.WithFields(logrus.Fields{"url": accountListURL}).Debug("fetching account list")
+	req, err := http.NewRequest("GET", accountListURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", IDToken))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		fmt.Println(string(contents))
+		return nil, fmt.Errorf("unable to retrieve account list. Status code %d", resp.StatusCode)
+
+	}
+	//err = writeToUserCache("apps", contents)
+	//if err != nil {
+	//	return err
+	//}
+	var accountList []*AccountRole
+
+	if err = json.Unmarshal(contents, &accountList); err != nil {
+		return nil, err
+	}
+	return accountList, nil
+}
+
 func verifyAuth() (*Tokens, *UserInfo, error) {
 	tokens, err := readTokensFromUserCache()
 	if err != nil {
@@ -409,6 +448,25 @@ func AppList() ([]*AppRole, error) {
 		}
 	}
 	return appList, err
+}
+
+func AccountList() ([]*AccountRole, error) {
+	tokens, _, err := verifyAuth()
+	if err != nil {
+		return nil, err
+	}
+	accountList, err := getAccountListWithIDToken(tokens.IDToken)
+	if err != nil {
+		tokens, err := refreshTokens()
+		if err != nil {
+			return nil, err
+		}
+		accountList, err = getAccountListWithIDToken(tokens.IDToken)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return accountList, err
 }
 
 func WhoAmI() (*string, error) {
