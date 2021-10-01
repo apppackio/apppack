@@ -690,11 +690,11 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 func (a *App) BuildStatus(build *codebuild.Build) (*BuildStatus, error) {
 	var pk string
 	if a.IsReviewApp() {
-		pk = fmt.Sprintf("APP#%s:%s#BUILD", a.Name, *a.ReviewApp)
+		pk = fmt.Sprintf("APP#%s:%s", a.Name, *a.ReviewApp)
 	} else {
-		pk = fmt.Sprintf("APP#%s#BUILD", a.Name)
+		pk = fmt.Sprintf("APP#%s", a.Name)
 	}
-	item, err := ddbItem(a.Session, pk, fmt.Sprintf("%010d", *build.BuildNumber))
+	item, err := ddbItem(a.Session, pk, fmt.Sprintf("BUILD#%010d", *build.BuildNumber))
 	if err != nil {
 		logrus.Debug(err)
 		return nil, fmt.Errorf("no status found for build #%d", *build.BuildNumber)
