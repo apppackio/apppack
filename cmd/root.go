@@ -38,6 +38,7 @@ const (
 
 // AppName is used to hold the `--app-name` flag
 var AppName string
+var UseAWSCredentials bool = false
 
 // Spinner is the loading animation to use for all commands
 var Spinner *spinner.Spinner = spinner.New(spinner.CharSets[14], 50*time.Millisecond)

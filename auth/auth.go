@@ -16,6 +16,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/sts"
 	awsconsoleurl "github.com/jkueh/go-aws-console-url"
 	"github.com/sirupsen/logrus"
@@ -58,11 +60,11 @@ type UserInfo struct {
 }
 
 type AppRole struct {
-	RoleARN   string `json:"role_arn"`
+	RoleARN   string `json:"role_arn" dynamodbav:"role_arn"`
 	AccountID string `json:"account_id"`
-	AppName   string `json:"name"`
-	Region    string `json:"region"`
-	Pipeline  bool   `json:"pipeline"`
+	AppName   string `json:"name" dynamodbav:"secondary_id"`
+	Region    string `json:"region" dynamodbav:"region"`
+	Pipeline  bool   `json:"pipeline" dynamodbav:"pipeline"`
 }
 
 func getAppRole(IDToken, name string) (*AppRole, error) {
@@ -336,6 +338,33 @@ func tokenRequest(url string, jsonData []byte) (*Tokens, error) {
 	}
 
 	return &tokens, nil
+}
+
+func AppRoleFromAWS(sess *session.Session, appName string) (*AppRole, error) {
+	stsSvc := sts.New(sess)
+	resp, err := stsSvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		return nil, err
+	}
+	accountID := resp.Account
+	ddbSvc := dynamodb.New(sess)
+	item, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
+		TableName: aws.String("apppack"),
+		Key: map[string]*dynamodb.AttributeValue{
+			"primary_id":   {S: aws.String(fmt.Sprintf("APP#%s", *accountID))},
+			"secondary_id": {S: &appName},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	a := AppRole{}
+	err = dynamodbattribute.UnmarshalMap(item.Item, &a)
+	if err != nil {
+		return nil, err
+	}
+	a.AccountID = *accountID
+	return &a, nil
 }
 
 func LoginComplete(deviceCode string) (*UserInfo, error) {

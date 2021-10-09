@@ -1150,7 +1150,7 @@ func (a *App) ValidateCronString(rule string) error {
 }
 
 // Init will pull in app settings from DyanmoDB and provide helper
-func Init(name string) (*App, error) {
+func Init(name string, awsCredentials bool) (*App, error) {
 	var reviewApp *string
 	if strings.Contains(name, ":") {
 		parts := strings.Split(name, ":")
@@ -1159,7 +1159,15 @@ func Init(name string) (*App, error) {
 	} else {
 		reviewApp = nil
 	}
-	sess, appRole, err := auth.AwsSession(name)
+	var sess *session.Session
+	var err error
+	var appRole *auth.AppRole
+	if awsCredentials {
+		sess = session.Must(session.NewSession())
+		appRole, err = auth.AppRoleFromAWS(sess, name)
+	} else {
+		sess, appRole, err = auth.AwsSession(name)
+	}
 	if err != nil {
 		return nil, err
 	}

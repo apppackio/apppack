@@ -69,7 +69,7 @@ var dbShellCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		family, exec, err := a.DBShellTaskInfo()
 		checkErr(err)
@@ -85,7 +85,7 @@ var dbDumpCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		app, err := app.Init(AppName)
+		app, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		err = app.LoadSettings()
 		checkErr(err)
@@ -164,7 +164,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 	Run: func(cmd *cobra.Command, args []string) {
 		var remoteFile string
 		startSpinner()
-		app, err := app.Init(AppName)
+		app, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		Spinner.Stop()
 		confirmAction("This will destroy any data that is currently in the database.", AppName)
@@ -219,6 +219,7 @@ func init() {
 
 	dbCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	dbCmd.MarkPersistentFlagRequired("app-name")
+	dbCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	dbCmd.AddCommand(dbShellCmd)
 	dbCmd.AddCommand(dbDumpCmd)
 	dbCmd.AddCommand(dbLoadCmd)

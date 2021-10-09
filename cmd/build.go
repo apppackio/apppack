@@ -584,7 +584,7 @@ var buildStartCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		build, err := a.StartBuild(false)
 		checkErr(err)
@@ -616,7 +616,7 @@ var buildWatchCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		build, err := a.LastBuild()
 		checkErr(err)
@@ -636,7 +636,7 @@ var buildListCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		builds, err := a.ListBuilds()
 		checkErr(err)
@@ -658,6 +658,7 @@ func init() {
 	rootCmd.AddCommand(buildCmd)
 	buildCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	buildCmd.MarkPersistentFlagRequired("app-name")
+	buildCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	buildCmd.AddCommand(buildStartCmd)
 	buildStartCmd.Flags().BoolVarP(&watchBuildFlag, "watch", "w", false, "watch build process")

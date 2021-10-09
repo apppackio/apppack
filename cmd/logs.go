@@ -54,7 +54,7 @@ var logsCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		err = a.LoadSettings()
 		checkErr(err)
@@ -92,7 +92,7 @@ var logsOpenCmd = &cobra.Command{
 	Long:                  `Generates a presigned URL and opens a web browser to Cloudwatch Insights in the AWS web console`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		a.LoadSettings()
 		checkErr(err)
@@ -116,6 +116,7 @@ func init() {
 	rootCmd.AddCommand(logsCmd)
 	logsCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	logsCmd.MarkPersistentFlagRequired("app-name")
+	logsCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	logsCmd.AddCommand(logsOpenCmd)
 	logsCmd.Flags().StringVar(&sawConfig.Prefix, "prefix", "", `log group prefix filter

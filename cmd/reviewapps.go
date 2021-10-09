@@ -52,7 +52,7 @@ var reviewappsCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(args[0])
+		a, err := app.Init(args[0], UseAWSCredentials)
 		checkErr(err)
 		reviewApps, err := a.GetReviewApps()
 		checkErr(err)
@@ -174,7 +174,7 @@ var reviewappsCreateCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(args[0])
+		a, err := app.Init(args[0], UseAWSCredentials)
 		checkErr(err)
 		if !a.IsReviewApp() { // TODO: validate
 			checkErr(fmt.Errorf("no pull request number set"))
@@ -233,7 +233,7 @@ var reviewappsDestroyCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(args[0])
+		a, err := app.Init(args[0], UseAWSCredentials)
 		checkErr(err)
 		if !a.IsReviewApp() { // TODO: validate
 			checkErr(fmt.Errorf("no pull request number set"))
@@ -250,6 +250,7 @@ var reviewappsDestroyCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(reviewappsCmd)
+	reviewappsCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	reviewappsCmd.AddCommand(reviewappsCreateCmd)
 	reviewappsCreateCmd.Flags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
 	upgradeCmd.PersistentFlags().MarkHidden("release")

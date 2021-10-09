@@ -181,7 +181,7 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		interactiveCmd(a, "bash -l")
 	},
@@ -190,6 +190,7 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 func init() {
 	rootCmd.AddCommand(shellCmd)
 	shellCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
+	shellCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	shellCmd.PersistentFlags().BoolVarP(&shellRoot, "root", "r", false, "open shell as root user")
 	shellCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
 	shellCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")

@@ -26,10 +26,10 @@ import (
 
 // openCmd represents the open command
 var openCmd = &cobra.Command{
-	Use:    "open",
-	Short:  "open the app in a browser",
+	Use:   "open",
+	Short: "open the app in a browser",
 	Run: func(cmd *cobra.Command, args []string) {
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		u, err := a.URL(nil)
 		checkErr(err)
@@ -42,4 +42,5 @@ func init() {
 	rootCmd.AddCommand(openCmd)
 	openCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	openCmd.MarkPersistentFlagRequired("app-name")
+	openCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 }

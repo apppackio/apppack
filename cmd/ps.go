@@ -72,7 +72,7 @@ var psCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		if a.Pipeline && !a.IsReviewApp() {
 			checkErr(fmt.Errorf("pipelines don't directly run processes"))
@@ -161,7 +161,7 @@ var psResizeCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		processType := args[0]
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		size, err := humanToECSSizeConfiguration(scaleCPU, scaleMemory)
 		checkErr(err)
@@ -192,7 +192,7 @@ apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 pr
 		minMaxProcs := strings.Split(args[1], "-")
 		minProcesses, err := strconv.Atoi(minMaxProcs[0])
 		checkErr(err)
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		if a.IsReviewApp() {
 			checkErr(fmt.Errorf("scaling is not supported for review apps"))
@@ -223,7 +223,7 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName)
+		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		interactiveCmd(a, strings.Join(args, " "))
 	},
@@ -236,6 +236,7 @@ func init() {
 	rootCmd.AddCommand(psCmd)
 	psCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	psCmd.MarkPersistentFlagRequired("app-name")
+	psCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	psCmd.AddCommand(psResizeCmd)
 	psResizeCmd.Flags().Float64Var(&scaleCPU, "cpu", 0.5, "CPU cores available for process")
