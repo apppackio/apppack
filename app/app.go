@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strconv"
@@ -133,101 +132,6 @@ type Process struct {
 	Command      string `json:"command"`
 }
 
-type BuildPhaseDetail struct {
-	Arns  []string `json:"arns"`
-	Logs  string   `json:"logs"`
-	Start int64    `json:"start"`
-	End   int64    `json:"end"`
-	State string   `json:"state"`
-}
-
-type BuildStatus struct {
-	AppName     string           `json:"app"`
-	BuildNumber int              `json:"build_number"`
-	PRNumber    string           `json:"pr_number"`
-	Commit      string           `json:"commit"`
-	Build       BuildPhaseDetail `json:"build"`
-	Test        BuildPhaseDetail `json:"test"`
-	Finalize    BuildPhaseDetail `json:"finalize"`
-	Release     BuildPhaseDetail `json:"release"`
-	Postdeploy  BuildPhaseDetail `json:"postdeploy"`
-	Deploy      BuildPhaseDetail `json:"deploy"`
-}
-
-type BuildPhase struct {
-	Name  string
-	Phase *BuildPhaseDetail
-}
-
-func (b *BuildStatus) NamedPhases() [6]BuildPhase {
-	return [6]BuildPhase{
-		{Name: "Build", Phase: &b.Build},
-		{Name: "Test", Phase: &b.Test},
-		{Name: "Finalize", Phase: &b.Finalize},
-		{Name: "Release", Phase: &b.Release},
-		{Name: "Postdeploy", Phase: &b.Postdeploy},
-		{Name: "Deploy", Phase: &b.Deploy},
-	}
-}
-
-func (b *BuildStatus) NamedPhasesReversed() [6]BuildPhase {
-	return [6]BuildPhase{
-		{Name: "Deploy", Phase: &b.Deploy},
-		{Name: "Postdeploy", Phase: &b.Postdeploy},
-		{Name: "Release", Phase: &b.Release},
-		{Name: "Finalize", Phase: &b.Finalize},
-		{Name: "Test", Phase: &b.Test},
-		{Name: "Build", Phase: &b.Build},
-	}
-}
-
-func (b *BuildStatus) CurrentPhase() *BuildPhase {
-	for _, p := range b.NamedPhases() {
-		if p.Phase.State == "started" {
-			return &p
-		}
-	}
-	return nil
-}
-
-// NextActivePhase finds the next phase which already ran or is in progress
-func (b *BuildStatus) NextActivePhase(lastPhase *BuildPhase) *BuildPhase {
-	found := false
-	for _, p := range b.NamedPhases() {
-		if found && p.Phase.Start != 0 {
-			return &p
-		}
-		if !found && p.Name == lastPhase.Name {
-			found = true
-		}
-	}
-	if b.Deploy.End != 0 {
-		return nil
-	}
-	return lastPhase
-}
-
-func (b *BuildStatus) FinalPhase() (*BuildPhase, error) {
-	for _, p := range b.NamedPhasesReversed() {
-		if p.Phase.State == "started" {
-			return nil, fmt.Errorf("%s phase is still running", p.Name)
-		}
-		if p.Phase.State == "succeeded" || p.Phase.State == "failed" {
-			return &p, nil
-		}
-	}
-	return nil, fmt.Errorf("no phases completed")
-}
-
-func (b *BuildStatus) FirstFailedPhase() *BuildPhase {
-	for _, p := range b.NamedPhases() {
-		if p.Phase.State == "failed" {
-			return &p
-		}
-	}
-	return nil
-}
-
 // locationName is the tag used by aws-sdk internally
 // we can use it to load specific AWS Input types from our JSON
 type ecsConfigItem struct {
@@ -298,51 +202,6 @@ var FargateSupportedConfigurations = []ECSSizeConfiguration{
 	{CPU: 4 * 1024, Memory: 28 * 1024},
 	{CPU: 4 * 1024, Memory: 29 * 1024},
 	{CPU: 4 * 1024, Memory: 30 * 1024},
-}
-
-func ddbItem(sess *session.Session, primaryID, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
-	ddbSvc := dynamodb.New(sess)
-	logrus.WithFields(logrus.Fields{"primaryID": primaryID, "secondaryID": secondaryID}).Debug("DynamoDB GetItem")
-	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id": {
-				S: aws.String(primaryID),
-			},
-			"secondary_id": {
-				S: aws.String(secondaryID),
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.Item == nil {
-		return nil, fmt.Errorf("could not find DDB item %s %s", primaryID, secondaryID)
-	}
-	return &result.Item, nil
-}
-
-func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error) {
-	ssmSvc := ssm.New(sess)
-	var parameters []*ssm.Parameter
-	input := ssm.GetParametersByPathInput{
-		Path:           &path,
-		WithDecryption: aws.Bool(true),
-	}
-	err := ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
-		for _, parameter := range resp.Parameters {
-			if parameter == nil {
-				continue
-			}
-			parameters = append(parameters, parameter)
-		}
-		return !lastPage
-	})
-	if err != nil {
-		return nil, err
-	}
-	return parameters, nil
 }
 
 func (a *App) IsReviewApp() bool {
@@ -455,7 +314,15 @@ func (a *App) GetReviewApps() ([]*ReviewApp, error) {
 }
 
 func (a *App) ddbItem(key string) (*map[string]*dynamodb.AttributeValue, error) {
-	return ddbItem(a.Session, fmt.Sprintf("APP#%s", a.Name), key)
+	if !a.IsReviewApp() {
+		return ddbItem(a.Session, fmt.Sprintf("APP#%s", a.Name), key)
+	}
+	// TODO: move DEPLOYSTATUS to standard review app location
+	if strings.HasPrefix(key, "CONFIG") || key == "settings" || strings.HasPrefix(key, "DEPLOYSTATUS") {
+		return ddbItem(a.Session, fmt.Sprintf("APP#%s", a.Name), key)
+	}
+	// review apps are at APP#{appname}:{pr}
+	return ddbItem(a.Session, fmt.Sprintf("APP#%s:%s", a.Name, *a.ReviewApp), key)
 }
 
 // LoadECSConfig will set the app.ECSConfig value from DDB
@@ -686,108 +553,63 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 	return build.Build, err
 }
 
-// BuildStatus checks the status of a CodeBuild run
-func (a *App) BuildStatus(build *codebuild.Build) (*BuildStatus, error) {
-	var pk string
-	if a.IsReviewApp() {
-		pk = fmt.Sprintf("APP#%s:%s", a.Name, *a.ReviewApp)
-	} else {
-		pk = fmt.Sprintf("APP#%s", a.Name)
-	}
-	item, err := ddbItem(a.Session, pk, fmt.Sprintf("BUILD#%010d", *build.BuildNumber))
-	if err != nil {
-		logrus.Debug(err)
-		return nil, fmt.Errorf("no status found for build #%d", *build.BuildNumber)
-	}
-	i := BuildStatus{}
-
-	err = dynamodbattribute.UnmarshalMap(*item, &i)
-	if err != nil {
-		return nil, err
-	}
-	return &i, nil
-}
-
 // ListBuilds lists recent CodeBuild runs
-func (a *App) ListBuilds() ([]*codebuild.Build, error) {
-	codebuildSvc := codebuild.New(a.Session)
-	err := a.LoadSettings()
-	if err != nil {
-		return nil, err
+func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
+	ddbSvc := dynamodb.New(a.Session)
+	primaryID := fmt.Sprintf("APP#%s", a.Name)
+	if a.IsReviewApp() {
+		primaryID = fmt.Sprintf("%s:%s", primaryID, *a.ReviewApp)
 	}
-	buildList, err := codebuildSvc.ListBuildsForProject(&codebuild.ListBuildsForProjectInput{
-		ProjectName: &a.Settings.CodebuildProject.Name,
+	logrus.WithFields(logrus.Fields{"count": count}).Debug("fetching build list from DDB")
+	ddbResp, err := ddbSvc.Query(&dynamodb.QueryInput{
+		TableName:              aws.String("apppack"),
+		KeyConditionExpression: aws.String("primary_id = :id1  AND begins_with(secondary_id,:id2)"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":id1": {S: &primaryID},
+			":id2": {S: aws.String("BUILD#")},
+		},
+
+		Limit:            aws.Int64(int64(count)),
+		ScanIndexForward: aws.Bool(false),
 	})
 	if err != nil {
 		return nil, err
 	}
-	builds, err := codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
-		Ids: buildList.Ids,
-	})
+	if ddbResp.Items == nil {
+		return nil, fmt.Errorf("could not find any builds")
+	}
+	i := []BuildStatus{}
+	err = dynamodbattribute.UnmarshalListOfMaps(ddbResp.Items, &i)
 	if err != nil {
 		return nil, err
 	}
-	return builds.Builds, nil
+	return i, nil
 }
 
-// LastBuild retrieves the most recent build
-func (a *App) LastBuild() (*codebuild.Build, error) {
-	codebuildSvc := codebuild.New(a.Session)
-	err := a.LoadSettings()
-	if err != nil {
-		return nil, err
-	}
-	buildList, err := codebuildSvc.ListBuildsForProject(&codebuild.ListBuildsForProjectInput{
-		ProjectName: &a.Settings.CodebuildProject.Name,
-		SortOrder:   aws.String("DESCENDING"),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(buildList.Ids) == 0 {
-		return nil, fmt.Errorf("no builds have started for %s", a.Name)
-	}
-	var builds *codebuild.BatchGetBuildsOutput
-	if a.IsReviewApp() {
-		builds, err = codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
-			Ids: buildList.Ids,
-		})
+// GetBuildStatus retrieves a build from the buildNumber
+// if buildNumber is -1, the most recent build will be retrieved
+func (a *App) GetBuildStatus(buildNumber int) (*BuildStatus, error) {
+	var build BuildStatus
+	if buildNumber == -1 {
+		builds, err := a.RecentBuilds(1)
 		if err != nil {
 			return nil, err
 		}
-		for _, b := range builds.Builds {
-			if *b.SourceVersion == fmt.Sprintf("pr/%s", *a.ReviewApp) {
-				return b, nil
-			}
+		build = builds[0]
+	} else {
+		item, err := a.ddbItem(fmt.Sprintf("BUILD#%010d", buildNumber))
+		if err != nil {
+			return nil, err
 		}
-		return nil, fmt.Errorf("no recent builds found for pr/%s", *a.ReviewApp)
+		err = dynamodbattribute.UnmarshalMap(*item, &build)
+		if err != nil {
+			return nil, err
+		}
+		if len(build.Build.Arns) == 0 {
+			return nil, fmt.Errorf("build has not started yet -- try again in a few seconds")
+		}
 	}
-	builds, err = codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
-		Ids: buildList.Ids[0:1],
-	})
-	if err != nil {
-		return nil, err
-	}
-	return builds.Builds[0], nil
-}
-
-// GetBuildArtifact retrieves an artifact stored in S3
-func (a *App) GetBuildArtifact(build *codebuild.Build, name string) ([]byte, error) {
-	artifactArn := build.Artifacts.Location
-	if artifactArn == nil {
-		return []byte{}, nil
-	}
-	s3Path := strings.Join(strings.Split(*artifactArn, ":")[5:], ":")
-	pathParts := strings.Split(s3Path, "/")
-	s3Svc := s3.New(a.Session)
-	obj, err := s3Svc.GetObject(&s3.GetObjectInput{
-		Bucket: &pathParts[0],
-		Key:    aws.String(strings.Join(append(pathParts[1:], name), "/")),
-	})
-	if err != nil {
-		return []byte{}, err
-	}
-	return ioutil.ReadAll(obj.Body)
+	return &build, nil
 }
 
 // ConfigPrefix returns the SSM Parameter Store prefix for config variables

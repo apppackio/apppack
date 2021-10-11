@@ -219,7 +219,9 @@ var reviewappsCreateCmd = &cobra.Command{
 		startSpinner()
 		build, err := a.StartBuild(true)
 		checkErr(err)
-		err = watchBuild(a, build)
+		buildStatus, err := pollBuildStatus(a, int(*build.BuildNumber), 10)
+		checkErr(err)
+		err = watchBuild(a, buildStatus)
 		checkErr(err)
 		Spinner.Stop()
 	},
