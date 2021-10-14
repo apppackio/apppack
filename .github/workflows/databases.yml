@@ -183,6 +183,9 @@ jobs:
     needs: ["init"]
     steps:
       -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
         uses: actions/download-artifact@master
         with:
           name: apppack
@@ -216,10 +219,11 @@ jobs:
         run: |
             ID="$(aws cloudformation describe-stacks --stack apppack-redis-apppack --output text --query Stacks[0].Outputs | grep Endpoint | cut -f2 -d.)"
             # debugging stack deletion failures
-            aws elasticache describe-replication-groups --replication-group-id $ID
+            ./.github/workflows/redis_status.sh $ID &
+            PID=$!
             yes apppack-redis-apppack | ./bin/apppack destroy redis apppack \
-                          --region us-east-2 || \
-            aws elasticache describe-replication-groups --replication-group-id $ID
+                          --region us-east-2
+            kill $PID
         if: always()
         timeout-minutes: 18
         env:
