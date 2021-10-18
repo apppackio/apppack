@@ -170,7 +170,7 @@ func getLatestRdsVersion(sess *session.Session, engine *string) (*string, error)
 var createDatabaseCmd = &cobra.Command{
 	Use:                   "database [<name>]",
 	Short:                 "setup resources for an AppPack Database",
-	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Database. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
+	Long:                  "*Requires admin permissions.*\nCreates an AppPack Database. If a `<name>` is not provided, the default name, `apppack` will be used.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -180,7 +180,7 @@ var createDatabaseCmd = &cobra.Command{
 		} else {
 			name = args[0]
 		}
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		var engine *string
 		var isAurora bool

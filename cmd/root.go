@@ -36,8 +36,11 @@ const (
 	timeFmt = "Jan 02, 2006 15:04:05 -0700"
 )
 
-// AppName is used to hold the `--app-name` flag
+// AppName is the `--app-name` flag
 var AppName string
+
+// AccountIDorAlias is the `--account` flag
+var AccountIDorAlias string
 var UseAWSCredentials bool = false
 
 // Spinner is the loading animation to use for all commands

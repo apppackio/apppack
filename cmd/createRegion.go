@@ -29,10 +29,10 @@ import (
 var createRegionCmd = &cobra.Command{
 	Use:                   "region",
 	Short:                 "setup AppPack resources for an AWS region",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		questions := []*survey.Question{}
 		answers := make(map[string]interface{})
@@ -85,8 +85,5 @@ func init() {
 	createCmd.AddCommand(createRegionCmd)
 	// All flags need to be added to `initCmd` as well so it can call this cmd
 	createRegionCmd.Flags().StringP("dockerhub-username", "u", "", "Docker Hub username")
-	initCmd.Flags().StringP("dockerhub-username", "u", "", "Docker Hub username")
 	createRegionCmd.Flags().StringP("dockerhub-access-token", "t", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
-	initCmd.Flags().StringP("dockerhub-access-token", "t", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
-
 }

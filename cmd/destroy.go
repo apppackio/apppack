@@ -125,10 +125,10 @@ var destroyCmd = &cobra.Command{
 var destroyAccountCmd = &cobra.Command{
 	Use:                   "account",
 	Short:                 "destroy AWS resources used by your AppPack account",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		stackName := "apppack-account"
 		cfnSvc := cloudformation.New(sess)
@@ -144,10 +144,10 @@ var destroyAccountCmd = &cobra.Command{
 var destroyRegionCmd = &cobra.Command{
 	Use:                   "region",
 	Short:                 "destroy AWS resources used by an AppPack region",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		stackName := fmt.Sprintf("apppack-region-%s", *sess.Config.Region)
 		ssmSvc := ssm.New(sess)
@@ -170,12 +170,12 @@ var destroyRegionCmd = &cobra.Command{
 var destroyRedisCmd = &cobra.Command{
 	Use:                   "redis <name>",
 	Short:                 "destroy AWS resources used by an AppPack Redis instance",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		stackName := fmt.Sprintf(redisStackNameTmpl, args[0])
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		cfnSvc := cloudformation.New(sess)
@@ -197,12 +197,12 @@ var destroyRedisCmd = &cobra.Command{
 var destroyDatabaseCmd = &cobra.Command{
 	Use:                   "database <name>",
 	Short:                 "destroy AWS resources used by an AppPack Database",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf(databaseStackNameTmpl, args[0])
@@ -222,12 +222,12 @@ var destroyDatabaseCmd = &cobra.Command{
 var destroyClusterCmd = &cobra.Command{
 	Use:                   "cluster <name>",
 	Short:                 "destroy AWS resources used by the AppPack Cluster",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clusterName := args[0]
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("cluster %s", clusterName)
@@ -246,12 +246,12 @@ var destroyClusterCmd = &cobra.Command{
 var destroyAppCmd = &cobra.Command{
 	Use:                   "app <name>",
 	Short:                 "destroy AWS resources used by the AppPack app",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		appName := args[0]
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("app %s", appName)
@@ -266,12 +266,12 @@ var destroyAppCmd = &cobra.Command{
 var destroyPipelineCmd = &cobra.Command{
 	Use:                   "pipeline <name>",
 	Short:                 "destroy AWS resources used by the AppPack pipeline",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		pipelineName := args[0]
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("pipeline %s", pipelineName)
@@ -286,13 +286,13 @@ var destroyPipelineCmd = &cobra.Command{
 var destroyCustomDomainCmd = &cobra.Command{
 	Use:                   "custom-domain <domain>",
 	Short:                 "destroy AWS resources used by the custom domain",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		primaryDomain := args[0]
 		friendlyName := fmt.Sprintf("%s domain", primaryDomain)
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stack, err := confirmDeleteStack(cfnSvc, customDomainStackName(primaryDomain), friendlyName)
@@ -304,6 +304,8 @@ var destroyCustomDomainCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(destroyCmd)
+	destroyCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+	destroyCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	destroyCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to destroy resources in")
 
 	destroyCmd.AddCommand(destroyAccountCmd)

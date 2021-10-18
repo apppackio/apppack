@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -69,7 +70,6 @@ func indexOf(arr []string, item string) int {
 	return -1
 }
 
-
 func appOrPipelineStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
 	stackName := appStackName(AppName)
@@ -93,6 +93,24 @@ func appOrPipelineStack(sess *session.Session, name string) (*cloudformation.Sta
 	return nil, err
 }
 
+func adminSession() (*session.Session, error) {
+	if UseAWSCredentials {
+		if region != "" {
+			return session.NewSession(&aws.Config{Region: &region})
+		}
+		sess, err := session.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		if *sess.Config.Region == "" {
+			return nil, fmt.Errorf("no region provided. Use the `--region` flag or set the AWS_REGION environment")
+		}
+		return sess, nil
+	}
+	sess, _, err := auth.AdminAWSSession(AccountIDorAlias)
+	return sess, err
+}
+
 // accessCmd represents the access command
 var accessCmd = &cobra.Command{
 	Use:                   "access",
@@ -100,7 +118,8 @@ var accessCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess, err := awsSession()
+		var err error
+		sess, err := adminSession()
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
@@ -119,7 +138,7 @@ var accessCmd = &cobra.Command{
 var accessAddCmd = &cobra.Command{
 	Use:                   "add <email>",
 	Short:                 "add access for a user to the app",
-	Long:                  "*Requires AWS credentials.*\nUpdates the application Cloudformation stack to add access for the user.",
+	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to add access for the user.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -128,7 +147,7 @@ var accessAddCmd = &cobra.Command{
 			checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
 		}
 		startSpinner()
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
@@ -153,13 +172,13 @@ var accessAddCmd = &cobra.Command{
 var accessRemoveCmd = &cobra.Command{
 	Use:                   "remove <email>",
 	Short:                 "remove access for a user to the app",
-	Long:                  "*Requires AWS credentials.*\nUpdates the application Cloudformation stack to remove access for the user.",
+	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to remove access for the user.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		email := args[0]
 		startSpinner()
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
@@ -190,6 +209,8 @@ func init() {
 
 	accessCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	accessCmd.MarkPersistentFlagRequired("app-name")
+	accessCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+	accessCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	accessCmd.AddCommand(accessAddCmd)
 	accessAddCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region of app")

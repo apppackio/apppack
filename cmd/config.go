@@ -22,7 +22,8 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
-	"text/tabwriter"
+
+	"github.com/juju/ansiterm/tabwriter"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"

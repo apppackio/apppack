@@ -110,7 +110,7 @@ func instanceTypeNames(sess *session.Session) ([]string, error) {
 var createClusterCmd = &cobra.Command{
 	Use:                   "cluster [<name>]",
 	Short:                 "setup resources for an AppPack Cluster",
-	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
+	Long:                  "*Requires admin permissions.*\nCreates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -124,7 +124,7 @@ var createClusterCmd = &cobra.Command{
 		answers := make(map[string]interface{})
 		addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
 		startSpinner()
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		_, err = stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
 		if err == nil {
@@ -207,11 +207,7 @@ func init() {
 	createCmd.AddCommand(createClusterCmd)
 	// All flags need to be added to `initCmd` as well so it can call this cmd
 	createClusterCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
-	initCmd.Flags().StringP("domain", "d", "", "parent domain for apps in the cluster")
 	createClusterCmd.Flags().BoolP("ec2", "e", false, "setup cluster with EC2 instances")
-	initCmd.Flags().BoolP("ec2", "e", false, "setup cluster with EC2 instances")
 	createClusterCmd.Flags().StringP("instance-class", "i", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
-	initCmd.Flags().StringP("instance-class", "i", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 	createClusterCmd.Flags().StringP("cidr", "c", "10.100.0.0/16", "network CIDR for VPC")
-	initCmd.Flags().StringP("cidr", "c", "10.100.0.0/16", "network CIDR for VPC")
 }
