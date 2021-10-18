@@ -72,7 +72,7 @@ func indexOf(arr []string, item string) int {
 
 func appOrPipelineStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
-	stackName := appStackName(AppName)
+	stackName := appStackName(name)
 	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: &stackName,
 	})
@@ -81,7 +81,7 @@ func appOrPipelineStack(sess *session.Session, name string) (*cloudformation.Sta
 	}
 	if aerr, ok := err.(awserr.Error); ok {
 		if aerr.Code() == "ValidationError" {
-			stackName = pipelineStackName(AppName)
+			stackName = pipelineStackName(name)
 			stackOutput, err = cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 				StackName: &stackName,
 			})

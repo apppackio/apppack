@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -93,7 +92,7 @@ func (o *OauthConfig) TokenRequest(jsonData []byte) (*Tokens, error) {
 	}
 	var tokens Tokens
 	if err = json.Unmarshal(contents, &tokens); err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 	return &tokens, nil
 }

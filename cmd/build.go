@@ -54,7 +54,7 @@ func indent(text, indent string) string {
 	return result[:len(result)-1]
 }
 
-func printBuild(sess *session.Session, buildStatus *app.BuildStatus) error {
+func printBuild(buildStatus *app.BuildStatus) error {
 	icon := map[string]aurora.Value{
 		app.PhaseInProgress: aurora.Faint(aurora.Blue("ℹ")),
 		app.PhaseSuccess:    aurora.Green("✔"),
@@ -603,7 +603,7 @@ var buildStartCmd = &cobra.Command{
 		buildStatus, err := pollBuildStatus(a, int(*build.BuildNumber), 10)
 		checkErr(err)
 		Spinner.Stop()
-		checkErr(printBuild(a.Session, buildStatus))
+		checkErr(printBuild(buildStatus))
 		if watchBuildFlag {
 			checkErr(watchBuild(a, buildStatus))
 		}
@@ -641,7 +641,7 @@ var buildWatchCmd = &cobra.Command{
 		}
 		checkErr(err)
 		Spinner.Stop()
-		checkErr(printBuild(a.Session, build))
+		checkErr(printBuild(build))
 		checkErr(printCommitLog(a.Session, build))
 		checkErr(watchBuild(a, build))
 	},
@@ -660,7 +660,7 @@ var buildListCmd = &cobra.Command{
 		checkErr(err)
 		Spinner.Stop()
 		for _, build := range builds {
-			checkErr(printBuild(a.Session, &build))
+			checkErr(printBuild(&build))
 			checkErr(printCommitLog(a.Session, &build))
 		}
 	},
