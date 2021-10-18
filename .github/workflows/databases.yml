@@ -72,7 +72,7 @@ jobs:
             yes apppack-database-standard-mysql | ./bin/apppack destroy database standard-mysql \
                           --region us-east-2
         if: always()
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -106,7 +106,7 @@ jobs:
             yes apppack-database-standard-postgres | ./bin/apppack destroy database standard-postgres \
                           --region us-east-2
         if: always()
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -141,7 +141,7 @@ jobs:
             yes apppack-database-aurora-mysql | ./bin/apppack destroy database aurora-mysql \
                           --region us-east-2
         if: always()
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -174,7 +174,7 @@ jobs:
             yes apppack-database-aurora-postgres | ./bin/apppack destroy database aurora-postgres \
                           --region us-east-2
         if: always()
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
