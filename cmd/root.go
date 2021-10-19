@@ -18,8 +18,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/apppackio/apppack/auth"
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
@@ -90,7 +92,15 @@ func checkErr(err error) {
 		return
 	}
 	Spinner.Stop()
-	printError(fmt.Sprintf("%v", err))
+	if strings.HasPrefix(err.Error(), auth.TokenRefreshErr) {
+		fmt.Println(
+			aurora.Yellow(fmt.Sprintf("⚠  %s", auth.TokenRefreshErr)),
+			aurora.Faint(strings.TrimPrefix(err.Error(), fmt.Sprintf("%s: ", auth.TokenRefreshErr))),
+		)
+		fmt.Printf("%s Reauthenticate this device by running: %s\n", aurora.Blue("ℹ"), aurora.White("apppack auth login"))
+	} else {
+		printError(err.Error())
+	}
 	os.Exit(1)
 }
 

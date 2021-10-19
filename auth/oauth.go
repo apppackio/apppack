@@ -15,6 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const TokenRefreshErr = "unable to refresh auth token"
+
 type DeviceCodeResp struct {
 	DeviceCode              string `json:"device_code"`
 	ExpiresIn               int    `json:"expires_in"`
@@ -193,7 +195,7 @@ func GetTokens() (*Tokens, error) {
 	}
 	tokens, err = Oauth.RefreshTokens(tokens)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %s", TokenRefreshErr, err)
 	}
 	if err = tokens.WriteToCache(); err != nil {
 		return nil, err
