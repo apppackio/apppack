@@ -52,6 +52,7 @@ const (
 	databaseFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/database.json"
 	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
 	customDomainFormationURL    = "https://s3.amazonaws.com/apppack-cloudformations/latest/custom-domain.json"
+	accountStackName            = "apppack-account"
 	redisStackNameTmpl          = "apppack-redis-%s"
 	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token"
 	databaseStackNameTmpl       = "apppack-database-%s"
