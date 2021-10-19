@@ -1006,7 +1006,7 @@ func init() {
 
 	createCmd.AddCommand(appCmd)
 	appCmd.Flags().SortFlags = false
-	appCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
+	appCmd.Flags().String("cluster", "apppack", "Cluster name")
 	appCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")
 	appCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	appCmd.Flags().StringP("branch", "b", "", "branch to setup for continuous deployment")
@@ -1025,7 +1025,7 @@ func init() {
 
 	createCmd.AddCommand(pipelineCmd)
 	pipelineCmd.Flags().SortFlags = false
-	pipelineCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
+	pipelineCmd.Flags().String("cluster", "apppack", "Cluster name")
 	pipelineCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")
 	pipelineCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	pipelineCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
@@ -1041,8 +1041,8 @@ func init() {
 	pipelineCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
 
 	createCmd.AddCommand(createRedisCmd)
-	createRedisCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
-	createRedisCmd.Flags().StringP("instance-class", "i", "cache.t3.micro", "instance class -- see https://aws.amazon.com/elasticache/pricing/#On-Demand_Nodes")
+	createRedisCmd.Flags().String("cluster", "apppack", "cluster name")
+	createRedisCmd.Flags().String("instance-class", "cache.t3.micro", "instance class -- see https://aws.amazon.com/elasticache/pricing/#On-Demand_Nodes")
 	createRedisCmd.Flags().Bool("multi-az", false, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html")
 
 }
