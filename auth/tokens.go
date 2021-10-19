@@ -185,6 +185,13 @@ func (t *Tokens) GetAdminRole(idOrAlias string) (*AdminRole, error) {
 	if err != nil {
 		return nil, err
 	}
+	// allow users to skip specifying a role if there is only one
+	if idOrAlias == "" {
+		if len(adminRoles) == 1 {
+			return adminRoles[0], nil
+		}
+		return nil, fmt.Errorf("no account ID or alias specified")
+	}
 	var found *AdminRole
 	for _, a := range adminRoles {
 		if a.AccountID == idOrAlias || a.AccountAlias == idOrAlias {
