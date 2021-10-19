@@ -41,13 +41,16 @@ func Login() *auth.UserInfo {
 	deviceCode, err := auth.Oauth.GetDeviceCode()
 	checkErr(err)
 	fmt.Println("Your verification code is", deviceCode.UserCode)
+	fmt.Println("Finish authentication in your web browser...")
 	err = browser.OpenURL(deviceCode.VerificationURIComplete)
 	if err != nil {
 		fmt.Println("URL:", aurora.White(deviceCode.VerificationURIComplete).String())
 	}
-	pauseUntilEnter("Finish verification in your web browser then press ENTER to continue.")
-	tokens, err := auth.Oauth.GetTokenWithDeviceCode(deviceCode.DeviceCode)
+	startSpinner()
+	Spinner.Suffix = " waiting for verification"
+	tokens, err := auth.Oauth.PollForToken(deviceCode)
 	checkErr(err)
+	Spinner.Stop()
 	checkErr(tokens.WriteToCache())
 	userInfo, err := tokens.GetUserInfo()
 	checkErr(err)

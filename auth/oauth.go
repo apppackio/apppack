@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -21,6 +22,12 @@ type DeviceCodeResp struct {
 	VerificationURI         string `json:"verification_uri"`
 	Interval                int    `json:"interval"`
 	VerificationURIComplete string `json:"verification_uri_complete"`
+}
+
+// OauthError handles errors from the Auth0 token endpoint
+type OauthError struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
 }
 
 type OauthConfig struct {
@@ -97,44 +104,31 @@ func (o *OauthConfig) TokenRequest(jsonData []byte) (*Tokens, error) {
 	return &tokens, nil
 }
 
-// func PollToken(pollURL string, clientID string, code *CodeResponse) (*api.AccessToken, error) {
-// 	timeNow := code.timeNow
-// 	if timeNow == nil {
-// 		timeNow = time.Now
-// 	}
-// 	timeSleep := code.timeSleep
-// 	if timeSleep == nil {
-// 		timeSleep = time.Sleep
-// 	}
+func (o *OauthConfig) PollForToken(code *DeviceCodeResp) (*Tokens, error) {
+	checkInterval := time.Duration(code.Interval) * time.Second
+	expiresAt := time.Now().Add(time.Duration(code.ExpiresIn) * time.Second)
 
-// 	checkInterval := time.Duration(code.Interval) * time.Second
-// 	expiresAt := timeNow().Add(time.Duration(code.ExpiresIn) * time.Second)
+	for {
+		time.Sleep(checkInterval)
 
-// 	for {
-// 		timeSleep(checkInterval)
+		token, err := o.GetTokenWithDeviceCode(code.DeviceCode)
+		if err == nil {
+			return token, nil
+		}
+		// "authorization_pending" is the only error that we accept
+		var authError OauthError
+		if json.Unmarshal([]byte(err.Error()), &authError) != nil {
+			return nil, err
+		}
+		if authError.Error != "authorization_pending" {
+			return nil, err
+		}
 
-// 		resp, err := api.PostForm(c, pollURL, url.Values{
-// 			"client_id":   {clientID},
-// 			"device_code": {code.DeviceCode},
-// 			"grant_type":  {grantType},
-// 		})
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		var apiError *api.Error
-// 		token, err := resp.AccessToken()
-// 		if err == nil {
-// 			return token, nil
-// 		} else if !(errors.As(err, &apiError) && apiError.Code == "authorization_pending") {
-// 			return nil, err
-// 		}
-
-// 		if timeNow().After(expiresAt) {
-// 			return nil, ErrTimeout
-// 		}
-// 	}
-// }
+		if time.Now().After(expiresAt) {
+			return nil, fmt.Errorf("device code expired -- try logging in again")
+		}
+	}
+}
 
 func readCacheFile(name string) ([]byte, error) {
 	dir, err := os.UserCacheDir()
