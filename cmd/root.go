@@ -118,7 +118,7 @@ func printWarning(text string) {
 
 func confirmAction(message, text string) {
 	printWarning(fmt.Sprintf("%s\n   Are you sure you want to continue?", message))
-	fmt.Printf("\nType %s to confirm.\n%s ", aurora.Faint(text), aurora.White(">"))
+	fmt.Printf("\nType %s to confirm.\n%s ", aurora.White(text), aurora.White(">"))
 	var confirm string
 	fmt.Scanln(&confirm)
 	if confirm != text {

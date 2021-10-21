@@ -164,8 +164,10 @@ var accountsCmd = &cobra.Command{
 		fmt.Printf("%s %s\n", aurora.Faint("==="), aurora.White("Accounts"))
 		w := new(tabwriter.Writer)
 		// minwidth, tabwidth, padding, padchar, flags
-		w.Init(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
-		fmt.Fprintf(w, "%s\t%s\t%s\n", aurora.Underline("Alias"), aurora.Underline("ID"), aurora.Underline("Default Region"))
+		w.Init(os.Stdout, 0, 8, 1, '\t', 0)
+		//fmt.Fprintf(w, "%s\t%s\t%s\n", aurora.Underline("Alias"), aurora.Underline("ID"), aurora.Underline("Default Region"))
+		fmt.Fprintln(w, "Alias\tID\tDefault Region")
+		fmt.Fprintln(w, "-----\t--\t--------------")
 		var alias string
 		for _, admin := range admins {
 			if admin.AccountAlias == "" {
