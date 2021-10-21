@@ -28,6 +28,7 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/codebuild"
@@ -185,6 +186,26 @@ func retryStackCreation(cfnSvc *cloudformation.CloudFormation, stackID *string, 
 
 func cloudformationStackURL(region, stackID *string) string {
 	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
+}
+
+// stackExists checks if a named Cfn Stack already exists in the region
+func stackExists(sess *session.Session, stackName string) (*bool, error) {
+	cfnSvc := cloudformation.New(sess)
+	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+		StackName: &stackName,
+	})
+	var exists bool
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == "ValidationError" {
+				exists = false
+				return &exists, nil
+			}
+		}
+		return nil, err
+	}
+	exists = len(stackOutput.Stacks) > 0 && *stackOutput.Stacks[0].StackStatus != cloudformation.StackStatusDeleteComplete
+	return &exists, nil
 }
 
 type stackItem struct {

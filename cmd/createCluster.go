@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
@@ -120,12 +121,29 @@ var createClusterCmd = &cobra.Command{
 		} else {
 			clusterName = args[0]
 		}
-		questions := []*survey.Question{}
-		answers := make(map[string]interface{})
-		addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
 		startSpinner()
 		sess, err := adminSession()
 		checkErr(err)
+		regionExists, err := stackExists(sess, fmt.Sprintf("apppack-region-%s", *sess.Config.Region))
+		checkErr(err)
+		if !*regionExists {
+			Spinner.Stop()
+			fmt.Println(aurora.Blue(fmt.Sprintf("ℹ %s region is not initialized", *sess.Config.Region)))
+			fmt.Printf("If this is your first cluster or you want to setup up a new region, type '%s' to continue.\n", aurora.White("yes"))
+			fmt.Print(aurora.White(fmt.Sprintf("Create cluster in %s region? ", *sess.Config.Region)).String())
+			var confirm string
+			fmt.Scanln(&confirm)
+			if confirm != "yes" {
+				checkErr(fmt.Errorf("aborting due to user input"))
+			}
+			fmt.Printf("running %s...\n", aurora.White("apppack create region"))
+			createRegionCmd.Run(cmd, []string{})
+			fmt.Println("")
+		}
+		questions := []*survey.Question{}
+		answers := make(map[string]interface{})
+		addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
+
 		_, err = stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
 		if err == nil {
 			checkErr(fmt.Errorf("cluster %s already exists", clusterName))
@@ -205,9 +223,13 @@ var createClusterCmd = &cobra.Command{
 
 func init() {
 	createCmd.AddCommand(createClusterCmd)
-	// All flags need to be added to `initCmd` as well so it can call this cmd
-	createClusterCmd.Flags().String("domain", "", "parent domain for apps in the cluster")
+	createClusterCmd.Flags().String("domain", "", "cluster domain name")
 	createClusterCmd.Flags().Bool("ec2", false, "setup cluster with EC2 instances")
 	createClusterCmd.Flags().String("instance-class", "", "autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
 	createClusterCmd.Flags().String("cidr", "10.100.0.0/16", "network CIDR for VPC")
+	// from createRegion
+	createClusterCmd.Flags().String("dockerhub-username", "", "Docker Hub username")
+	createClusterCmd.Flags().String("dockerhub-access-token", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
+	createClusterCmd.Flags().MarkHidden("dockerhub-username")
+	createClusterCmd.Flags().MarkHidden("dockerhub-access-token")
 }
