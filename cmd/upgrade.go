@@ -69,7 +69,7 @@ func updateStackAndWait(sess *session.Session, stackInput *cloudformation.Update
 
 func upgradeStack(stackName, templateURL string) error {
 	startSpinner()
-	sess, err := awsSession()
+	sess, err := adminSession()
 	checkErr(err)
 	cfnSvc := cloudformation.New(sess)
 	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -126,7 +126,7 @@ var upgradeCmd = &cobra.Command{
 var upgradeAppCmd = &cobra.Command{
 	Use:                   "app <name>",
 	Short:                 "upgrade an application AppPack stack",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -140,7 +140,7 @@ var upgradeAppCmd = &cobra.Command{
 var upgradePipelineCmd = &cobra.Command{
 	Use:                   "pipeline <name>",
 	Short:                 "upgrade a pipeline AppPack stack",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -154,7 +154,7 @@ var upgradePipelineCmd = &cobra.Command{
 var upgradeClusterCmd = &cobra.Command{
 	Use:                   "cluster <name>",
 	Short:                 "upgrade a cluster AppPack stack",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -168,7 +168,7 @@ var upgradeClusterCmd = &cobra.Command{
 var upgradeRedisCmd = &cobra.Command{
 	Use:                   "redis <name>",
 	Short:                 "upgrade a Redis AppPack stack",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -182,7 +182,7 @@ var upgradeRedisCmd = &cobra.Command{
 var upgradeDatabaseCmd = &cobra.Command{
 	Use:                   "database <name>",
 	Short:                 "upgrade a database AppPack stack",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -194,6 +194,8 @@ var upgradeDatabaseCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(upgradeCmd)
+	upgradeCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+	upgradeCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	upgradeCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	upgradeCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to upgrade resources in")
 	upgradeCmd.PersistentFlags().StringVar(&release, "release", "", "Specify a specific pre-release stack")

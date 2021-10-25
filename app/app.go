@@ -988,7 +988,7 @@ func Init(name string, awsCredentials bool) (*App, error) {
 		sess = session.Must(session.NewSession())
 		appRole, err = auth.AppRoleFromAWS(sess, name)
 	} else {
-		sess, appRole, err = auth.AwsSession(name)
+		sess, appRole, err = auth.AppAWSSession(name)
 	}
 	if err != nil {
 		return nil, err

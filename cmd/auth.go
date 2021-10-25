@@ -17,8 +17,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/apppackio/apppack/auth"
+	"github.com/juju/ansiterm/tabwriter"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
@@ -34,23 +36,35 @@ Your credentials are cached locally for your user, so these commands should not 
 	DisableFlagsInUseLine: true,
 }
 
+// Login performs an interactive login via a device code
+func Login() *auth.UserInfo {
+	deviceCode, err := auth.Oauth.GetDeviceCode()
+	checkErr(err)
+	fmt.Println("Your verification code is", deviceCode.UserCode)
+	fmt.Println("Finish authentication in your web browser...")
+	err = browser.OpenURL(deviceCode.VerificationURIComplete)
+	if err != nil {
+		fmt.Println("URL:", aurora.White(deviceCode.VerificationURIComplete).String())
+	}
+	startSpinner()
+	Spinner.Suffix = " waiting for verification"
+	tokens, err := auth.Oauth.PollForToken(deviceCode)
+	checkErr(err)
+	Spinner.Stop()
+	checkErr(tokens.WriteToCache())
+	userInfo, err := tokens.GetUserInfo()
+	checkErr(err)
+	checkErr(userInfo.WriteToCache())
+	return userInfo
+}
+
 // loginCmd represents the login command
 var loginCmd = &cobra.Command{
 	Use:                   "login",
 	Short:                 "login to AppPack.io on this device",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataPtr, err := auth.LoginInit()
-		checkErr(err)
-		data := *dataPtr
-		fmt.Println("Your verification code is", data.UserCode)
-		err = browser.OpenURL(data.VerificationURIComplete)
-		if err != nil {
-			fmt.Printf("URL: %s\n", aurora.White(data.VerificationURIComplete))
-		}
-		pauseUntilEnter("Finish verification in your web browser then press ENTER to continue.")
-		userInfo, err := auth.LoginComplete(data.DeviceCode)
-		checkErr(err)
+		userInfo := Login()
 		printSuccess(fmt.Sprintf("Logged in as %s", aurora.Bold(userInfo.Email)))
 	},
 }
@@ -134,10 +148,44 @@ var appsCmd = &cobra.Command{
 	},
 }
 
+var accountsCmd = &cobra.Command{
+	Use:                   "accounts",
+	Short:                 "list the accounts you have administrator access to",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		startSpinner()
+		admins, err := auth.AdminList()
+		checkErr(err)
+		Spinner.Stop()
+		if len(admins) == 0 {
+			printWarning("you are not an administrator on any accounts")
+			return
+		}
+		fmt.Printf("%s %s\n", aurora.Faint("==="), aurora.White("Accounts"))
+		w := new(tabwriter.Writer)
+		// minwidth, tabwidth, padding, padchar, flags
+		w.Init(os.Stdout, 0, 8, 1, '\t', 0)
+		//fmt.Fprintf(w, "%s\t%s\t%s\n", aurora.Underline("Alias"), aurora.Underline("ID"), aurora.Underline("Default Region"))
+		fmt.Fprintln(w, "Alias\tID\tDefault Region")
+		fmt.Fprintln(w, "-----\t--\t--------------")
+		var alias string
+		for _, admin := range admins {
+			if admin.AccountAlias == "" {
+				alias = aurora.Faint("(unnamed)").String()
+			} else {
+				alias = admin.AccountAlias
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\n", alias, admin.AccountID, admin.Region)
+		}
+		w.Flush()
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(loginCmd)
 	authCmd.AddCommand(logoutCmd)
 	authCmd.AddCommand(whoAmICmd)
 	authCmd.AddCommand(appsCmd)
+	authCmd.AddCommand(accountsCmd)
 }

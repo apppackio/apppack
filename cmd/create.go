@@ -34,7 +34,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/getsentry/sentry-go"
@@ -54,6 +53,7 @@ const (
 	databaseFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/database.json"
 	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
 	customDomainFormationURL    = "https://s3.amazonaws.com/apppack-cloudformations/latest/custom-domain.json"
+	accountStackName            = "apppack-account"
 	redisStackNameTmpl          = "apppack-redis-%s"
 	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token"
 	databaseStackNameTmpl       = "apppack-database-%s"
@@ -188,60 +188,24 @@ func cloudformationStackURL(region, stackID *string) string {
 	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
 }
 
-// awsSession starts a session, verifying a region has been provided
-func awsSession() (*session.Session, error) {
-	if region != "" {
-		return session.NewSession(&aws.Config{Region: &region})
-	}
-	sess, err := session.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	if *sess.Config.Region == "" {
-		return nil, fmt.Errorf("no region provided. Use the `--region` flag or set the AWS_REGION environment")
-	}
-	return sess, err
-
-}
-
-// hasApppackOIDC checks for existence of our OIDC Provider
-// usually we check for the existence of a Cfn Stack, but these resources are global
-// and Stacks are per-region, so we need to check for this resource directly
-func hasApppackOIDC(sess *session.Session) (*bool, error) {
-	iamSvc := iam.New(sess)
-	resp, err := iamSvc.ListOpenIDConnectProviders(&iam.ListOpenIDConnectProvidersInput{})
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range resp.OpenIDConnectProviderList {
-		oidcProvider, err := iamSvc.GetOpenIDConnectProvider(&iam.GetOpenIDConnectProviderInput{
-			OpenIDConnectProviderArn: r.Arn,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if *oidcProvider.Url == "auth.apppack.io/" {
-			return aws.Bool(true), nil
-		}
-	}
-	return aws.Bool(false), nil
-}
-
 // stackExists checks if a named Cfn Stack already exists in the region
 func stackExists(sess *session.Session, stackName string) (*bool, error) {
 	cfnSvc := cloudformation.New(sess)
-	_, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: &stackName,
 	})
+	var exists bool
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
-			if fmt.Sprint(aerr.Code()) == "ValidationError" {
-				return aws.Bool(false), nil
+			if aerr.Code() == "ValidationError" {
+				exists = false
+				return &exists, nil
 			}
 		}
 		return nil, err
 	}
-	return aws.Bool(true), nil
+	exists = len(stackOutput.Stacks) > 0 && *stackOutput.Stacks[0].StackStatus != cloudformation.StackStatusDeleteComplete
+	return &exists, nil
 }
 
 type stackItem struct {
@@ -630,82 +594,11 @@ These currently require AWS authentication credentials to operate unlike app-spe
 	DisableFlagsInUseLine: true,
 }
 
-// accountCmd represents the create command
-var accountCmd = &cobra.Command{
-	Use:                   "account",
-	Short:                 "setup resources for your AppPack account",
-	Long:                  "*Requires AWS credentials.*",
-	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		sess, err := awsSession()
-		checkErr(err)
-		alreadyInstalled, err := hasApppackOIDC(sess)
-		checkErr(err)
-		if *alreadyInstalled {
-			checkErr(fmt.Errorf("account already exists"))
-		}
-		if createChangeSet {
-			fmt.Println("Creating Cloudformation Change Set for account-level resources...")
-		} else {
-			fmt.Println("Creating account-level resources...")
-		}
-		startSpinner()
-		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:account"), Value: aws.String("true")},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
-
-		input := cloudformation.CreateStackInput{
-			StackName:   aws.String("apppack-account"),
-			TemplateURL: aws.String(getReleaseUrl(accountFormationURL)),
-			Parameters: []*cloudformation.Parameter{
-				{
-					ParameterKey:   aws.String("AppPackRoleExternalId"),
-					ParameterValue: aws.String(strings.ReplaceAll(uuid.New().String(), "-", "")),
-				},
-			},
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-			Tags:         cfnTags,
-		}
-		cfnSvc := cloudformation.New(sess)
-		if createChangeSet {
-			changeSet, err := createChangeSetAndWait(cfnSvc, &input)
-			Spinner.Stop()
-			checkErr(err)
-			statusURL := cloudformationStackURL(sess.Config.Region, changeSet.ChangeSetId)
-			if *changeSet.Status != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL))
-			} else {
-				fmt.Println("View ChangeSet at:")
-				fmt.Println(aurora.White(statusURL))
-				fmt.Println("Once your stack is created send the 'Outputs' to support@apppack.io for account approval.")
-			}
-		} else {
-			stack, err := createStackAndWait(cfnSvc, &input, true)
-			Spinner.Stop()
-			checkErr(err)
-			if *stack.StackStatus != "CREATE_COMPLETE" {
-				checkErr(fmt.Errorf("Stack creation failed.\nView status at %s", cloudformationStackURL(sess.Config.Region, stack.StackId)))
-			} else {
-				printSuccess("AppPack account created")
-				fmt.Println(aurora.Bold("Send the following information to support@apppack.io for account approval:"))
-				for _, output := range stack.Outputs {
-					if *output.OutputKey == "ExternalId" || *output.OutputKey == "AppPackRoleArn" {
-						fmt.Printf("%s: %s\n", *output.OutputKey, *output.OutputValue)
-					}
-				}
-
-			}
-		}
-
-	},
-}
-
 // createRedisCmd represents the create redis command
 var createRedisCmd = &cobra.Command{
 	Use:                   "redis [<name>]",
 	Short:                 "setup resources for an AppPack Redis instance",
-	Long:                  "*Requires AWS credentials.*\nCreates an AppPack Redis instance. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires AWS credentials.",
+	Long:                  "*Requires admin permissions.*\nCreates an AppPack Redis instance. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires admin permissions.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -715,7 +608,7 @@ var createRedisCmd = &cobra.Command{
 		} else {
 			name = args[0]
 		}
-		sess, err := awsSession()
+		sess, err := adminSession()
 		checkErr(err)
 		answers := make(map[string]interface{})
 		if !nonInteractive {
@@ -854,7 +747,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 	} else {
 		appType = "app"
 	}
-	sess, err := awsSession()
+	sess, err := adminSession()
 	checkErr(err)
 	if !nonInteractive {
 		questions := []*survey.Question{}
@@ -1056,7 +949,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 var appCmd = &cobra.Command{
 	Use:                   "app <name>",
 	Short:                 "create an AppPack application",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -1068,7 +961,7 @@ var appCmd = &cobra.Command{
 var pipelineCmd = &cobra.Command{
 	Use:                   "pipeline <name>",
 	Short:                 "create an AppPack pipeline",
-	Long:                  "*Requires AWS credentials.*",
+	Long:                  "*Requires admin permissions.*",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -1125,17 +1018,17 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 func init() {
 
 	rootCmd.AddCommand(createCmd)
+	createCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+	createCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	createCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")
 	createCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to create resources in")
 	createCmd.PersistentFlags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
 	createCmd.PersistentFlags().MarkHidden("release")
 
-	createCmd.AddCommand(accountCmd)
-
 	createCmd.AddCommand(appCmd)
 	appCmd.Flags().SortFlags = false
-	appCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
+	appCmd.Flags().String("cluster", "apppack", "Cluster name")
 	appCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")
 	appCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	appCmd.Flags().StringP("branch", "b", "", "branch to setup for continuous deployment")
@@ -1154,7 +1047,7 @@ func init() {
 
 	createCmd.AddCommand(pipelineCmd)
 	pipelineCmd.Flags().SortFlags = false
-	pipelineCmd.Flags().StringP("cluster", "c", "apppack", "Cluster name")
+	pipelineCmd.Flags().String("cluster", "apppack", "Cluster name")
 	pipelineCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")
 	pipelineCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	pipelineCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
@@ -1170,8 +1063,8 @@ func init() {
 	pipelineCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
 
 	createCmd.AddCommand(createRedisCmd)
-	createRedisCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
-	createRedisCmd.Flags().StringP("instance-class", "i", "cache.t3.micro", "instance class -- see https://aws.amazon.com/elasticache/pricing/#On-Demand_Nodes")
+	createRedisCmd.Flags().String("cluster", "apppack", "cluster name")
+	createRedisCmd.Flags().String("instance-class", "cache.t3.micro", "instance class -- see https://aws.amazon.com/elasticache/pricing/#On-Demand_Nodes")
 	createRedisCmd.Flags().Bool("multi-az", false, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html")
 
 }

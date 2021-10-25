@@ -18,8 +18,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/apppackio/apppack/auth"
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
@@ -36,8 +38,11 @@ const (
 	timeFmt = "Jan 02, 2006 15:04:05 -0700"
 )
 
-// AppName is used to hold the `--app-name` flag
+// AppName is the `--app-name` flag
 var AppName string
+
+// AccountIDorAlias is the `--account` flag
+var AccountIDorAlias string
 var UseAWSCredentials bool = false
 
 // Spinner is the loading animation to use for all commands
@@ -87,7 +92,15 @@ func checkErr(err error) {
 		return
 	}
 	Spinner.Stop()
-	printError(fmt.Sprintf("%v", err))
+	if strings.HasPrefix(err.Error(), auth.TokenRefreshErr) {
+		fmt.Println(
+			aurora.Yellow(fmt.Sprintf("⚠  %s", auth.TokenRefreshErr)),
+			aurora.Faint(strings.TrimPrefix(err.Error(), fmt.Sprintf("%s: ", auth.TokenRefreshErr))),
+		)
+		fmt.Printf("%s Reauthenticate this device by running: %s\n", aurora.Blue("ℹ"), aurora.White("apppack auth login"))
+	} else {
+		printError(err.Error())
+	}
 	os.Exit(1)
 }
 
@@ -105,7 +118,7 @@ func printWarning(text string) {
 
 func confirmAction(message, text string) {
 	printWarning(fmt.Sprintf("%s\n   Are you sure you want to continue?", message))
-	fmt.Printf("\nType %s to confirm.\n%s ", aurora.Faint(text), aurora.White(">"))
+	fmt.Printf("\nType %s to confirm.\n%s ", aurora.White(text), aurora.White(">"))
 	var confirm string
 	fmt.Scanln(&confirm)
 	if confirm != text {
