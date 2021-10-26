@@ -321,7 +321,7 @@ var createDatabaseCmd = &cobra.Command{
 
 func init() {
 	createCmd.AddCommand(createDatabaseCmd)
-	createDatabaseCmd.Flags().StringP("cluster", "c", "apppack", "cluster name")
+	createDatabaseCmd.Flags().String("cluster", "apppack", "cluster name")
 	createDatabaseCmd.Flags().StringP("instance-class", "i", "db.t3.medium", "instance class -- see https://aws.amazon.com/rds/postgresql/pricing/?pg=pr&loc=3")
 	createDatabaseCmd.Flags().BoolP("aurora", "a", false, "use Aurora -- see https://aws.amazon.com/rds/aurora/")
 	createDatabaseCmd.Flags().StringP("engine", "e", "postgresql", "engine [mysql,postgres")
