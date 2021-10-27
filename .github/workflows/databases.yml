@@ -31,11 +31,12 @@ jobs:
         name: AppPack Init
         run: |
             ./bin/apppack create region --region us-east-2 \
+                 --aws-credentials \
                 --dockerhub-username $DOCKERHUB_USERNAME \
                 --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
             ./bin/apppack create cluster --region us-east-2 \
+                --aws-credentials \
                 --domain testclusters.apppack.io \
-                --instance-class t3.micro
         timeout-minutes: 15
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -56,6 +57,7 @@ jobs:
         run: |
             chmod +x ./bin/apppack
             ./bin/apppack create database --region us-east-2 \
+                --aws-credentials \
                 --non-interactive \
                 --instance-class db.t3.micro \
                 --engine mysql \
@@ -70,7 +72,7 @@ jobs:
         name: Destroy standard MySQL
         run: |
             yes apppack-database-standard-mysql | ./bin/apppack destroy database standard-mysql \
-                          --region us-east-2
+                          --aws-credentials --region us-east-2
         if: always()
         timeout-minutes: 35
         env:
@@ -90,6 +92,7 @@ jobs:
         run: |
             chmod +x ./bin/apppack
             ./bin/apppack create database --region us-east-2 \
+                --aws-credentials \
                 --non-interactive \
                 --instance-class db.t3.micro \
                 --engine postgres \
@@ -104,7 +107,7 @@ jobs:
         name: Destroy standard Postgres
         run: |
             yes apppack-database-standard-postgres | ./bin/apppack destroy database standard-postgres \
-                          --region us-east-2
+                          --aws-credentials --region us-east-2
         if: always()
         timeout-minutes: 35
         env:
@@ -124,6 +127,7 @@ jobs:
         run: |
             chmod +x ./bin/apppack
             ./bin/apppack create database --region us-east-2 \
+                --aws-credentials \
                 --non-interactive \
                 --instance-class db.t3.small \
                 --aurora \
@@ -139,7 +143,7 @@ jobs:
         name: Destroy Aurora MySQL
         run: |
             yes apppack-database-aurora-mysql | ./bin/apppack destroy database aurora-mysql \
-                          --region us-east-2
+                          --aws-credentials --region us-east-2
         if: always()
         timeout-minutes: 35
         env:
@@ -159,6 +163,7 @@ jobs:
         run: |
             chmod +x ./bin/apppack
             ./bin/apppack create database --region us-east-2 \
+                --aws-credentials \
                 --non-interactive \
                 --instance-class db.t3.medium \
                 --aurora \
@@ -172,7 +177,7 @@ jobs:
         name: Destroy Aurora Postgres
         run: |
             yes apppack-database-aurora-postgres | ./bin/apppack destroy database aurora-postgres \
-                          --region us-east-2
+                          --aws-credentials --region us-east-2
         if: always()
         timeout-minutes: 35
         env:
@@ -195,7 +200,7 @@ jobs:
         run: |
             chmod +x ./bin/apppack
             ./bin/apppack create redis --region us-east-2 \
-                --non-interactive
+                --aws-credentials --non-interactive
         timeout-minutes: 35
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -222,7 +227,7 @@ jobs:
             ./.github/workflows/redis_status.sh $ID &
             PID=$!
             yes apppack-redis-apppack | ./bin/apppack destroy redis apppack \
-                          --region us-east-2
+                          --aws-credentials --region us-east-2
             kill $PID
         if: always()
         timeout-minutes: 18
@@ -249,7 +254,7 @@ jobs:
         name: Destroy cluster
         run: |
             chmod +x ./bin/apppack
-            yes apppack-cluster-apppack | ./bin/apppack destroy cluster apppack --region us-east-2
+            yes apppack-cluster-apppack | ./bin/apppack destroy cluster apppack --aws-credentials --region us-east-2
         if: always()
         timeout-minutes: 8
         env:
@@ -258,7 +263,7 @@ jobs:
       -
         name: Destroy region
         run: |
-          yes apppack-region-us-east-2 | ./bin/apppack destroy region --region us-east-2
+          yes apppack-region-us-east-2 | ./bin/apppack destroy region --aws-credentials --region us-east-2
         if: always()
         timeout-minutes: 3
         env:
