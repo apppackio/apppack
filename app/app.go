@@ -486,7 +486,7 @@ func (a *App) CreateEcsSession(task ecs.Task, shellCmd string) (*ecs.Session, er
 		Interactive: aws.Bool(true),
 		Task:        task.TaskArn,
 	}
-	retries := 10
+	retries := 20
 	// it takes some time for the SSM agent to startup
 	// poll for availability
 	for retries > 0 {
