@@ -850,6 +850,12 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 	} else {
 		fargateParameter = "enabled"
 	}
+	var buildWebhookParameter string
+	if isTruthy(aws.String(cmd.Flags().Lookup("disable-build-webhook").Value.String())) {
+		buildWebhookParameter = "disabled"
+	} else {
+		buildWebhookParameter = "enabled"
+	}
 	rand.Seed(time.Now().UnixNano())
 
 	input := cloudformation.CreateStackInput{
@@ -918,6 +924,10 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 			{
 				ParameterKey:   aws.String("AllowedUsers"),
 				ParameterValue: aws.String(strings.Trim(*(getArgValue(cmd, &answers, "users", true)), "[]")),
+			},
+			{
+				ParameterKey:   aws.String("BuildWebhook"),
+				ParameterValue: &buildWebhookParameter,
 			},
 		},
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
@@ -1044,6 +1054,7 @@ func init() {
 	appCmd.Flags().Bool("addon-ses", false, "setup SES (Email) add-on (requires manual approval of domain at SES)")
 	appCmd.Flags().String("addon-ses-domain", "*", "domain approved for sending via SES add-on. Use '*' for all domains.")
 	appCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
+	appCmd.Flags().Bool("disable-build-webhook", false, "disable creation of a webhook on the repo to automatically trigger builds on push")
 
 	createCmd.AddCommand(pipelineCmd)
 	pipelineCmd.Flags().SortFlags = false
