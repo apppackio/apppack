@@ -979,6 +979,10 @@ var pipelineCmd = &cobra.Command{
 	},
 }
 
+// stackHasFailure is used to track the first occurrence of a failure while waiting for a Cloudformation stack
+var stackHasFailure = false
+
+// waitForCloudformationStack displays the progress of a Stack while it waits for it to complete
 func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName string) (*cloudformation.Stack, error) {
 	startSpinner()
 	stackDesc, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -1007,6 +1011,14 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 	for _, resource := range stackresources.StackResources {
 		// CREATE_IN_PROGRESS | CREATE_FAILED | CREATE_COMPLETE | DELETE_IN_PROGRESS | DELETE_FAILED | DELETE_COMPLETE | DELETE_SKIPPED | UPDATE_IN_PROGRESS | UPDATE_FAILED | UPDATE_COMPLETE | IMPORT_FAILED | IMPORT_COMPLETE | IMPORT_IN_PROGRESS | IMPORT_ROLLBACK_IN_PROGRESS | IMPORT_ROLLBACK_FAILED | IMPORT_ROLLBACK_COMPLETE
 		if strings.HasSuffix(*resource.ResourceStatus, "_FAILED") {
+			// only warn on the first failure
+			// failures will cascade and end up being extra noise
+			if !stackHasFailure {
+				Spinner.Stop()
+				printError(fmt.Sprintf("%s failed: %s", *resource.LogicalResourceId, *resource.ResourceStatusReason))
+				startSpinner()
+				stackHasFailure = true
+			}
 			failed = append(failed, *resource.ResourceStatus)
 		} else if strings.HasSuffix(*resource.ResourceStatus, "_IN_PROGRESS") {
 			inProgress = append(inProgress, *resource.ResourceStatus)
