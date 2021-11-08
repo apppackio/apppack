@@ -583,6 +583,9 @@ func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(i) == 0 {
+		return nil, fmt.Errorf("could not find any builds")
+	}
 	return i, nil
 }
 
