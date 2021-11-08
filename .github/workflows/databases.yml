@@ -206,31 +206,19 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
-        name: Wait for steady state
-        run: |
-          # destroy fails if replication group is not available
-          ID="$(aws cloudformation describe-stacks --stack apppack-redis-apppack --output text --query Stacks[0].Outputs | grep Endpoint | cut -f2 -d.)"
-          until [ "$(aws elasticache describe-replication-groups --replication-group-id $ID --query ReplicationGroups[0].Status --output text)" = "available" ]; do
-            echo "waiting for replication group to become available..."
-            sleep 10
-          done
-        timeout-minutes: 5
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-2
-      -
         name: Destroy Redis
+        # Redis clusters fail to destroy occassionally when there were just created
+        # The error is:
+        #   Cache cluster xxx-001 is not in a valid state to be deleted. (Service: AmazonElastiCache; Status Code: 400; Error Code: InvalidReplicationGroupState
+        # The state during this time is "available", so there's nothing we can do but retry the operation :P
+        # Amazon support's recommendation is to wait 5-10 minutes after creation to delete it
         run: |
-            ID="$(aws cloudformation describe-stacks --stack apppack-redis-apppack --output text --query Stacks[0].Outputs | grep Endpoint | cut -f2 -d.)"
-            # debugging stack deletion failures
-            ./.github/workflows/redis_status.sh $ID &
-            PID=$!
+            yes apppack-redis-apppack | ./bin/apppack destroy redis apppack \
+                          --aws-credentials --region us-east-2 || \
             yes apppack-redis-apppack | ./bin/apppack destroy redis apppack \
                           --aws-credentials --region us-east-2
-            kill $PID
         if: always()
-        timeout-minutes: 18
+        timeout-minutes: 25
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
