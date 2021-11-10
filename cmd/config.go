@@ -30,6 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/bridge"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
@@ -123,6 +124,7 @@ var listCmd = &cobra.Command{
 		checkErr(err)
 		parameters, err := a.GetConfig()
 		checkErr(err)
+		bridge.SortParameters(parameters)
 		Spinner.Stop()
 		for _, value := range parameters {
 			parts := strings.Split(*value.Name, "/")
@@ -136,6 +138,7 @@ var listCmd = &cobra.Command{
 			a.ReviewApp = nil
 			parameters, err := a.GetConfig()
 			checkErr(err)
+			bridge.SortParameters(parameters)
 			Spinner.Stop()
 			for _, value := range parameters {
 				parts := strings.Split(*value.Name, "/")
@@ -178,6 +181,7 @@ var configExportCmd = &cobra.Command{
 		a, err := app.Init(AppName, UseAWSCredentials)
 		checkErr(err)
 		parameters, err := a.GetConfig()
+		bridge.SortParameters(parameters)
 		checkErr(err)
 		config := make(map[string]string)
 		ssmSvc := ssm.New(a.Session)
