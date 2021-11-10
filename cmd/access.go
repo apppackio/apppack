@@ -29,6 +29,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var CurrentAccountRole *auth.AdminRole
+
 func parameterValue(stack *cloudformation.Stack, key string) (*string, error) {
 	for _, p := range stack.Parameters {
 		if *p.ParameterKey == key {
@@ -94,6 +96,7 @@ func appOrPipelineStack(sess *session.Session, name string) (*cloudformation.Sta
 }
 
 func adminSession() (*session.Session, error) {
+	var err error
 	if UseAWSCredentials {
 		if region != "" {
 			return session.NewSession(&aws.Config{Region: &region})
@@ -107,7 +110,8 @@ func adminSession() (*session.Session, error) {
 		}
 		return sess, nil
 	}
-	sess, _, err := auth.AdminAWSSession(AccountIDorAlias)
+	var sess *session.Session
+	sess, CurrentAccountRole, err = auth.AdminAWSSession(AccountIDorAlias)
 	return sess, err
 }
 

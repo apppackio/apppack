@@ -27,13 +27,11 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/auth"
+	"github.com/apppackio/apppack/ddb"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/codebuild"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/getsentry/sentry-go"
@@ -188,70 +186,8 @@ func cloudformationStackURL(region, stackID *string) string {
 	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
 }
 
-// stackExists checks if a named Cfn Stack already exists in the region
-func stackExists(sess *session.Session, stackName string) (*bool, error) {
-	cfnSvc := cloudformation.New(sess)
-	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-		StackName: &stackName,
-	})
-	var exists bool
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == "ValidationError" {
-				exists = false
-				return &exists, nil
-			}
-		}
-		return nil, err
-	}
-	exists = len(stackOutput.Stacks) > 0 && *stackOutput.Stacks[0].StackStatus != cloudformation.StackStatusDeleteComplete
-	return &exists, nil
-}
-
-type stackItem struct {
-	PrimaryID   string `json:"primary_id"`
-	SecondaryID string `json:"secondary_id"`
-	Stack       Stack  `json:"value"`
-}
-
-type Stack struct {
-	StackID        string `json:"stack_id"`
-	StackName      string `json:"stack_name"`
-	Name           string `json:"name"`
-	DatabaseEngine string `json:"engine"`
-}
-
-func listClusters(sess *session.Session) ([]string, error) {
-	ddbSvc := dynamodb.New(sess)
-	result, err := ddbSvc.Query(&dynamodb.QueryInput{
-		TableName:              aws.String("apppack"),
-		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":id1": {S: aws.String("CLUSTERS")},
-			":id2": {S: aws.String("CLUSTER#")},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.Items == nil {
-		return nil, fmt.Errorf("could not find any AppPack clusters")
-	}
-	i := []stackItem{}
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &i)
-	if err != nil {
-		return nil, err
-	}
-	clusters := []string{}
-	for idx := range i {
-		clusters = append(clusters, i[idx].Stack.Name)
-	}
-
-	return clusters, nil
-}
-
 func makeClusterQuestion(sess *session.Session, message *string) (*survey.Question, error) {
-	clusters, err := listClusters(sess)
+	clusters, err := ddb.ListClusters(sess)
 	if err != nil {
 		return nil, err
 	}
@@ -274,84 +210,6 @@ func makeClusterQuestion(sess *session.Session, message *string) (*survey.Questi
 	}, err
 }
 
-func getDDBClusterItem(sess *session.Session, cluster *string, addon string, name *string) (*Stack, error) {
-	ddbSvc := dynamodb.New(sess)
-	secondaryID := fmt.Sprintf("%s#%s#%s", *cluster, addon, *name)
-	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id": {
-				S: aws.String("CLUSTERS"),
-			},
-			"secondary_id": {
-				S: aws.String(secondaryID),
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.Item == nil {
-		return nil, fmt.Errorf("could not find CLUSTERS/%s", secondaryID)
-	}
-	i := stackItem{}
-	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
-	if err != nil {
-		return nil, err
-	}
-	return &i.Stack, nil
-}
-
-func ddbClusterQuery(sess *session.Session, cluster, addon *string) (*[]map[string]*dynamodb.AttributeValue, error) {
-	ddbSvc := dynamodb.New(sess)
-	result, err := ddbSvc.Query(&dynamodb.QueryInput{
-		TableName:              aws.String("apppack"),
-		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":id1": {S: aws.String("CLUSTERS")},
-			":id2": {S: aws.String(fmt.Sprintf("%s#%s#", *cluster, *addon))},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.Items == nil {
-		return nil, fmt.Errorf("could not find any AppPack %s stacks on %s cluster", strings.ToLower(*addon), *cluster)
-	}
-	return &result.Items, nil
-}
-
-// isHostedZoneForDomain verifies that the dnsName would be a valid record in the hosted zone
-func isHostedZoneForDomain(dnsName string, hostedZone *route53.HostedZone) bool {
-	return strings.HasSuffix(dnsName, strings.TrimSuffix(*hostedZone.Name, "."))
-}
-
-// hostedZoneForDomain searches AWS Hosted Zones for a place for this domain
-func hostedZoneForDomain(sess *session.Session, dnsName string) (*route53.HostedZone, error) {
-	r53Svc := route53.New(sess)
-	nameParts := strings.Split(dnsName, ".")
-	// keep stripping off subdomains until a match is found
-	for i := range nameParts {
-		input := route53.ListHostedZonesByNameInput{
-			DNSName: aws.String(strings.Join(nameParts[i:], ".")),
-		}
-		resp, err := r53Svc.ListHostedZonesByName(&input)
-		if err != nil {
-			return nil, err
-		}
-		for _, zone := range resp.HostedZones {
-			if isHostedZoneForDomain(dnsName, zone) && !*zone.Config.PrivateZone {
-				err = checkHostedZone(r53Svc, zone)
-				if err != nil {
-					printError(fmt.Sprintf("%v", err))
-				}
-				return zone, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("no hosted zones found for %s", dnsName)
-}
-
 // HasSameItems verifies two string slices contain the same elements
 func HasSameItems(a, b []string) bool {
 	if len(a) != len(b) {
@@ -368,7 +226,8 @@ func HasSameItems(a, b []string) bool {
 }
 
 // checkHostedZone prompts the user if the NS records for the domain don't match what AWS expects
-func checkHostedZone(r53svc *route53.Route53, zone *route53.HostedZone) error {
+func checkHostedZone(sess *session.Session, zone *route53.HostedZone) error {
+	r53svc := route53.New(sess)
 	results, err := net.LookupNS(*zone.Name)
 	if err != nil {
 		return err
@@ -397,31 +256,8 @@ func checkHostedZone(r53svc *route53.Route53, zone *route53.HostedZone) error {
 	return nil
 }
 
-func listStacks(sess *session.Session, cluster *string, addon string) ([]string, error) {
-	items, err := ddbClusterQuery(sess, cluster, &addon)
-	if err != nil {
-		return nil, err
-	}
-	i := []stackItem{}
-	err = dynamodbattribute.UnmarshalListOfMaps(*items, &i)
-	if err != nil {
-		return nil, err
-	}
-	stacks := []string{}
-	var stack Stack
-	for idx := range i {
-		stack = i[idx].Stack
-		if len(stack.DatabaseEngine) > 0 {
-			stacks = append(stacks, fmt.Sprintf("%s (%s)", stack.Name, stack.DatabaseEngine))
-		} else {
-			stacks = append(stacks, stack.Name)
-		}
-	}
-	return stacks, nil
-}
-
 func makeDatabaseQuestion(sess *session.Session, cluster *string) (*survey.Question, error) {
-	databases, err := listStacks(sess, cluster, "DATABASE")
+	databases, err := ddb.ListStacks(sess, cluster, "DATABASE")
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +276,7 @@ func makeDatabaseQuestion(sess *session.Session, cluster *string) (*survey.Quest
 }
 
 func makeRedisQuestion(sess *session.Session, cluster *string) (*survey.Question, error) {
-	instances, err := listStacks(sess, cluster, "REDIS")
+	instances, err := ddb.ListStacks(sess, cluster, "REDIS")
 	if err != nil {
 		return nil, err
 	}
@@ -515,43 +351,6 @@ func getArgValue(cmd *cobra.Command, answers *map[string]interface{}, name strin
 	return &flag.DefValue
 }
 
-func stackFromDDBItem(sess *session.Session, secondaryID string) (*cloudformation.Stack, error) {
-	ddbSvc := dynamodb.New(sess)
-	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id": {
-				S: aws.String("CLUSTERS"),
-			},
-			"secondary_id": {
-				S: aws.String(secondaryID),
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.Item == nil {
-		return nil, fmt.Errorf("could not find CLUSTERS/%s", secondaryID)
-	}
-	i := stackItem{}
-	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
-	if err != nil {
-		return nil, err
-	}
-	cfnSvc := cloudformation.New(sess)
-	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-		StackName: &i.Stack.StackID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(stacks.Stacks) == 0 {
-		return nil, fmt.Errorf("no stacks found with ID %s", i.Stack.StackID)
-	}
-	return stacks.Stacks[0], nil
-}
-
 func contains(arr []string, str string) bool {
 	for _, a := range arr {
 		if a == str {
@@ -589,7 +388,7 @@ var createCmd = &cobra.Command{
 	Short: "create AppPack resources in your AWS account",
 	Long: `Use subcommands to create AppPack resources in your account.
 	
-These currently require AWS authentication credentials to operate unlike app-specific commands which use AppPack for authentication.
+These require administrator access.
 `,
 	DisableFlagsInUseLine: true,
 }
@@ -624,11 +423,11 @@ var createRedisCmd = &cobra.Command{
 		}
 		cluster := getArgValue(cmd, &answers, "cluster", true)
 		// check if a redis already exists on the cluster
-		_, err = getDDBClusterItem(sess, cluster, "REDIS", &name)
+		_, err = ddb.GetClusterItem(sess, cluster, "REDIS", &name)
 		if err == nil {
 			checkErr(fmt.Errorf(fmt.Sprintf("a Redis instance named %s already exists on the cluster %s", name, *cluster)))
 		}
-		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
+		clusterStack, err := ddb.StackFromItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
 		checkErr(err)
 		var multiAZParameter string
 		if isTruthy((getArgValue(cmd, &answers, "multi-az", false))) {
@@ -806,7 +605,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 		cfnTags = append(cfnTags, &pipelineTag)
 	}
 
-	clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
+	clusterStack, err := ddb.StackFromItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
 	checkErr(err)
 	sesDomain := ""
 	if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
@@ -817,7 +616,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 		databaseDisplay := getArgValue(cmd, &answers, "addon-database-name", false)
 		// remove ' (engine)' from the database display text
 		database := strings.Split(*databaseDisplay, " ")[0]
-		databaseStack, err := getDDBClusterItem(sess, cluster, "DATABASE", &database)
+		databaseStack, err := ddb.GetClusterItem(sess, cluster, "DATABASE", &database)
 		checkErr(err)
 		databaseStackName = strings.Split(databaseStack.StackID, "/")[1]
 	} else {
@@ -826,7 +625,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 	var redisStackName string
 	if isTruthy(getArgValue(cmd, &answers, "addon-redis", false)) {
 		redis := getArgValue(cmd, &answers, "addon-redis-name", false)
-		redisStack, err := getDDBClusterItem(sess, cluster, "REDIS", redis)
+		redisStack, err := ddb.GetClusterItem(sess, cluster, "REDIS", redis)
 		checkErr(err)
 		redisStackName = strings.Split(redisStack.StackID, "/")[1]
 	} else {

@@ -1,5 +1,7 @@
 package auth
 
+import "fmt"
+
 type Role interface {
 	GetRoleARN() string
 }
@@ -25,4 +27,11 @@ type AdminRole struct {
 
 func (a *AdminRole) GetRoleARN() string {
 	return a.RoleARN
+}
+
+func (a *AdminRole) GetAccountName() string {
+	if a.AccountAlias != "" {
+		return fmt.Sprintf("%s (%s)", a.AccountID, a.AccountAlias)
+	}
+	return a.AccountID
 }

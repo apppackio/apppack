@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/bridge"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
@@ -119,8 +120,9 @@ The domain(s) provided must all be a part of the same parent domain and a Route5
 		checkErr(err)
 		clusterStackName, err := clusterStackForApp(sess, *appName)
 		checkErr(err)
-		zone, err := hostedZoneForDomain(sess, primaryDomain)
+		zone, err := bridge.HostedZoneForDomain(sess, primaryDomain)
 		checkErr(err)
+		checkErr(checkHostedZone(sess, zone))
 		cfnTags := []*cloudformation.Tag{
 			{Key: aws.String("apppack:customDomain"), Value: &primaryDomain},
 			{Key: aws.String("apppack:appName"), Value: appName},
@@ -143,7 +145,7 @@ The domain(s) provided must all be a part of the same parent domain and a Route5
 		}
 		if len(args) > 1 {
 			for i, domain := range args[1:] {
-				if !isHostedZoneForDomain(domain, zone) {
+				if !bridge.IsHostedZoneForDomain(domain, zone) {
 					checkErr(fmt.Errorf("%s can not be placed in the hosted zone %s (%s)", domain, *zone.Name, zoneID))
 				}
 				parameters = append(parameters, &cloudformation.Parameter{

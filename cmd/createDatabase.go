@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/apppackio/apppack/ddb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
@@ -232,11 +233,11 @@ var createDatabaseCmd = &cobra.Command{
 		}
 		cluster := getArgValue(cmd, &answers, "cluster", true)
 		// check if a database already exists on the cluster
-		_, err = getDDBClusterItem(sess, cluster, "DATABASE", &name)
+		_, err = ddb.GetClusterItem(sess, cluster, "DATABASE", &name)
 		if err == nil {
 			checkErr(fmt.Errorf(fmt.Sprintf("a database named %s already exists on the cluster %s", name, *cluster)))
 		}
-		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
+		clusterStack, err := ddb.StackFromItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
 		checkErr(err)
 		var multiAZParameter string
 		if isTruthy((getArgValue(cmd, &answers, "multi-az", false))) {

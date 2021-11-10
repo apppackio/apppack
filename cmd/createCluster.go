@@ -23,6 +23,8 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apparentlymart/go-cidr/cidr"
+	"github.com/apppackio/apppack/bridge"
+	"github.com/apppackio/apppack/ddb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
@@ -124,7 +126,7 @@ var createClusterCmd = &cobra.Command{
 		startSpinner()
 		sess, err := adminSession()
 		checkErr(err)
-		regionExists, err := stackExists(sess, fmt.Sprintf("apppack-region-%s", *sess.Config.Region))
+		regionExists, err := bridge.StackExists(sess, fmt.Sprintf("apppack-region-%s", *sess.Config.Region))
 		checkErr(err)
 		if !*regionExists {
 			Spinner.Stop()
@@ -144,7 +146,7 @@ var createClusterCmd = &cobra.Command{
 		answers := make(map[string]interface{})
 		addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
 
-		_, err = stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
+		_, err = ddb.StackFromItem(sess, fmt.Sprintf("CLUSTER#%s", clusterName))
 		if err == nil {
 			checkErr(fmt.Errorf("cluster %s already exists", clusterName))
 		}
@@ -167,7 +169,9 @@ var createClusterCmd = &cobra.Command{
 			{Key: aws.String("apppack"), Value: aws.String("true")},
 		}
 		domain := getArgValue(cmd, &answers, "domain", true)
-		zone, err := hostedZoneForDomain(sess, *domain)
+		zone, err := bridge.HostedZoneForDomain(sess, *domain)
+		checkErr(err)
+		checkErr(checkHostedZone(sess, zone))
 		zoneID := strings.Split(*zone.Id, "/")[2]
 		checkErr(err)
 		vpcCIDR := getArgValue(cmd, &answers, "cidr", true)
