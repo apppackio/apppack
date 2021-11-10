@@ -851,7 +851,8 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 		fargateParameter = "enabled"
 	}
 	var buildWebhookParameter string
-	if isTruthy(aws.String(cmd.Flags().Lookup("disable-build-webhook").Value.String())) {
+	flag := cmd.Flags().Lookup("disable-build-webhook")
+	if flag != nil && isTruthy(aws.String(flag.Value.String())) {
 		buildWebhookParameter = "disabled"
 	} else {
 		buildWebhookParameter = "enabled"
