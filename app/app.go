@@ -95,6 +95,7 @@ type Settings struct {
 	LogGroup struct {
 		Name string `json:"name"`
 	} `json:"log_group"`
+	StackID string `json:"stack_id"`
 }
 
 type deployStatusItem struct {
@@ -1001,6 +1002,12 @@ func Init(name string, awsCredentials bool) (*App, error) {
 		Pipeline:  appRole.Pipeline,
 		Session:   sess,
 		ReviewApp: reviewApp,
+	}
+	// TODO: pipeline is stored on the app role, but aws credentials don't use the role
+	// this is a horribly hacky way to look it up
+	if awsCredentials {
+		app.LoadSettings()
+		app.Pipeline = strings.Contains(app.Settings.StackID, fmt.Sprintf("/apppack-pipeline-%s/", app.Name))
 	}
 	if !app.Pipeline && app.ReviewApp != nil {
 		return nil, fmt.Errorf("%s is a standard app and can't have review apps", name)
