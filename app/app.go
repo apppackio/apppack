@@ -976,7 +976,7 @@ func (a *App) ValidateCronString(rule string) error {
 }
 
 // Init will pull in app settings from DyanmoDB and provide helper
-func Init(name string, awsCredentials bool) (*App, error) {
+func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	var reviewApp *string
 	if strings.Contains(name, ":") {
 		parts := strings.Split(name, ":")
@@ -1001,7 +1001,7 @@ func Init(name string, awsCredentials bool) (*App, error) {
 		// this is a horribly hacky way to figure out if the app is a pipeline, but it works
 		app.Pipeline = strings.Contains(app.Settings.StackID, fmt.Sprintf("/apppack-pipeline-%s/", app.Name))
 	} else {
-		sess, appRole, err := auth.AppAWSSession(name)
+		sess, appRole, err := auth.AppAWSSession(name, sessionDuration)
 		if err != nil {
 			return nil, err
 		}

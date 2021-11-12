@@ -165,7 +165,7 @@ var awsExecCmd = &cobra.Command{
 	Short:                 "run a local command with AWS credentials",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if len(args) < 1 {
 			checkErr(fmt.Errorf("provide an executable to run as an argument"))

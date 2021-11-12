@@ -54,7 +54,7 @@ var logsCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		err = a.LoadSettings()
 		checkErr(err)
@@ -92,7 +92,7 @@ var logsOpenCmd = &cobra.Command{
 	Long:                  `Generates a presigned URL and opens a web browser to Cloudwatch Insights in the AWS web console`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		a.LoadSettings()
 		checkErr(err)

@@ -37,7 +37,7 @@ func Logout() error {
 	return os.RemoveAll(path)
 }
 
-func AppAWSSession(appName string) (*session.Session, *AppRole, error) {
+func AppAWSSession(appName string, sessionDuration int) (*session.Session, *AppRole, error) {
 	tokens, err := GetTokens()
 	if err != nil {
 		return nil, nil, err
@@ -46,7 +46,7 @@ func AppAWSSession(appName string) (*session.Session, *AppRole, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	creds, err := tokens.GetCredentials(appRole)
+	creds, err := tokens.GetCredentials(appRole, sessionDuration)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -66,7 +66,7 @@ func AppAWSSession(appName string) (*session.Session, *AppRole, error) {
 	), appRole, nil
 }
 
-func AdminAWSSession(idOrAlias string) (*session.Session, *AdminRole, error) {
+func AdminAWSSession(idOrAlias string, sessionDuration int) (*session.Session, *AdminRole, error) {
 	tokens, err := GetTokens()
 	if err != nil {
 		return nil, nil, err
@@ -75,7 +75,7 @@ func AdminAWSSession(idOrAlias string) (*session.Session, *AdminRole, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	creds, err := tokens.GetCredentials(adminRole)
+	creds, err := tokens.GetCredentials(adminRole, sessionDuration)
 	if err != nil {
 		return nil, nil, err
 	}

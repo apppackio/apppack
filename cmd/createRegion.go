@@ -32,7 +32,7 @@ var createRegionCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		questions := []*survey.Question{}
 		answers := make(map[string]interface{})

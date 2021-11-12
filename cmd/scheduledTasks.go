@@ -45,7 +45,7 @@ var scheduledTasksCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
 			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
@@ -76,7 +76,7 @@ Be sure to wrap your command and schedule in quotes to ensure they are read as a
 		}
 		command := strings.Join(args, " ")
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
 			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
@@ -100,7 +100,7 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
 			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))

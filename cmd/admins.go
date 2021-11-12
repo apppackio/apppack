@@ -33,7 +33,7 @@ var adminsCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -65,7 +65,7 @@ var adminsAddCmd = &cobra.Command{
 			checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
 		}
 		startSpinner()
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -102,7 +102,7 @@ var adminsRemoveCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		email := args[0]
 		startSpinner()
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
