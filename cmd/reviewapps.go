@@ -52,7 +52,7 @@ var reviewappsCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(args[0], UseAWSCredentials)
+		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		reviewApps, err := a.GetReviewApps()
 		checkErr(err)
@@ -174,7 +174,7 @@ var reviewappsCreateCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(args[0], UseAWSCredentials)
+		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if !a.IsReviewApp() { // TODO: validate
 			checkErr(fmt.Errorf("no pull request number set"))
@@ -235,7 +235,7 @@ var reviewappsDestroyCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(args[0], UseAWSCredentials)
+		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if !a.IsReviewApp() { // TODO: validate
 			checkErr(fmt.Errorf("no pull request number set"))

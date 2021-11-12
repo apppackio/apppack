@@ -180,7 +180,7 @@ var createDatabaseCmd = &cobra.Command{
 		} else {
 			name = args[0]
 		}
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		var engine *string
 		var isAurora bool

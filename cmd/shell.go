@@ -181,7 +181,7 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		interactiveCmd(a, "bash -l")
 	},

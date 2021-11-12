@@ -50,7 +50,7 @@ var getCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		svc := ssm.New(a.Session)
 		resp, err := svc.GetParameter(&ssm.GetParameterInput{
@@ -78,7 +78,7 @@ var setCmd = &cobra.Command{
 		name := parts[0]
 		value := parts[1]
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		err = a.SetConfig(name, value, true)
 		checkErr(err)
@@ -96,7 +96,7 @@ var unsetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		name := args[0]
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		svc := ssm.New(a.Session)
 		_, err = svc.DeleteParameter(&ssm.DeleteParameterInput{
@@ -119,7 +119,7 @@ var listCmd = &cobra.Command{
 		// minwidth, tabwidth, padding, padchar, flags
 		w.Init(os.Stdout, 8, 8, 0, '\t', 0)
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		parameters, err := a.GetConfig()
 		checkErr(err)
@@ -175,7 +175,7 @@ var configExportCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		parameters, err := a.GetConfig()
 		checkErr(err)
@@ -212,7 +212,7 @@ var configImportCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		data, err := ioutil.ReadFile(args[0])
 		if err != nil {

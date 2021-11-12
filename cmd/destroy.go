@@ -128,7 +128,7 @@ var destroyAccountCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		stackName := "apppack-account"
 		cfnSvc := cloudformation.New(sess)
@@ -147,7 +147,7 @@ var destroyRegionCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		stackName := fmt.Sprintf("apppack-region-%s", *sess.Config.Region)
 		ssmSvc := ssm.New(sess)
@@ -175,7 +175,7 @@ var destroyRedisCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		stackName := fmt.Sprintf(redisStackNameTmpl, args[0])
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		ssmSvc := ssm.New(sess)
 		cfnSvc := cloudformation.New(sess)
@@ -202,7 +202,7 @@ var destroyDatabaseCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stackName := fmt.Sprintf(databaseStackNameTmpl, args[0])
@@ -227,7 +227,7 @@ var destroyClusterCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clusterName := args[0]
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("cluster %s", clusterName)
@@ -251,7 +251,7 @@ var destroyAppCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		appName := args[0]
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("app %s", appName)
@@ -271,7 +271,7 @@ var destroyPipelineCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		pipelineName := args[0]
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		friendlyName := fmt.Sprintf("pipeline %s", pipelineName)
@@ -292,7 +292,7 @@ var destroyCustomDomainCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		primaryDomain := args[0]
 		friendlyName := fmt.Sprintf("%s domain", primaryDomain)
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		cfnSvc := cloudformation.New(sess)
 		stack, err := confirmDeleteStack(cfnSvc, customDomainStackName(primaryDomain), friendlyName)

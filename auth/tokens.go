@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/sirupsen/logrus"
@@ -207,21 +208,20 @@ func (t *Tokens) GetAdminRole(idOrAlias string) (*AdminRole, error) {
 	return found, nil
 }
 
-func (t *Tokens) GetCredentials(role Role) (*sts.Credentials, error) {
+func (t *Tokens) GetCredentials(role Role, duration int) (*sts.Credentials, error) {
 	userInfo, err := UserInfoFromCache()
 	if err != nil {
 		return nil, err
 	}
 	sess := session.Must(session.NewSession())
 	svc := sts.New(sess)
-	duration := int64(900)
 	roleARN := role.GetRoleARN()
 	logrus.WithFields(logrus.Fields{"role": roleARN}).Debug("assuming role")
 	resp, err := svc.AssumeRoleWithWebIdentity(&sts.AssumeRoleWithWebIdentityInput{
 		RoleArn:          &roleARN,
 		WebIdentityToken: &t.IDToken,
 		RoleSessionName:  &userInfo.Email,
-		DurationSeconds:  &duration,
+		DurationSeconds:  aws.Int64(int64(duration)),
 	})
 	if err != nil {
 		return nil, err

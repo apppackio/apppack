@@ -93,7 +93,7 @@ func appOrPipelineStack(sess *session.Session, name string) (*cloudformation.Sta
 	return nil, err
 }
 
-func adminSession() (*session.Session, error) {
+func adminSession(sessionDuration int) (*session.Session, error) {
 	if UseAWSCredentials {
 		if region != "" {
 			return session.NewSession(&aws.Config{Region: &region})
@@ -107,7 +107,7 @@ func adminSession() (*session.Session, error) {
 		}
 		return sess, nil
 	}
-	sess, _, err := auth.AdminAWSSession(AccountIDorAlias)
+	sess, _, err := auth.AdminAWSSession(AccountIDorAlias, sessionDuration)
 	return sess, err
 }
 
@@ -119,7 +119,7 @@ var accessCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
 		var err error
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
@@ -147,7 +147,7 @@ var accessAddCmd = &cobra.Command{
 			checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
 		}
 		startSpinner()
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
@@ -178,7 +178,7 @@ var accessRemoveCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		email := args[0]
 		startSpinner()
-		sess, err := adminSession()
+		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)

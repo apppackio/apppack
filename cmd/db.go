@@ -69,7 +69,7 @@ var dbShellCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		family, exec, err := a.DBShellTaskInfo()
 		checkErr(err)
@@ -85,7 +85,9 @@ var dbDumpCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		app, err := app.Init(AppName, UseAWSCredentials)
+		// db dump load can be really slow, let people open longer sessions to wait for it to finish
+		SessionDurationSeconds = 3600
+		app, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		err = app.LoadSettings()
 		checkErr(err)
@@ -164,7 +166,9 @@ WARNING: This is a destructive action which will delete the contents of your rem
 	Run: func(cmd *cobra.Command, args []string) {
 		var remoteFile string
 		startSpinner()
-		app, err := app.Init(AppName, UseAWSCredentials)
+		// db dump load can be really slow, let people open longer sessions to wait for it to finish
+		SessionDurationSeconds = 3600
+		app, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		Spinner.Stop()
 		confirmAction("This will destroy any data that is currently in the database.", AppName)
