@@ -9,9 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/sts"
 	awsconsoleurl "github.com/jkueh/go-aws-console-url"
 	"github.com/sirupsen/logrus"
 )
@@ -29,35 +26,6 @@ const (
 	grantType     = "urn:ietf:params:oauth:grant-type:device_code"
 	cachePrefix   = "io.apppack"
 )
-
-// AppRoleFromAWS gets an AppRole direct from DynamoDB instead of the AppPack API
-// needed for use with `--aws-credentials` which can't access the API
-func AppRoleFromAWS(sess *session.Session, appName string) (*AppRole, error) {
-	stsSvc := sts.New(sess)
-	resp, err := stsSvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err != nil {
-		return nil, err
-	}
-	accountID := resp.Account
-	ddbSvc := dynamodb.New(sess)
-	item, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id":   {S: aws.String(fmt.Sprintf("APP#%s", *accountID))},
-			"secondary_id": {S: &appName},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	a := AppRole{}
-	err = dynamodbattribute.UnmarshalMap(item.Item, &a)
-	if err != nil {
-		return nil, err
-	}
-	a.AccountID = *accountID
-	return &a, nil
-}
 
 func Logout() error {
 	dir, err := os.UserCacheDir()

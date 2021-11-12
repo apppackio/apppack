@@ -986,28 +986,27 @@ func Init(name string, awsCredentials bool) (*App, error) {
 		reviewApp = nil
 	}
 	var sess *session.Session
-	var err error
-	var appRole *auth.AppRole
-	if awsCredentials {
-		sess = session.Must(session.NewSession())
-		appRole, err = auth.AppRoleFromAWS(sess, name)
-	} else {
-		sess, appRole, err = auth.AppAWSSession(name)
-	}
-	if err != nil {
-		return nil, err
-	}
 	app := App{
 		Name:      name,
-		Pipeline:  appRole.Pipeline,
-		Session:   sess,
 		ReviewApp: reviewApp,
 	}
-	// TODO: pipeline is stored on the app role, but aws credentials don't use the role
-	// this is a horribly hacky way to look it up
+
 	if awsCredentials {
-		app.LoadSettings()
+		sess = session.Must(session.NewSession())
+		app.Session = sess
+		err := app.LoadSettings()
+		if err != nil {
+			return nil, err
+		}
+		// this is a horribly hacky way to figure out if the app is a pipeline, but it works
 		app.Pipeline = strings.Contains(app.Settings.StackID, fmt.Sprintf("/apppack-pipeline-%s/", app.Name))
+	} else {
+		sess, appRole, err := auth.AppAWSSession(name)
+		if err != nil {
+			return nil, err
+		}
+		app.Pipeline = appRole.Pipeline
+		app.Session = sess
 	}
 	if !app.Pipeline && app.ReviewApp != nil {
 		return nil, fmt.Errorf("%s is a standard app and can't have review apps", name)
