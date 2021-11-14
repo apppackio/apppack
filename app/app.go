@@ -707,6 +707,28 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	return appTasks, nil
 }
 
+func (a *App) GetECSEvents(service string) ([]*ecs.ServiceEvent, error) {
+	ecsSvc := ecs.New(a.Session)
+	a.LoadSettings()
+	logrus.WithFields(logrus.Fields{"service": service}).Debug("fetching service events")
+	serviceStatus, err := ecsSvc.DescribeServices(&ecs.DescribeServicesInput{
+		Cluster:  &a.Settings.Cluster.ARN,
+		Services: aws.StringSlice([]string{fmt.Sprintf("%s-%s", a.Name, service)}),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(serviceStatus.Services) == 0 {
+		return nil, fmt.Errorf("could not find service %s", service)
+	}
+	events := serviceStatus.Services[0].Events
+	// reverse events so the oldest is first
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+	return events, nil
+}
+
 func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 	currentTime := time.Now()
 	username, err := auth.WhoAmI()
