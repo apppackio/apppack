@@ -20,25 +20,20 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
-	"github.com/apppackio/apppack/auth"
 	"github.com/apppackio/apppack/ddb"
+	"github.com/apppackio/apppack/stacks"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/getsentry/sentry-go"
-	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
-	"github.com/mattn/go-isatty"
-	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -55,20 +50,13 @@ const (
 	redisStackNameTmpl          = "apppack-redis-%s"
 	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token"
 	databaseStackNameTmpl       = "apppack-database-%s"
+	clusterStackNameTmpl        = "apppack-cluster-%s"
 )
 
 var createChangeSet bool
 var nonInteractive bool
 var region string
 var release string
-
-func appStackName(appName string) string {
-	return fmt.Sprintf("apppack-app-%s", appName)
-}
-
-func pipelineStackName(appName string) string {
-	return fmt.Sprintf("apppack-pipeline-%s", appName)
-}
 
 // swap out latest URL for a pre-release
 func getReleaseUrl(url string) string {
@@ -81,11 +69,11 @@ func getReleaseUrl(url string) string {
 func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateStackInput, changeSet bool, friendlyName string) error {
 	cfnSvc := cloudformation.New(sess)
 	if changeSet {
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		fmt.Printf("Creating Cloudformation Change Set for %s...\n", friendlyName)
-		startSpinner()
+		ui.StartSpinner()
 		changeSet, err := createChangeSetAndWait(cfnSvc, input)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		if err != nil {
 			return err
 		}
@@ -96,18 +84,18 @@ func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateS
 		fmt.Println("View ChangeSet at:")
 		fmt.Println(aurora.White(statusURL))
 	} else {
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		fmt.Printf("Creating %s resources...\n", friendlyName)
-		startSpinner()
+		ui.StartSpinner()
 		stack, err := createStackAndWait(cfnSvc, input, true)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		if err != nil {
 			return err
 		}
 		if *stack.StackStatus != "CREATE_COMPLETE" {
 			return fmt.Errorf("Stack creation failed.\nView status at %s", cloudformationStackURL(sess.Config.Region, stack.StackId))
 		}
-		printSuccess(fmt.Sprintf("created %s", friendlyName))
+		ui.PrintSuccess(fmt.Sprintf("created %s", friendlyName))
 	}
 	return nil
 }
@@ -146,7 +134,7 @@ func createStackAndWait(cfnSvc *cloudformation.CloudFormation, stackInput *cloud
 	if err != nil {
 		return nil, err
 	}
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	fmt.Println(aurora.Faint(*stackOutput.StackId))
 	stack, err := waitForCloudformationStack(cfnSvc, *stackInput.StackName)
 	if err != nil {
@@ -160,7 +148,7 @@ func createStackAndWait(cfnSvc *cloudformation.CloudFormation, stackInput *cloud
 
 // retryStackCreation will attempt to destroy and recreate the stack
 func retryStackCreation(cfnSvc *cloudformation.CloudFormation, stackID *string, input *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
-	printWarning("stack creation failed")
+	ui.PrintWarning("stack creation failed")
 	fmt.Println("retrying operation... deleting and recreating stack")
 	sentry.CaptureException(fmt.Errorf("Stack creation failed: %s", *input.StackName))
 	defer sentry.Flush(time.Second * 5)
@@ -184,30 +172,6 @@ func retryStackCreation(cfnSvc *cloudformation.CloudFormation, stackID *string, 
 
 func cloudformationStackURL(region, stackID *string) string {
 	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
-}
-
-func makeClusterQuestion(sess *session.Session, message *string) (*survey.Question, error) {
-	clusters, err := ddb.ListClusters(sess)
-	if err != nil {
-		return nil, err
-	}
-	if len(clusters) == 0 {
-		return nil, fmt.Errorf("no AppPack clusters are setup")
-	}
-	var defaultCluster string
-	if contains(clusters, "apppack") {
-		defaultCluster = "apppack"
-	} else {
-		defaultCluster = clusters[0]
-	}
-	return &survey.Question{
-		Name: "cluster",
-		Prompt: &survey.Select{
-			Message: *message,
-			Options: clusters,
-			Default: defaultCluster,
-		},
-	}, err
 }
 
 // HasSameItems verifies two string slices contain the same elements
@@ -247,12 +211,12 @@ func checkHostedZone(sess *session.Session, zone *route53.HostedZone) error {
 	if HasSameItems(actualServers, expectedServers) {
 		return nil
 	}
-	Spinner.Stop()
-	printWarning(fmt.Sprintf("%s doesn't appear to be using AWS' domain servers", strings.TrimSuffix(*zone.Name, ".")))
+	ui.Spinner.Stop()
+	ui.PrintWarning(fmt.Sprintf("%s doesn't appear to be using AWS' domain servers", strings.TrimSuffix(*zone.Name, ".")))
 	fmt.Printf("Expected:\n  %s\n\n", strings.Join(expectedServers, "\n  "))
 	fmt.Printf("Actual:\n  %s\n\n", strings.Join(actualServers, "\n  "))
 	fmt.Printf("If nameservers are not setup properly, TLS certificate creation will fail.\n")
-	pauseUntilEnter("Once you've verified the nameservers are correct, press ENTER to continue.")
+	ui.PauseUntilEnter("Once you've verified the nameservers are correct, press ENTER to continue.")
 	return nil
 }
 
@@ -401,14 +365,24 @@ var createRedisCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		ui.StartSpinner()
+		sess, err := adminSession(SessionDurationSeconds)
+		checkErr(err)
 		var name string
 		if len(args) == 0 {
 			name = "apppack"
 		} else {
 			name = args[0]
 		}
-		sess, err := adminSession()
-		checkErr(err)
+		CreateStackCommand(sess, &StackCommandOpts{
+			StackName: name,
+			StackType: "Redis",
+			Flags:     cmd.Flags(),
+			Stack: &stacks.RedisStack{
+				Parameters: &stacks.RedisStackParameters{},
+			},
+		})
+
 		answers := make(map[string]interface{})
 		if !nonInteractive {
 			questions := []*survey.Question{}
@@ -440,20 +414,7 @@ var createRedisCmd = &cobra.Command{
 		} else {
 			fmt.Println("Creating Redis resources, this may take a few minutes...")
 		}
-		startSpinner()
-		authToken := fmt.Sprintf(redisAuthTokenParameterTmpl, name)
-		ssmSvc := ssm.New(sess)
-		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-			Name:  &authToken,
-			Value: aws.String(generatePassword()),
-			Type:  aws.String("SecureString"),
-		})
-		checkErr(err)
-		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:redis"), Value: &name},
-			{Key: aws.String("apppack:cluster"), Value: cluster},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
+		ui.StartSpinner()
 
 		input := cloudformation.CreateStackInput{
 			StackName:   aws.String(fmt.Sprintf(redisStackNameTmpl, name)),
@@ -468,10 +429,6 @@ var createRedisCmd = &cobra.Command{
 					ParameterValue: clusterStack.StackName,
 				},
 				{
-					ParameterKey:   aws.String("AuthTokenParameter"),
-					ParameterValue: &authToken,
-				},
-				{
 					ParameterKey:   aws.String("InstanceClass"),
 					ParameterValue: getArgValue(cmd, &answers, "instance-class", true),
 				},
@@ -480,279 +437,29 @@ var createRedisCmd = &cobra.Command{
 					ParameterValue: &multiAZParameter,
 				},
 			},
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-			Tags:         cfnTags,
 		}
-		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s Redis instance", name))
-		checkErr(err)
 	},
 }
 
-func verifySourceCredentials(sess *session.Session, repositoryType string, interactive bool) error {
-	codebuildSvc := codebuild.New(sess)
-	sourceCredentialsOutput, err := codebuildSvc.ListSourceCredentials(&codebuild.ListSourceCredentialsInput{})
-	if err != nil {
-		return err
+func CreateStackCommand(sess *session.Session, opts *StackCommandOpts) {
+	checkErr(stacks.LoadStack(opts.Stack, opts.Flags))
+	ui.Spinner.Stop()
+	fmt.Print(aurora.Green(fmt.Sprintf("🏗  Creating %s `%s` in %s", opts.StackType, opts.StackName, *sess.Config.Region)).String())
+	if CurrentAccountRole != nil {
+		fmt.Print(aurora.Green(fmt.Sprintf(" on %s", CurrentAccountRole.GetAccountName())).String())
 	}
-	hasCredentials := false
-	for _, cred := range sourceCredentialsOutput.SourceCredentialsInfos {
-		if *cred.ServerType == repositoryType {
-			hasCredentials = true
-		}
-	}
-	if !hasCredentials {
-		var friendlySourceName string
-		if repositoryType == "BITBUCKET" {
-			friendlySourceName = "Bitbucket"
-		} else {
-			friendlySourceName = "GitHub"
-		}
-		Spinner.Stop()
-		printWarning(fmt.Sprintf("CodeBuild needs to be authenticated to access your repository at %s", friendlySourceName))
-		fmt.Println("On the CodeBuild new project page:")
-		fmt.Printf("    1. Scroll to the %s section\n", aurora.Bold("Source"))
-		fmt.Printf("    2. Select %s for the %s\n", aurora.Bold(friendlySourceName), aurora.Bold("Source provider"))
-		fmt.Printf("    3. Keep the default %s\n", aurora.Bold("Connect using OAuth"))
-		fmt.Printf("    4. Click %s\n", aurora.Bold(fmt.Sprintf("Connect to %s", friendlySourceName)))
-		fmt.Printf("    5. Click %s in the popup window\n", aurora.Bold("Confirm"))
-		fmt.Printf("    6. %s You can close the browser window and continue with app setup here.\n\n", aurora.Bold("That's it!"))
-		newProjectURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/project/new", *sess.Config.Region)
-		if !interactive {
-			fmt.Printf("Visit %s to complete the authentication\n", newProjectURL)
-			fmt.Println("No further steps are necessary. After you've completed the authentication, re-run this command.")
-			os.Exit(1)
-		}
-		url, err := auth.GetConsoleURL(sess, newProjectURL)
-		if err == nil && isatty.IsTerminal(os.Stdin.Fd()) {
-			fmt.Println("Opening the CodeBuild new project page now...")
-			browser.OpenURL(*url)
-		} else {
-			fmt.Printf("Visit the following URL to authenticate: %s", newProjectURL)
-		}
-		pauseUntilEnter("Finish authentication in your web browser then press ENTER to continue.")
-		return verifySourceCredentials(sess, repositoryType, interactive)
-	}
-	return nil
-}
-
-func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
-	answers := make(map[string]interface{})
-	var databaseAddonEnabled bool
-	var redisAddonEnabled bool
-	name := args[0]
-	var appType string
-	if pipeline {
-		appType = "pipeline"
-	} else {
-		appType = "app"
-	}
-	sess, err := adminSession()
-	checkErr(err)
+	fmt.Println()
 	if !nonInteractive {
-		questions := []*survey.Question{}
-		clusterQuestion, err := makeClusterQuestion(sess, aws.String("cluster to install app into"))
-		checkErr(err)
-		questions = append(questions, clusterQuestion)
-		addQuestionFromFlag(cmd.Flags().Lookup("repository"), &questions, nil)
-		if !pipeline {
-			addQuestionFromFlag(cmd.Flags().Lookup("branch"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
-		}
-		addQuestionFromFlag(cmd.Flags().Lookup("healthcheck-path"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-private-s3"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-public-s3"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-database"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-redis"), &questions, nil)
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
-		}
-		questions = []*survey.Question{}
-		databaseAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-database", false))
-		if databaseAddonEnabled {
-			databaseClusterQuestion, err := makeDatabaseQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
-			checkErr(err)
-			questions = append(questions, databaseClusterQuestion)
-		}
-		redisAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-redis", false))
-		if redisAddonEnabled {
-			redisInstanceQuestion, err := makeRedisQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
-			checkErr(err)
-			questions = append(questions, redisInstanceQuestion)
-		}
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-sqs"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-ses"), &questions, nil)
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
-		}
-		questions = []*survey.Question{}
-		if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-ses-domain"), &questions, nil)
-		}
-		addQuestionFromFlag(cmd.Flags().Lookup("users"), &questions, nil)
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
-		}
+		checkErr(opts.Stack.AskQuestions(sess))
 	}
-	startSpinner()
-	cluster := getArgValue(cmd, &answers, "cluster", true)
-	cfnTags := []*cloudformation.Tag{
-		{Key: aws.String("apppack:appName"), Value: &name},
-		{Key: aws.String("apppack:cluster"), Value: cluster},
-		{Key: aws.String("apppack"), Value: aws.String("true")},
-	}
-	if pipeline {
-		pipelineTag := cloudformation.Tag{Key: aws.String("apppack:pipeline"), Value: aws.String("true")}
-		cfnTags = append(cfnTags, &pipelineTag)
-	}
-
-	clusterStack, err := ddb.StackFromItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
-	checkErr(err)
-	sesDomain := ""
-	if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
-		sesDomain = *getArgValue(cmd, &answers, "addon-ses-domain", false)
-	}
-	var databaseStackName string
-	if isTruthy(getArgValue(cmd, &answers, "addon-database", false)) {
-		databaseDisplay := getArgValue(cmd, &answers, "addon-database-name", false)
-		// remove ' (engine)' from the database display text
-		database := strings.Split(*databaseDisplay, " ")[0]
-		databaseStack, err := ddb.GetClusterItem(sess, cluster, "DATABASE", &database)
-		checkErr(err)
-		databaseStackName = strings.Split(databaseStack.StackID, "/")[1]
+	ui.StartSpinner()
+	if createChangeSet {
+		checkErr(stacks.CreateStackChangeset(opts.Stack, sess, &opts.StackName, &release))
 	} else {
-		databaseStackName = ""
+		checkErr(stacks.CreateStack(opts.Stack, sess, &opts.StackName, &release))
 	}
-	var redisStackName string
-	if isTruthy(getArgValue(cmd, &answers, "addon-redis", false)) {
-		redis := getArgValue(cmd, &answers, "addon-redis-name", false)
-		redisStack, err := ddb.GetClusterItem(sess, cluster, "REDIS", redis)
-		checkErr(err)
-		redisStackName = strings.Split(redisStack.StackID, "/")[1]
-	} else {
-		redisStackName = ""
-	}
-	repositoryURL := getArgValue(cmd, &answers, "repository", true)
-	var repositoryType string
-	if strings.Contains(*repositoryURL, "github.com") {
-		repositoryType = "GITHUB"
-	} else if strings.Contains(*repositoryURL, "bitbucket.org") {
-		repositoryType = "BITBUCKET"
-	} else {
-		checkErr(fmt.Errorf("unknown repository source"))
-	}
-	err = verifySourceCredentials(sess, repositoryType, !nonInteractive)
-	checkErr(err)
-	var fargateParameter string
-	if isTruthy(aws.String(cmd.Flags().Lookup("ec2").Value.String())) {
-		// TODO: verify cluster is EC2 compatible
-		fargateParameter = "disabled"
-	} else {
-		fargateParameter = "enabled"
-	}
-	var buildWebhookParameter string
-	flag := cmd.Flags().Lookup("disable-build-webhook")
-	if flag != nil && isTruthy(aws.String(flag.Value.String())) {
-		buildWebhookParameter = "disabled"
-	} else {
-		buildWebhookParameter = "enabled"
-	}
-	rand.Seed(time.Now().UnixNano())
-
-	input := cloudformation.CreateStackInput{
-		TemplateURL: aws.String(getReleaseUrl(appFormationURL)),
-		Parameters: []*cloudformation.Parameter{
-			{
-				ParameterKey:   aws.String("Type"),
-				ParameterValue: &appType,
-			},
-			{
-				ParameterKey:   aws.String("HealthCheckPath"),
-				ParameterValue: getArgValue(cmd, &answers, "healthcheck-path", true),
-			},
-			{
-				ParameterKey:   aws.String("LoadBalancerRulePriority"),
-				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-200)+200)), // TODO: verify empty slot
-			},
-			{
-				ParameterKey:   aws.String("Name"),
-				ParameterValue: &name,
-			},
-			{
-				ParameterKey:   aws.String("ClusterStackName"),
-				ParameterValue: clusterStack.StackName,
-			},
-			{
-				ParameterKey:   aws.String("AppPackRoleExternalId"),
-				ParameterValue: aws.String(strings.ReplaceAll(uuid.New().String(), "-", "")),
-			},
-			{
-				ParameterKey:   aws.String("PrivateS3BucketEnabled"),
-				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-private-s3", false)))),
-			},
-			{
-				ParameterKey:   aws.String("PublicS3BucketEnabled"),
-				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-public-s3", false)))),
-			},
-			{
-				ParameterKey:   aws.String("SesDomain"),
-				ParameterValue: &sesDomain,
-			},
-			{
-				ParameterKey:   aws.String("DatabaseStackName"),
-				ParameterValue: &databaseStackName,
-			},
-			{
-				ParameterKey:   aws.String("RedisStackName"),
-				ParameterValue: &redisStackName,
-			},
-			{
-				ParameterKey:   aws.String("SQSQueueEnabled"),
-				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-sqs", false)))),
-			},
-			{
-				ParameterKey:   aws.String("RepositoryType"),
-				ParameterValue: &repositoryType,
-			},
-			{
-				ParameterKey:   aws.String("RepositoryUrl"),
-				ParameterValue: repositoryURL,
-			},
-			{
-				ParameterKey:   aws.String("Fargate"),
-				ParameterValue: &fargateParameter,
-			},
-			{
-				ParameterKey:   aws.String("AllowedUsers"),
-				ParameterValue: aws.String(strings.Trim(*(getArgValue(cmd, &answers, "users", true)), "[]")),
-			},
-			{
-				ParameterKey:   aws.String("BuildWebhook"),
-				ParameterValue: &buildWebhookParameter,
-			},
-		},
-		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-		Tags:         cfnTags,
-	}
-	if pipeline {
-		input.StackName = aws.String(pipelineStackName(name))
-		pipelineParameters := []*cloudformation.Parameter{
-			{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("")},
-			{ParameterKey: aws.String("Domains"), ParameterValue: aws.String("")},
-		}
-		input.Parameters = append(input.Parameters, pipelineParameters...)
-	} else {
-		input.StackName = aws.String(appStackName(name))
-		appParameters := []*cloudformation.Parameter{
-			{ParameterKey: aws.String("Branch"), ParameterValue: getArgValue(cmd, &answers, "branch", true)},
-			{ParameterKey: aws.String("Domains"), ParameterValue: getArgValue(cmd, &answers, "domain", false)},
-		}
-		input.Parameters = append(input.Parameters, appParameters...)
-	}
-	err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s %s", name, appType))
-	checkErr(err)
-	if !pipeline {
-		fmt.Println(aurora.White(fmt.Sprintf("  %s app created\n  Push to your git repository to trigger a build or run `apppack -a %s build start`", name, name)))
-	}
+	ui.Spinner.Stop()
+	ui.PrintSuccess(fmt.Sprintf("updated %s stack for %s", opts.StackType, opts.StackName))
 }
 
 // appCmd represents the create app command
@@ -763,7 +470,20 @@ var appCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		createAppOrPipeline(cmd, args, false)
+		ui.StartSpinner()
+		sess, err := adminSession(SessionDurationSeconds)
+		checkErr(err)
+		name := args[0]
+		CreateStackCommand(sess, &StackCommandOpts{
+			StackName: name,
+			StackType: "app",
+			Flags:     cmd.Flags(),
+			Stack: &stacks.AppStack{
+				Parameters: &stacks.AppStackParameters{},
+				Pipeline:   false,
+			},
+		})
+		fmt.Println(aurora.White(fmt.Sprintf("Push to your git repository to trigger a build or run `apppack -a %s build start`", name)))
 	},
 }
 
@@ -775,7 +495,19 @@ var pipelineCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		createAppOrPipeline(cmd, args, true)
+		ui.StartSpinner()
+		sess, err := adminSession(SessionDurationSeconds)
+		checkErr(err)
+		name := args[0]
+		CreateStackCommand(sess, &StackCommandOpts{
+			StackName: name,
+			StackType: "pipeline",
+			Flags:     cmd.Flags(),
+			Stack: &stacks.AppStack{
+				Parameters: &stacks.AppStackParameters{},
+				Pipeline:   true,
+			},
+		})
 	},
 }
 
@@ -784,7 +516,7 @@ var stackHasFailure = false
 
 // waitForCloudformationStack displays the progress of a Stack while it waits for it to complete
 func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName string) (*cloudformation.Stack, error) {
-	startSpinner()
+	ui.StartSpinner()
 	stackDesc, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: &stackName,
 	})
@@ -794,7 +526,7 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 	stack := stackDesc.Stacks[0]
 
 	if strings.HasSuffix(*stack.StackStatus, "_COMPLETE") || strings.HasSuffix(*stack.StackStatus, "_FAILED") {
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		return stack, nil
 	}
 	stackresources, err := cfnSvc.DescribeStackResources(&cloudformation.DescribeStackResourcesInput{
@@ -814,9 +546,9 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 			// only warn on the first failure
 			// failures will cascade and end up being extra noise
 			if !stackHasFailure {
-				Spinner.Stop()
-				printError(fmt.Sprintf("%s failed: %s", *resource.LogicalResourceId, *resource.ResourceStatusReason))
-				startSpinner()
+				ui.Spinner.Stop()
+				ui.PrintError(fmt.Sprintf("%s failed: %s", *resource.LogicalResourceId, *resource.ResourceStatusReason))
+				ui.StartSpinner()
 				stackHasFailure = true
 			}
 			failed = append(failed, *resource.ResourceStatus)
@@ -832,7 +564,7 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 	if len(failed) > 0 {
 		status = fmt.Sprintf("%s / %d failed", status, len(failed))
 	}
-	Spinner.Suffix = status
+	ui.Spinner.Suffix = status
 	time.Sleep(5 * time.Second)
 	return waitForCloudformationStack(cfnSvc, stackName)
 }
