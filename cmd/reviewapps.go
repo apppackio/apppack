@@ -174,7 +174,7 @@ var reviewappsCreateCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
+		a, err := app.Init(args[0], UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		if !a.IsReviewApp() { // TODO: validate
 			checkErr(fmt.Errorf("no pull request number set"))

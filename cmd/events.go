@@ -38,7 +38,7 @@ var eventsCmd = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		events, err := a.GetECSEvents(args[0])
 		checkErr(err)

@@ -113,7 +113,7 @@ The domain(s) provided must all be a part of the same parent domain and a Route5
 	Run: func(cmd *cobra.Command, args []string) {
 		primaryDomain := args[0]
 		startSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		appName, err := appForDomain(sess, primaryDomain)
 		checkErr(err)

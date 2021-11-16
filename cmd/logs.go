@@ -47,6 +47,8 @@ func newBlade(session *session.Session) *blade.Blade {
 	return &b
 }
 
+var followLogs = false
+
 // logsCmd represents the logs command
 var logsCmd = &cobra.Command{
 	Use:                   "logs",
@@ -54,7 +56,13 @@ var logsCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		var duration int
+		if followLogs {
+			duration = MaxSessionDurationSeconds
+		} else {
+			duration = SessionDurationSeconds
+		}
+		a, err := app.Init(AppName, UseAWSCredentials, duration)
 		checkErr(err)
 		err = a.LoadSettings()
 		checkErr(err)
@@ -77,7 +85,7 @@ var logsCmd = &cobra.Command{
 			sawConfig.Streams = streams
 		}
 		Spinner.Stop()
-		if cmd.Flags().Lookup("follow").Value.String() == "true" {
+		if followLogs {
 			b.StreamEvents()
 		} else {
 			b.GetEvents()
@@ -92,7 +100,7 @@ var logsOpenCmd = &cobra.Command{
 	Long:                  `Generates a presigned URL and opens a web browser to Cloudwatch Insights in the AWS web console`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		a.LoadSettings()
 		checkErr(err)
@@ -142,5 +150,5 @@ Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`,
 	logsCmd.Flags().BoolVar(&sawOutputConfig.Expand, "expand", false, "indent JSON log messages")
 	logsCmd.Flags().BoolVar(&sawOutputConfig.Invert, "invert", false, "invert colors for light terminal themes")
 	logsCmd.Flags().BoolVar(&sawOutputConfig.RawString, "rawString", false, "print JSON strings without escaping")
-	logsCmd.Flags().BoolP("follow", "f", false, "Stream logs to console")
+	logsCmd.Flags().BoolVarP(&followLogs, "follow", "f", false, "Stream logs to console")
 }

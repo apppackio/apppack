@@ -122,7 +122,7 @@ var createClusterCmd = &cobra.Command{
 			clusterName = args[0]
 		}
 		startSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		regionExists, err := stackExists(sess, fmt.Sprintf("apppack-region-%s", *sess.Config.Region))
 		checkErr(err)

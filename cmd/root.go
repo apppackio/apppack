@@ -45,6 +45,7 @@ var AppName string
 var AccountIDorAlias string
 var UseAWSCredentials bool = false
 var SessionDurationSeconds int = 900
+var MaxSessionDurationSeconds int = 3600
 
 // Spinner is the loading animation to use for all commands
 var Spinner *spinner.Spinner = spinner.New(spinner.CharSets[14], 50*time.Millisecond)

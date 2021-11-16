@@ -608,7 +608,7 @@ var createRedisCmd = &cobra.Command{
 		} else {
 			name = args[0]
 		}
-		sess, err := adminSession(SessionDurationSeconds)
+		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		answers := make(map[string]interface{})
 		if !nonInteractive {
@@ -747,7 +747,7 @@ func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
 	} else {
 		appType = "app"
 	}
-	sess, err := adminSession(SessionDurationSeconds)
+	sess, err := adminSession(MaxSessionDurationSeconds)
 	checkErr(err)
 	if !nonInteractive {
 		questions := []*survey.Question{}
