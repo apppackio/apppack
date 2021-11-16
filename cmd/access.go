@@ -109,7 +109,9 @@ func adminSession(sessionDuration int) (*session.Session, error) {
 		}
 		return sess, nil
 	}
-	sess, CurrentAccountRole, err := auth.AdminAWSSession(AccountIDorAlias, sessionDuration)
+	var sess *session.Session
+	var err error
+	sess, CurrentAccountRole, err = auth.AdminAWSSession(AccountIDorAlias, sessionDuration)
 	return sess, err
 }
 

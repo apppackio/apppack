@@ -447,12 +447,9 @@ func CreateStackCommand(sess *session.Session, opts *StackCommandOpts) {
 	if CurrentAccountRole != nil {
 		fmt.Print(aurora.Green(fmt.Sprintf(" on %s", CurrentAccountRole.GetAccountName())).String())
 	}
-<<<<<<< HEAD
 	fmt.Println()
-=======
 	sess, err := adminSession(SessionDurationSeconds)
 	checkErr(err)
->>>>>>> 10abb65 (Bump up session timeout for long commands)
 	if !nonInteractive {
 		checkErr(opts.Stack.AskQuestions(sess))
 	}
