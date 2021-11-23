@@ -91,7 +91,7 @@ func stringInSlice(a string, list []string) bool {
 
 // removeFromList removes items in a slice from a slice of strings
 // it returns both the new slice and a slice of items not found
-func removeFromSlice(slice []string, toRemove []string) ([]string, []string) {
+func removeFromSlice(slice, toRemove []string) ([]string, []string) {
 	var result []string
 	var notFound []string
 	for _, r := range toRemove {
