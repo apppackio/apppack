@@ -129,7 +129,7 @@ jobs:
             ./bin/apppack create database --region us-east-2 \
                 --aws-credentials \
                 --non-interactive \
-                --instance-class db.t3.small \
+                --instance-class db.t3.medium \
                 --aurora \
                 --engine mysql \
                 --allocated-storage 10 \

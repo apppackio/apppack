@@ -58,9 +58,55 @@ func validateEmail(email string) bool {
 func splitAndTrimCSV(csv *string) []string {
 	var items []string
 	for _, i := range strings.Split(*csv, ",") {
-		items = append(items, strings.Trim(i, " "))
+		i = strings.TrimSpace(i)
+		if i != "" {
+			items = append(items, i)
+		}
 	}
 	return items
+}
+
+// deduplicate removes duplicates from a slice of strings
+func deduplicate(slice []string) ([]string, []string) {
+	seen := make(map[string]bool)
+	var result []string
+	var dupes []string
+	for _, s := range slice {
+		if seen[s] {
+			dupes = append(dupes, s)
+			continue
+		}
+		seen[s] = true
+		result = append(result, s)
+	}
+	return result, dupes
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+// removeFromList removes items in a slice from a slice of strings
+// it returns both the new slice and a slice of items not found
+func removeFromSlice(slice, toRemove []string) ([]string, []string) {
+	var result []string
+	var notFound []string
+	for _, r := range toRemove {
+		if !stringInSlice(r, slice) {
+			notFound = append(notFound, r)
+		}
+	}
+	for _, s := range slice {
+		if !stringInSlice(s, toRemove) {
+			result = append(result, s)
+		}
+	}
+	return result, notFound
 }
 
 func indexOf(arr []string, item string) int {
@@ -115,6 +161,30 @@ func adminSession(sessionDuration int) (*session.Session, error) {
 	return sess, err
 }
 
+func updateAllowedUsers(sess *session.Session, stack *cloudformation.Stack, users []string) error {
+	startSpinner()
+	sort.Strings(users)
+	usersCSV := aws.String(strings.Join(users, ","))
+	if err := replaceParameter(stack, "AllowedUsers", usersCSV); err != nil {
+		return err
+	}
+	_, err := updateStackAndWait(sess, &cloudformation.UpdateStackInput{
+		StackName:           stack.StackName,
+		Parameters:          stack.Parameters,
+		UsePreviousTemplate: aws.Bool(true),
+		Capabilities:        []*string{aws.String("CAPABILITY_IAM")},
+	})
+	if err != nil {
+		return err
+	}
+	Spinner.Stop()
+	printSuccess(fmt.Sprintf("allowed users updated for %s", AppName))
+	for _, u := range users {
+		fmt.Printf("  • %s\n", u)
+	}
+	return nil
+}
+
 // accessCmd represents the access command
 var accessCmd = &cobra.Command{
 	Use:                   "access",
@@ -133,22 +203,25 @@ var accessCmd = &cobra.Command{
 		sort.Strings(users)
 		Spinner.Stop()
 		for _, u := range users {
-			fmt.Println(u)
+			fmt.Printf("  • %s\n", u)
 		}
 	},
 }
 
 // accessAddCmd represents the access command
 var accessAddCmd = &cobra.Command{
-	Use:                   "add <email>",
-	Short:                 "add access for a user to the app",
+	Use:                   "add <email>...",
+	Short:                 "add access for users to the app",
 	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to add access for the user.",
 	DisableFlagsInUseLine: true,
-	Args:                  cobra.ExactArgs(1),
+	Args:                  cobra.MinimumNArgs(1),
+	Example:               "apppack -a my-app access add user1@example.com user2@example.com",
 	Run: func(cmd *cobra.Command, args []string) {
-		email := args[0]
-		if !validateEmail(email) {
-			checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
+		for _, email := range args {
+
+			if !validateEmail(email) {
+				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
+			}
 		}
 		startSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
@@ -157,30 +230,31 @@ var accessAddCmd = &cobra.Command{
 		checkErr(err)
 		usersCSV, err := parameterValue(stack, "AllowedUsers")
 		checkErr(err)
-		usersCSV = aws.String(strings.Join([]string{*usersCSV, email}, ","))
-		err = replaceParameter(stack, "AllowedUsers", usersCSV)
-		checkErr(err)
-		_, err = updateStackAndWait(sess, &cloudformation.UpdateStackInput{
-			StackName:           stack.StackName,
-			Parameters:          stack.Parameters,
-			UsePreviousTemplate: aws.Bool(true),
-			Capabilities:        []*string{aws.String("CAPABILITY_IAM")},
-		})
-		checkErr(err)
+		users := splitAndTrimCSV(usersCSV)
+		users = append(users, args...)
+		users, dupes := deduplicate(users)
 		Spinner.Stop()
-		printSuccess(fmt.Sprintf("access added for %s on %s", email, AppName))
+		for _, d := range dupes {
+			printWarning(fmt.Sprintf("%s already has access to %s", d, AppName))
+		}
+		checkErr(updateAllowedUsers(sess, stack, users))
 	},
 }
 
 // accessRemoveCmd represents the access command
 var accessRemoveCmd = &cobra.Command{
-	Use:                   "remove <email>",
-	Short:                 "remove access for a user to the app",
+	Use:                   "remove <email>...",
+	Short:                 "remove access for users to the app",
 	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to remove access for the user.",
 	DisableFlagsInUseLine: true,
-	Args:                  cobra.ExactArgs(1),
+	Args:                  cobra.MinimumNArgs(1),
+	Example:               "apppack -a my-app access remove user1@example.com user2@example.com",
 	Run: func(cmd *cobra.Command, args []string) {
-		email := args[0]
+		for _, email := range args {
+			if !validateEmail(email) {
+				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
+			}
+		}
 		startSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
@@ -189,22 +263,12 @@ var accessRemoveCmd = &cobra.Command{
 		usersCSV, err := parameterValue(stack, "AllowedUsers")
 		checkErr(err)
 		userList := splitAndTrimCSV(usersCSV)
-		idx := indexOf(userList, email)
-		if idx < 0 {
-			checkErr(fmt.Errorf("%s does not have access to %s", email, AppName))
-		}
-		newUsersCSV := strings.Join(append(userList[:idx], userList[idx+1:]...), ",")
-		err = replaceParameter(stack, "AllowedUsers", &newUsersCSV)
-		checkErr(err)
-		_, err = updateStackAndWait(sess, &cloudformation.UpdateStackInput{
-			StackName:           stack.StackName,
-			Parameters:          stack.Parameters,
-			UsePreviousTemplate: aws.Bool(true),
-			Capabilities:        []*string{aws.String("CAPABILITY_IAM")},
-		})
-		checkErr(err)
+		users, notFound := removeFromSlice(userList, args)
 		Spinner.Stop()
-		printSuccess(fmt.Sprintf("access removed for %s on %s", email, AppName))
+		for _, n := range notFound {
+			printWarning(fmt.Sprintf("%s does not have access to %s", n, AppName))
+		}
+		checkErr(updateAllowedUsers(sess, stack, users))
 	},
 }
 

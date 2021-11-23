@@ -593,10 +593,13 @@ var buildStartCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
+		var duration int
 		if watchBuildFlag {
-			SessionDurationSeconds = 3600
+			duration = MaxSessionDurationSeconds
+		} else {
+			duration = SessionDurationSeconds
 		}
-		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		a, err := app.Init(AppName, UseAWSCredentials, duration)
 		checkErr(err)
 		build, err := a.StartBuild(false)
 		checkErr(err)
@@ -631,8 +634,7 @@ var buildWatchCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
-		SessionDurationSeconds = 3600
-		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		var build *app.BuildStatus
 		var buildNumber int

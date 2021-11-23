@@ -366,7 +366,7 @@ var createRedisCmd = &cobra.Command{
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		var name string
 		if len(args) == 0 {
@@ -448,7 +448,7 @@ func CreateStackCommand(sess *session.Session, opts *StackCommandOpts) {
 		fmt.Print(aurora.Green(fmt.Sprintf(" on %s", CurrentAccountRole.GetAccountName())).String())
 	}
 	fmt.Println()
-	sess, err := adminSession(SessionDurationSeconds)
+	sess, err := adminSession(MaxSessionDurationSeconds)
 	checkErr(err)
 	if !nonInteractive {
 		checkErr(opts.Stack.AskQuestions(sess))

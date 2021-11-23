@@ -69,7 +69,7 @@ func updateStackAndWait(sess *session.Session, stackInput *cloudformation.Update
 
 func upgradeStack(stackName, templateURL string) error {
 	startSpinner()
-	sess, err := adminSession(SessionDurationSeconds)
+	sess, err := adminSession(MaxSessionDurationSeconds)
 	checkErr(err)
 	cfnSvc := cloudformation.New(sess)
 	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
