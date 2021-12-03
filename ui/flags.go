@@ -85,7 +85,11 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 			if field.Type.Elem().Kind() != reflect.String {
 				return fmt.Errorf("unsupported slice type %s", field.Type.Elem().Kind())
 			}
-			ref.Field(i).Set(reflect.ValueOf(strings.Split(flag.Value.String(), ",")))
+			val, err := flags.GetStringSlice(tag.Name)
+			if err != nil {
+				return err
+			}
+			ref.Field(i).Set(reflect.ValueOf(val))
 		default:
 			return fmt.Errorf("unsupported type %s", field.Type.Kind())
 		}

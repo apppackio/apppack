@@ -25,6 +25,7 @@ import (
 	"github.com/TylerBrock/saw/blade"
 	sawconfig "github.com/TylerBrock/saw/config"
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/pkg/browser"
@@ -55,7 +56,7 @@ var logsCmd = &cobra.Command{
 	Short:                 "access application logs from Cloudwatch Logs",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		var duration int
 		if followLogs {
 			duration = MaxSessionDurationSeconds
@@ -84,7 +85,7 @@ var logsCmd = &cobra.Command{
 			}
 			sawConfig.Streams = streams
 		}
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		if followLogs {
 			b.StreamEvents()
 		} else {
@@ -102,8 +103,7 @@ var logsOpenCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
-		a.LoadSettings()
-		checkErr(err)
+		checkErr(a.LoadSettings())
 		logGroupParam := strings.ReplaceAll(url.QueryEscape(a.Settings.LogGroup.Name), "%", "*")
 		var query string
 		if a.IsReviewApp() {

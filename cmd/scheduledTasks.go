@@ -22,6 +22,7 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/ui"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
@@ -30,9 +31,8 @@ func printTasks(tasks []*app.ScheduledTask) {
 	if len(tasks) == 0 {
 		fmt.Printf("%s\n", aurora.Yellow("no scheduled tasks defined"))
 		return
-	} else {
-		fmt.Printf("%s\n", aurora.Faint("Min\tHr\tDayMon\tMon\tDayWk\tYr"))
 	}
+	fmt.Printf("%s\n", aurora.Faint("Min\tHr\tDayMon\tMon\tDayWk\tYr"))
 	for _, task := range tasks {
 		fmt.Printf("%s\t%s\n", aurora.Faint(strings.Join(strings.Split(task.Schedule, " "), "\t")), task.Command)
 	}
@@ -44,14 +44,14 @@ var scheduledTasksCmd = &cobra.Command{
 	Short:                 "list scheduled tasks",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
 			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
 		}
 		tasks, err := a.ScheduledTasks()
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		checkErr(err)
 		printTasks(tasks)
 	},
@@ -75,14 +75,14 @@ Be sure to wrap your command and schedule in quotes to ensure they are read as a
 			checkErr(fmt.Errorf("schedule string should contain 6 space separated values\nhttps://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions"))
 		}
 		command := strings.Join(args, " ")
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
 			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
 		}
 		tasks, err := a.CreateScheduledTask(schedule, command)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		checkErr(err)
 		printSuccess("task created")
 		printTasks(tasks)
@@ -99,7 +99,7 @@ var scheduledTasksDeleteCmd = &cobra.Command{
 If no index is provided, an interactive prompt will be provided to choose the task to delete.`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
@@ -127,7 +127,7 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 				},
 			}}
 			answers := make(map[string]int)
-			Spinner.Stop()
+			ui.Spinner.Stop()
 			if err := survey.Ask(questions, &answers); err != nil {
 				checkErr(err)
 			}

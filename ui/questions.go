@@ -28,7 +28,7 @@ type BooleanOptionProxy struct {
 	Value *bool
 }
 
-func (b *BooleanOptionProxy) WriteAnswer(field string, value interface{}) error {
+func (b *BooleanOptionProxy) WriteAnswer(_ string, value interface{}) error {
 	ans, ok := value.(core.OptionAnswer)
 	if !ok {
 		return fmt.Errorf("unable to convert value to OptionAnswer")
@@ -38,6 +38,20 @@ func (b *BooleanOptionProxy) WriteAnswer(field string, value interface{}) error 
 	} else {
 		*b.Value = false
 	}
+	return nil
+}
+
+// MultiLineValueProxy allows setting a []string value from a survey.Multiline question
+type MultiLineValueProxy struct {
+	Value *[]string
+}
+
+func (m *MultiLineValueProxy) WriteAnswer(_ string, value interface{}) error {
+	ans, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("unable to convert value to string")
+	}
+	*m.Value = strings.Split(ans, "\n")
 	return nil
 }
 
@@ -71,6 +85,8 @@ func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 		} else if p, ok := q.Question.Prompt.(*survey.Select); ok {
 			underline = len(p.Message)
 		} else if p, ok := q.Question.Prompt.(*survey.Multiline); ok {
+			underline = len(p.Message)
+		} else if p, ok := q.Question.Prompt.(*survey.Password); ok {
 			underline = len(p.Message)
 		}
 		fmt.Println(aurora.Faint(strings.Repeat("─", 2+underline)))

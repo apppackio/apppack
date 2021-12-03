@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
@@ -17,7 +18,7 @@ type RedisStackParameters struct {
 	Name               string
 	ClusterStackName   string `flag:"cluster;fmtString:apppack-cluster-%s"`
 	InstanceClass      string `flag:"instance-lass"`
-	MultiAZ            bool   `flag:"multi-az"`
+	MultiAZ            bool   `flag:"multi-az" cfnbool:"yesno"`
 	AuthTokenParameter string
 }
 
@@ -29,18 +30,26 @@ func (p *RedisStackParameters) ToCloudFormationParameters() ([]*cloudformation.P
 	return StructToCloudformationParameters(p)
 }
 
+var DefaultRedisStackParameters = RedisStackParameters{
+	InstanceClass: "cache.t4g.micro",
+	MultiAZ:       false,
+}
+
 // SetInternalFields updates fields that aren't exposed to the user
 func (p *RedisStackParameters) SetInternalFields(sess *session.Session, name *string) error {
 	if p.AuthTokenParameter == "" {
-		authToken := fmt.Sprintf(redisAuthTokenParameterTmpl, name)
+		authToken := fmt.Sprintf(redisAuthTokenParameterTmpl, *name)
 		p.AuthTokenParameter = authToken
 		ssmSvc := ssm.New(sess)
 		_, err := ssmSvc.PutParameter(&ssm.PutParameterInput{
 			Name:  &authToken,
-			Value: aws.String(generatePassword()),
+			Value: aws.String(GeneratePassword()),
 			Type:  aws.String("SecureString"),
 		})
 		return err
+	}
+	if p.Name == "" {
+		p.Name = *name
 	}
 	return nil
 }
@@ -60,6 +69,30 @@ func (a *RedisStack) GetStack() *cloudformation.Stack {
 
 func (a *RedisStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
+}
+
+func (*RedisStack) PreDelete(_ *session.Session) error {
+	return nil
+}
+
+func (a *RedisStack) PostDelete(sess *session.Session, name *string) error {
+	// PostDelete gets called during destroy even if the stack doesn't exist
+	// to cleanup orphaned resources. In that scenario, the name is provided
+	// otherwise it can be looked up from the Stack.
+	if name == nil {
+		name = aws.String("")
+		_, err := fmt.Sscanf(*a.Stack.StackName, redisStackNameTmpl, name)
+		if err != nil {
+			return err
+		}
+	}
+	parameterName := fmt.Sprintf(redisAuthTokenParameterTmpl, *name)
+	logrus.WithFields(logrus.Fields{"name": parameterName}).Debug("deleting SSM parameter")
+	ssmSvc := ssm.New(sess)
+	_, err := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
+		Name: &parameterName,
+	})
+	return err
 }
 
 func (a *RedisStack) ClusterName() string {
@@ -85,7 +118,7 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 		}
 	}
 	if a.Parameters.InstanceClass == "" {
-		a.Parameters.InstanceClass = "cache.t3.micro"
+		a.Parameters.InstanceClass = DefaultRedisStackParameters.InstanceClass
 	}
 	questions = append(questions, []*ui.QuestionExtra{
 		{
@@ -111,16 +144,16 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 			},
 		},
 	}...)
-	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
-		return err
-	}
-	return nil
+	return ui.AskQuestions(questions, a.Parameters)
 }
 
-
-func (a *RedisStack) StackName(name *string) *string {
+func (*RedisStack) StackName(name *string) *string {
 	stackName := fmt.Sprintf(redisStackNameTmpl, *name)
 	return &stackName
+}
+
+func (*RedisStack) StackType() string {
+	return "redis"
 }
 
 func (a *RedisStack) Tags(name *string) []*cloudformation.Tag {
@@ -131,16 +164,16 @@ func (a *RedisStack) Tags(name *string) []*cloudformation.Tag {
 	}
 }
 
-func (a *RedisStack) Capabilities() []*string {
+func (*RedisStack) Capabilities() []*string {
 	return []*string{
 		aws.String("CAPABILITY_IAM"),
 	}
 }
 
-func (a *RedisStack) TemplateURL(release *string) *string {
+func (*RedisStack) TemplateURL(release *string) *string {
 	url := redisFormationURL
-	if release != nil {
-		url = strings.Replace(appFormationURL, "/latest/", fmt.Sprintf("/%s/", *release), 1)
+	if release != nil && *release != "" {
+		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
 	return &url
 }

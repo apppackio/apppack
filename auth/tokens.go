@@ -103,15 +103,13 @@ func (t *Tokens) IsExpired() (*bool, error) {
 			logrus.WithFields(logrus.Fields{"expiration_date": out.Expiry.Time().Local().String()}).Debug("token has not expired")
 			b := false
 			return &b, nil
-		} else {
-			logrus.WithFields(logrus.Fields{"expiration_date": out.Expiry.Time().Local().String()}).Debug("token expired")
-			b := true
-			return &b, nil
 		}
-	} else {
-		logrus.WithFields(logrus.Fields{"error": err}).Debug("unable to parse token")
-		return nil, fmt.Errorf("unable to parse token")
+		logrus.WithFields(logrus.Fields{"expiration_date": out.Expiry.Time().Local().String()}).Debug("token expired")
+		b := true
+		return &b, nil
 	}
+	logrus.WithFields(logrus.Fields{"error": err}).Debug("unable to parse token")
+	return nil, fmt.Errorf("unable to parse token")
 }
 
 func (t *Tokens) GetAppList() ([]*AppRole, error) {

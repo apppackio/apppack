@@ -709,7 +709,9 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 
 func (a *App) GetECSEvents(service string) ([]*ecs.ServiceEvent, error) {
 	ecsSvc := ecs.New(a.Session)
-	a.LoadSettings()
+	if err := a.LoadSettings(); err != nil {
+		return nil, err
+	}
 	logrus.WithFields(logrus.Fields{"service": service}).Debug("fetching service events")
 	serviceStatus, err := ecsSvc.DescribeServices(&ecs.DescribeServicesInput{
 		Cluster:  &a.Settings.Cluster.ARN,
@@ -735,8 +737,7 @@ func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.LoadSettings()
-	if err != nil {
+	if err = a.LoadSettings(); err != nil {
 		return nil, err
 	}
 	if a.IsReviewApp() {
@@ -855,7 +856,9 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 	}
 	_, ok := scaling[processType]
 	if !ok {
-		a.LoadECSConfig()
+		if err = a.LoadECSConfig(); err != nil {
+			return err
+		}
 		cpu, err := strconv.Atoi(*a.ECSConfig.TaskDefinitionArgs.Cpu)
 		if err != nil {
 			return err

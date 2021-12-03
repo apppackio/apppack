@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/dustin/go-humanize"
 	"github.com/logrusorgru/aurora"
@@ -71,14 +72,14 @@ var psCmd = &cobra.Command{
 	Short:                 "show running processes",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.Pipeline && !a.IsReviewApp() {
 			checkErr(fmt.Errorf("pipelines don't directly run processes"))
 		}
 		tasks, err := a.DescribeTasks()
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		checkErr(err)
 		// group tasks by process type
 		grouped := map[string][]*ecs.Task{}
@@ -205,10 +206,10 @@ apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 pr
 			maxProcesses = minProcesses
 			out = fmt.Sprintf("%s will scale to %d processes", processType, minProcesses)
 		}
-		startSpinner()
+		ui.StartSpinner()
 		err = a.ScaleProcess(processType, minProcesses, maxProcesses)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		printSuccess(out)
 	},
 }
@@ -222,7 +223,7 @@ var psExecCmd = &cobra.Command{
 Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		interactiveCmd(a, strings.Join(args, " "))

@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -34,6 +35,15 @@ func GetStackParameter(parameters []*cloudformation.Parameter, name string) (*st
 	return nil, fmt.Errorf("no parameter named %s", name)
 }
 
+func GetStackOutput(outputs []*cloudformation.Output, name string) (*string, error) {
+	for _, output := range outputs {
+		if *output.OutputKey == name {
+			return output.OutputValue, nil
+		}
+	}
+	return nil, fmt.Errorf("no output named %s", name)
+}
+
 func GetStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
 	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
@@ -43,4 +53,28 @@ func GetStack(sess *session.Session, name string) (*cloudformation.Stack, error)
 		return nil, err
 	}
 	return stacks.Stacks[0], nil
+}
+
+func ApppackStacks(sess *session.Session) ([]*cloudformation.Stack, error) {
+	cfnSvc := cloudformation.New(sess)
+	stacks := []*cloudformation.Stack{}
+	var token *string
+	for {
+		resp, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+			NextToken: token,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, stack := range resp.Stacks {
+			if strings.HasPrefix(*stack.StackName, "apppack-") {
+				stacks = append(stacks, stack)
+			}
+		}
+		if resp.NextToken == nil {
+			break
+		}
+		token = resp.NextToken
+	}
+	return stacks, nil
 }

@@ -30,3 +30,11 @@ func PrintSuccess(text string) {
 func PrintWarning(text string) {
 	fmt.Println(aurora.Yellow(fmt.Sprintf("⚠  %s", text)))
 }
+
+func PrintHeaderln(text string) {
+	fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(text)))
+}
+
+func PrintHeader(text string) {
+	fmt.Printf(aurora.Faint("===").String(), aurora.Bold(aurora.White(text)))
+}

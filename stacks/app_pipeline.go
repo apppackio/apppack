@@ -28,11 +28,11 @@ import (
 type AppStackParameters struct {
 	Type                     string
 	Name                     string
-	ClusterStackName         string `flag:"cluster;fmtString:apppack-cluster-%s"`
-	RepositoryUrl            string `flag:"repository"`
-	Branch                   string `flag:"branch"`
-	Domain                   string `flag:"domain"`
-	HealthCheckPath          string `flag:"healthcheck-path"`
+	ClusterStackName         string   `flag:"cluster;fmtString:apppack-cluster-%s"`
+	RepositoryUrl            string   `flag:"repository"`
+	Branch                   string   `flag:"branch"`
+	Domains                  []string `flag:"domains"`
+	HealthCheckPath          string   `flag:"healthcheck-path"`
 	HealthcheckInterval      int
 	DeregistrationDelay      int
 	LoadBalancerRulePriority int
@@ -50,6 +50,24 @@ type AppStackParameters struct {
 	CustomTaskPolicyArn      string
 }
 
+var DefaultAppStackParameters = AppStackParameters{
+	Type:                "app",
+	HealthCheckPath:     "/",
+	HealthcheckInterval: 30,
+	DeregistrationDelay: 15,
+	Fargate:             true,
+	BuildWebhook:        true,
+}
+
+var DefaultPipelineStackParameters = AppStackParameters{
+	Type:                "pipeline",
+	HealthCheckPath:     DefaultAppStackParameters.HealthCheckPath,
+	HealthcheckInterval: DefaultAppStackParameters.HealthcheckInterval,
+	DeregistrationDelay: DefaultAppStackParameters.DeregistrationDelay,
+	Fargate:             DefaultAppStackParameters.Fargate,
+	BuildWebhook:        DefaultAppStackParameters.BuildWebhook,
+}
+
 func (p *AppStackParameters) Import(parameters []*cloudformation.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
@@ -59,9 +77,10 @@ func (p *AppStackParameters) ToCloudFormationParameters() ([]*cloudformation.Par
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (p *AppStackParameters) SetInternalFields(sess *session.Session, name *string) error {
+func (p *AppStackParameters) SetInternalFields(_ *session.Session, name *string) error {
 	// update values from flags if they are set
 	if p.LoadBalancerRulePriority == 0 {
+		rand.Seed(time.Now().UnixNano())
 		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200
 	}
 	if err := p.SetRepositoryType(); err != nil {
@@ -69,8 +88,10 @@ func (p *AppStackParameters) SetInternalFields(sess *session.Session, name *stri
 	}
 	if p.AppPackRoleExternalId == "" {
 		// TODO: This should come from us instead of the user
-		rand.Seed(time.Now().UnixNano())
 		p.AppPackRoleExternalId = strings.ReplaceAll(uuid.New().String(), "-", "")
+	}
+	if p.Name == "" {
+		p.Name = *name
 	}
 
 	return nil
@@ -104,6 +125,14 @@ func (a *AppStack) GetStack() *cloudformation.Stack {
 
 func (a *AppStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
+}
+
+func (*AppStack) PreDelete(_ *session.Session) error {
+	return nil
+}
+
+func (*AppStack) PostDelete(_ *session.Session, _ *string) error {
+	return nil
 }
 
 func (a *AppStack) ClusterName() string {
@@ -330,10 +359,10 @@ func (a *AppStack) AskForSES() error {
 	var helpText string
 	if a.Pipeline {
 		verbose = "Should review apps on this pipeline be allowed to send email via Amazon SES?"
-		helpText = "Allow this pipeline's review apps to send email via SES. See https://docs.apppack.io/how-to/sending%20email/ for more info."
+		helpText = "Allow this pipeline's review apps to send email via SES. See https://docs.apppack.io/how-to/sending-mail/ for more info."
 	} else {
 		verbose = "Should this app be allowed to send email via Amazon SES?"
-		helpText = "Allow this app to send email via SES. See https://docs.apppack.io/how-to/sending%20email/ for more info."
+		helpText = "Allow this app to send email via SES. See https://docs.apppack.io/how-to/sending-email/ for more info."
 	}
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
@@ -427,6 +456,9 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 		return err
 	}
 	questions = []*ui.QuestionExtra{}
+	if err := a.Parameters.SetRepositoryType(); err != nil {
+		return err
+	}
 	if err = verifySourceCredentials(sess, a.Parameters.RepositoryType); err != nil {
 		return err
 	}
@@ -443,10 +475,12 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 			},
 			{
 				Verbose:  "Should the app be served on a custom domain? (Optional)",
-				HelpText: "By default, the app will automatically be assigned a domain within the cluster. If you'd like it to respond to another domain, enter it here. See https://docs.apppack.io/how-to/custom-domains/ for more info.",
+				HelpText: "By default, the app will automatically be assigned a domain within the cluster. If you'd like it to respond on other domain(s), enter them here (one-per-line). See https://docs.apppack.io/how-to/custom-domains/ for more info.",
+				WriteTo:  &ui.MultiLineValueProxy{Value: &a.Parameters.Domains},
 				Question: &survey.Question{
-					Name:   "Domain",
-					Prompt: &survey.Input{Message: "Custom Domain", Default: a.Parameters.Domain},
+					Prompt: &survey.Multiline{
+						Message: "Custom Domain(s)",
+						Default: strings.Join(a.Parameters.Domains, "\n")},
 				},
 			},
 		}...)
@@ -530,8 +564,8 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 			{
 				Verbose:  fmt.Sprintf("Who can manage this %s?", a.StackType()),
 				HelpText: fmt.Sprintf("A list of email addresses (one per line) who have access to manage this %s via AppPack.", a.StackType()),
+				WriteTo:  &ui.MultiLineValueProxy{Value: &a.Parameters.AllowedUsers},
 				Question: &survey.Question{
-					Name:     "AllowedUsers",
 					Prompt:   &survey.Multiline{Message: "Users"},
 					Validate: survey.Required,
 				},
@@ -540,8 +574,7 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 		if err != nil {
 			return err
 		}
-	}
-	if err = a.WarnIfDataLoss(); err != nil {
+	} else if err = a.WarnIfDataLoss(); err != nil {
 		return err
 	}
 
@@ -631,9 +664,9 @@ func (a *AppStack) RedisToBeDestroyed() (bool, error) {
 func (a *AppStack) StackName(name *string) *string {
 	var stackName string
 	if a.Pipeline {
-		stackName = fmt.Sprintf(pipelineStackNameTmpl, *name)
+		stackName = fmt.Sprintf(PipelineStackNameTmpl, *name)
 	} else {
-		stackName = fmt.Sprintf(appStackNameTmpl, *name)
+		stackName = fmt.Sprintf(AppStackNameTmpl, *name)
 	}
 	return &stackName
 }
@@ -653,13 +686,13 @@ func (a *AppStack) Tags(name *string) []*cloudformation.Tag {
 	return tags
 }
 
-func (a *AppStack) Capabilities() []*string {
+func (*AppStack) Capabilities() []*string {
 	return []*string{
 		aws.String("CAPABILITY_IAM"),
 	}
 }
 
-func (a *AppStack) TemplateURL(release *string) *string {
+func (*AppStack) TemplateURL(release *string) *string {
 	url := appFormationURL
 	if release != nil {
 		url = strings.Replace(appFormationURL, "/latest/", fmt.Sprintf("/%s/", *release), 1)
@@ -712,5 +745,5 @@ func verifySourceCredentials(sess *session.Session, repositoryType string) error
 }
 
 func GetPipelineStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
-	return bridge.GetStack(sess, fmt.Sprintf(pipelineStackNameTmpl, name))
+	return bridge.GetStack(sess, fmt.Sprintf(PipelineStackNameTmpl, name))
 }

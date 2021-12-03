@@ -24,6 +24,7 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/logrusorgru/aurora"
@@ -48,9 +49,9 @@ func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
 		if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 			return fmt.Errorf("task is not running -- last status: %s", status)
 		}
-		Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
+		ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
 	}
-	Spinner.Suffix = ""
+	ui.Spinner.Suffix = ""
 	return nil
 }
 
@@ -62,16 +63,16 @@ func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskOverrid
 		false,
 	)
 	checkErr(err)
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	fmt.Println(aurora.Faint(fmt.Sprintf("starting %s", *task.TaskArn)))
-	startSpinner()
+	ui.StartSpinner()
 	checkErr(WaitForTaskRunning(a, task))
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	fmt.Println(aurora.Faint("waiting for SSM Agent to startup"))
-	startSpinner()
+	ui.StartSpinner()
 	ecsSession, err := a.CreateEcsSession(*task, *shellCmd)
 	checkErr(err)
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	err = a.ConnectToEcsSession(ecsSession)
 	checkErr(err)
 }
@@ -151,17 +152,17 @@ func interactiveCmd(a *app.App, cmd string) {
 				},
 			},
 		}
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		if err := survey.Ask(questions, &answers); err != nil {
 			checkErr(err)
 		}
-		startSpinner()
+		ui.StartSpinner()
 		ecsSession, err := a.CreateEcsSession(
 			*tasks[answers["task"].(survey.OptionAnswer).Index],
 			exec,
 		)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		err = a.ConnectToEcsSession(ecsSession)
 		checkErr(err)
 	}
@@ -180,7 +181,7 @@ var shellCmd = &cobra.Command{
 Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		interactiveCmd(a, "bash -l")

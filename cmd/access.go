@@ -19,51 +19,20 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/apppackio/apppack/auth"
+	"github.com/apppackio/apppack/stacks"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/spf13/cobra"
 )
 
 var CurrentAccountRole *auth.AdminRole
 
-func parameterValue(stack *cloudformation.Stack, key string) (*string, error) {
-	for _, p := range stack.Parameters {
-		if *p.ParameterKey == key {
-			return p.ParameterValue, nil
-		}
-	}
-	return nil, fmt.Errorf("cloudformation parameter %s not found", key)
-}
-
-func replaceParameter(stack *cloudformation.Stack, key string, value *string) error {
-	for _, p := range stack.Parameters {
-		if *p.ParameterKey == key {
-			p.ParameterValue = value
-			return nil
-		}
-	}
-	return fmt.Errorf("cloudformation parameter %s not found", key)
-}
-
 func validateEmail(email string) bool {
 	pattern := regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 	return pattern.MatchString(email)
-}
-
-func splitAndTrimCSV(csv *string) []string {
-	var items []string
-	for _, i := range strings.Split(*csv, ",") {
-		i = strings.TrimSpace(i)
-		if i != "" {
-			items = append(items, i)
-		}
-	}
-	return items
 }
 
 // deduplicate removes duplicates from a slice of strings
@@ -109,36 +78,17 @@ func removeFromSlice(slice, toRemove []string) ([]string, []string) {
 	return result, notFound
 }
 
-func indexOf(arr []string, item string) int {
-	for k, v := range arr {
-		if item == v {
-			return k
+func appOrPipelineStack(sess *session.Session, name string) (*stacks.AppStack, error) {
+	stack := stacks.AppStack{Pipeline: false}
+	err := stacks.LoadStackFromCloudformation(sess, &stack, &name)
+	if err != nil {
+		stack.Pipeline = true
+		err = stacks.LoadStackFromCloudformation(sess, &stack, &name)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return -1
-}
-
-func appOrPipelineStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
-	cfnSvc := cloudformation.New(sess)
-	stackName := appStackName(name)
-	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-		StackName: &stackName,
-	})
-	if err == nil {
-		return stackOutput.Stacks[0], nil
-	}
-	if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == "ValidationError" {
-			stackName = pipelineStackName(name)
-			stackOutput, err = cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-				StackName: &stackName,
-			})
-			if err == nil {
-				return stackOutput.Stacks[0], nil
-			}
-		}
-	}
-	return nil, err
+	return &stack, nil
 }
 
 func adminSession(sessionDuration int) (*session.Session, error) {
@@ -157,29 +107,19 @@ func adminSession(sessionDuration int) (*session.Session, error) {
 	}
 	var sess *session.Session
 	var err error
-	sess, CurrentAccountRole, err = auth.AdminAWSSession(AccountIDorAlias, sessionDuration)
+	sess, CurrentAccountRole, err = auth.AdminAWSSession(AccountIDorAlias, sessionDuration, region)
 	return sess, err
 }
 
-func updateAllowedUsers(sess *session.Session, stack *cloudformation.Stack, users []string) error {
-	startSpinner()
-	sort.Strings(users)
-	usersCSV := aws.String(strings.Join(users, ","))
-	if err := replaceParameter(stack, "AllowedUsers", usersCSV); err != nil {
+func updateAllowedUsers(sess *session.Session, stack *stacks.AppStack, name *string) error {
+	ui.StartSpinner()
+	if err := stacks.ModifyStack(sess, stack, name); err != nil {
+		ui.Spinner.Stop()
 		return err
 	}
-	_, err := updateStackAndWait(sess, &cloudformation.UpdateStackInput{
-		StackName:           stack.StackName,
-		Parameters:          stack.Parameters,
-		UsePreviousTemplate: aws.Bool(true),
-		Capabilities:        []*string{aws.String("CAPABILITY_IAM")},
-	})
-	if err != nil {
-		return err
-	}
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	printSuccess(fmt.Sprintf("allowed users updated for %s", AppName))
-	for _, u := range users {
+	for _, u := range stack.Parameters.AllowedUsers {
 		fmt.Printf("  • %s\n", u)
 	}
 	return nil
@@ -191,18 +131,15 @@ var accessCmd = &cobra.Command{
 	Short:                 "list users with access to the app",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		var err error
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
-		usersCSV, err := parameterValue(stack, "AllowedUsers")
-		checkErr(err)
-		users := splitAndTrimCSV(usersCSV)
-		sort.Strings(users)
-		Spinner.Stop()
-		for _, u := range users {
+		sort.Strings(stack.Parameters.AllowedUsers)
+		ui.Spinner.Stop()
+		for _, u := range stack.Parameters.AllowedUsers {
 			fmt.Printf("  • %s\n", u)
 		}
 	},
@@ -223,21 +160,19 @@ var accessAddCmd = &cobra.Command{
 				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
 			}
 		}
-		startSpinner()
+		ui.StartSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
-		usersCSV, err := parameterValue(stack, "AllowedUsers")
-		checkErr(err)
-		users := splitAndTrimCSV(usersCSV)
-		users = append(users, args...)
-		users, dupes := deduplicate(users)
-		Spinner.Stop()
+		stack.Parameters.AllowedUsers = append(stack.Parameters.AllowedUsers, args...)
+		var dupes []string
+		stack.Parameters.AllowedUsers, dupes = deduplicate(stack.Parameters.AllowedUsers)
+		ui.Spinner.Stop()
 		for _, d := range dupes {
 			printWarning(fmt.Sprintf("%s already has access to %s", d, AppName))
 		}
-		checkErr(updateAllowedUsers(sess, stack, users))
+		checkErr(updateAllowedUsers(sess, stack, &AppName))
 	},
 }
 
@@ -255,20 +190,18 @@ var accessRemoveCmd = &cobra.Command{
 				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
 			}
 		}
-		startSpinner()
+		ui.StartSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 		stack, err := appOrPipelineStack(sess, AppName)
 		checkErr(err)
-		usersCSV, err := parameterValue(stack, "AllowedUsers")
-		checkErr(err)
-		userList := splitAndTrimCSV(usersCSV)
-		users, notFound := removeFromSlice(userList, args)
-		Spinner.Stop()
+		var notFound []string
+		stack.Parameters.AllowedUsers, notFound = removeFromSlice(stack.Parameters.AllowedUsers, args)
+		ui.Spinner.Stop()
 		for _, n := range notFound {
 			printWarning(fmt.Sprintf("%s does not have access to %s", n, AppName))
 		}
-		checkErr(updateAllowedUsers(sess, stack, users))
+		checkErr(updateAllowedUsers(sess, stack, &AppName))
 	},
 }
 

@@ -44,12 +44,14 @@ jobs:
       -
         name: AppPack Cluster
         run: |
-          yes yes | ./apppack create cluster \
+          ./apppack create cluster \
             --aws-credentials \
             --region us-east-1 \
+            --create-region \
             --dockerhub-username $DOCKERHUB_USERNAME \
             --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN \
-            --domain testclusters.apppack.io
+            --domain testclusters.apppack.io \
+            --non-interactive
         timeout-minutes: 20
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}

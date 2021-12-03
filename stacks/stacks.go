@@ -3,6 +3,7 @@ package stacks
 import (
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
+	"github.com/sirupsen/logrus"
 )
 
 var stackHasFailure = false
@@ -72,6 +74,10 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 	created := []string{}
 	deleted := []string{}
 	failed := []string{}
+	// sort oldest to newest so we can catch the first error in the stack
+	sort.Slice(stackresources.StackResources, func(i, j int) bool {
+		return stackresources.StackResources[i].Timestamp.Before(*stackresources.StackResources[j].Timestamp)
+	})
 	for _, resource := range stackresources.StackResources {
 		// CREATE_IN_PROGRESS | CREATE_FAILED | CREATE_COMPLETE | DELETE_IN_PROGRESS | DELETE_FAILED | DELETE_COMPLETE | DELETE_SKIPPED | UPDATE_IN_PROGRESS | UPDATE_FAILED | UPDATE_COMPLETE | IMPORT_FAILED | IMPORT_COMPLETE | IMPORT_IN_PROGRESS | IMPORT_ROLLBACK_IN_PROGRESS | IMPORT_ROLLBACK_FAILED | IMPORT_ROLLBACK_COMPLETE
 		if strings.HasSuffix(*resource.ResourceStatus, "_FAILED") {
@@ -172,6 +178,29 @@ func CreateChangeSetAndWait(sess *session.Session, changesetInput *cloudformatio
 		return nil, err
 	}
 	return cfnSvc.DescribeChangeSet(&describeChangeSetInput)
+}
+
+// DeleteStackAndWait will execute the PreDelete hook, delete the stack and wait for it to complete,
+// then, if successful, execute the PostDelete hook.
+func DeleteStackAndWait(sess *session.Session, stack Stack) (*cloudformation.Stack, error) {
+	if err := stack.PreDelete(sess); err != nil {
+		return nil, err
+	}
+	cfnSvc := cloudformation.New(sess)
+	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+		StackName: stack.GetStack().StackId,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cfnStack, err := waitForCloudformationStack(cfnSvc, *stack.GetStack().StackId)
+	if err == nil && *cfnStack.StackStatus == "DELETE_COMPLETE" {
+		if err := stack.PostDelete(sess, nil); err != nil {
+			logrus.WithFields(logrus.Fields{"err": err}).Warning("post-delete failed")
+			return nil, err
+		}
+	}
+	return cfnStack, err
 }
 
 // clusterSelectTransform converts `{name}` -> `{stackName}`

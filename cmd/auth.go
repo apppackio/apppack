@@ -20,6 +20,7 @@ import (
 	"os"
 
 	"github.com/apppackio/apppack/auth"
+	"github.com/apppackio/apppack/ui"
 	"github.com/juju/ansiterm/tabwriter"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/browser"
@@ -31,7 +32,7 @@ var authCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "authenticate with AppPack.io",
 	Long: `This will open a web browser and/or provide a URL to visit to verify this device.
-	
+
 Your credentials are cached locally for your user, so these commands should not be used on a shared device account.`,
 	DisableFlagsInUseLine: true,
 }
@@ -46,11 +47,11 @@ func Login() *auth.UserInfo {
 	if err != nil {
 		fmt.Println("URL:", aurora.White(deviceCode.VerificationURIComplete).String())
 	}
-	startSpinner()
-	Spinner.Suffix = " waiting for verification"
+	ui.StartSpinner()
+	ui.Spinner.Suffix = " waiting for verification"
 	tokens, err := auth.Oauth.PollForToken(deviceCode)
 	checkErr(err)
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	checkErr(tokens.WriteToCache())
 	userInfo, err := tokens.GetUserInfo()
 	checkErr(err)
@@ -99,7 +100,7 @@ var appsCmd = &cobra.Command{
 	Short:                 "list the apps you have access to",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		apps, err := auth.AppList()
 		checkErr(err)
 		appGroups := make(map[string][]*auth.AppRole)
@@ -122,9 +123,9 @@ var appsCmd = &cobra.Command{
 				}
 			}
 		}
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		if len(appGroups) > 0 {
-			fmt.Printf("%s %s\n", aurora.Faint("==="), aurora.White("Apps"))
+			ui.PrintHeader("Apps")
 			for _, group := range appGroups {
 				fmt.Println(aurora.Faint(fmt.Sprintf("Account: %s (%s)", group[0].AccountID, group[0].Region)))
 				for _, app := range group {
@@ -136,7 +137,7 @@ var appsCmd = &cobra.Command{
 			fmt.Print("\n")
 		}
 		if len(pipelineGroups) > 0 {
-			fmt.Printf("%s %s\n", aurora.Faint("==="), aurora.White("Pipelines"))
+			ui.PrintHeader("Pipelines")
 			for _, group := range pipelineGroups {
 				fmt.Println(aurora.Faint(fmt.Sprintf("Account: %s (%s)", group[0].AccountID, group[0].Region)))
 				for _, app := range group {
@@ -153,15 +154,15 @@ var accountsCmd = &cobra.Command{
 	Short:                 "list the accounts you have administrator access to",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		admins, err := auth.AdminList()
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		if len(admins) == 0 {
 			printWarning("you are not an administrator on any accounts")
 			return
 		}
-		fmt.Printf("%s %s\n", aurora.Faint("==="), aurora.White("Accounts"))
+		ui.PrintHeaderln("Accounts")
 		w := new(tabwriter.Writer)
 		// minwidth, tabwidth, padding, padchar, flags
 		w.Init(os.Stdout, 0, 8, 1, '\t', 0)
