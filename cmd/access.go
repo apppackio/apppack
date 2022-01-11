@@ -185,6 +185,7 @@ func updateAllowedUsers(sess *session.Session, stack *cloudformation.Stack, user
 var accessCmd = &cobra.Command{
 	Use:                   "access",
 	Short:                 "list users with access to the app",
+	Args:                  cobra.NoArgs,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()

@@ -30,6 +30,7 @@ var adminsCmd = &cobra.Command{
 	Use:                   "admins",
 	Short:                 "list the administrators for an accouunt",
 	Long:                  "*Requires admin permissions.*",
+	Args:                  cobra.NoArgs,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		startSpinner()
