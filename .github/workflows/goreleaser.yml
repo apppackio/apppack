@@ -41,6 +41,12 @@ jobs:
           name: apppack_darwin_amd64
           path: dist/apppack_darwin_amd64
       -
+        name: Upload Darwin binary (ARM)
+        uses: actions/upload-artifact@v2
+        with:
+          name: apppack_darwin_arm64
+          path: dist/apppack_darwin_arm64
+      -
         name: Upload Linux binary
         uses: actions/upload-artifact@v2
         with:
