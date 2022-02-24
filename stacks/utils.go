@@ -1,18 +1,20 @@
 package stacks
 
 import (
-	"math/rand"
-	"strings"
-	"time"
+	"crypto/rand"
+	"math/big"
 )
 
-func GeneratePassword() string {
-	rand.Seed(time.Now().UnixNano())
-	chars := []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-	length := 30
-	var b strings.Builder
-	for i := 0; i < length; i++ {
-		b.WriteRune(chars[rand.Intn(len(chars))])
+func GeneratePassword() (string, error) {
+	// generate a random alpha numeric string using crypto/rand
+	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	b := make([]rune, 30)
+	for i := range b {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			return "", err
+		}
+		b[i] = letters[n.Int64()]
 	}
-	return b.String()
+	return string(b), nil
 }

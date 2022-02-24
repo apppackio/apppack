@@ -40,10 +40,14 @@ func (p *RedisStackParameters) SetInternalFields(sess *session.Session, name *st
 	if p.AuthTokenParameter == "" {
 		authToken := fmt.Sprintf(redisAuthTokenParameterTmpl, *name)
 		p.AuthTokenParameter = authToken
+		password, err := GeneratePassword()
+		if err != nil {
+			return err
+		}
 		ssmSvc := ssm.New(sess)
-		_, err := ssmSvc.PutParameter(&ssm.PutParameterInput{
+		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 			Name:  &authToken,
-			Value: aws.String(GeneratePassword()),
+			Value: &password,
 			Type:  aws.String("SecureString"),
 		})
 		return err
