@@ -17,108 +17,57 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/apppackio/apppack/stacks"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/rds"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-func getStackOutput(stack *cloudformation.Stack, name string) (*string, error) {
-	for _, output := range stack.Outputs {
-		if *output.OutputKey == name {
-			return output.OutputValue, nil
+// DestroyStackCmd destroys the given stack after user confirmation
+func DestroyStackCmd(sess *session.Session, stack stacks.Stack, name string) {
+	ui.StartSpinner()
+	if err := stacks.LoadStackFromCloudformation(sess, stack, &name); err != nil {
+		// if the stack doesn't exist, try to do the post-cleanup
+		// to make sure we don't leave orphaned resources
+		if err1 := stack.PostDelete(sess, &name); err1 != nil {
+			logrus.WithFields(logrus.Fields{"err": err1}).Warning("post-delete failed")
 		}
+		checkErr(err)
 	}
-	return nil, fmt.Errorf("stack %s does not have an output named %s", *stack.StackName, name)
-}
-
-func getStackParameter(stack *cloudformation.Stack, name string) (*string, error) {
-	for _, parameter := range stack.Parameters {
-		if *parameter.ParameterKey == name {
-			return parameter.ParameterValue, nil
+	stackName := stack.GetStack().StackName
+	ui.Spinner.Stop()
+	confirmAction(fmt.Sprintf("This will permanently destroy all resources in the `%s` %s stack.", name, strings.Title(stack.StackType())), *stackName)
+	ui.StartSpinner()
+	// retry deletion once on failure for transient errors
+	retry := true
+	var destroy func() error
+	destroy = func() error {
+		stack, err := stacks.DeleteStackAndWait(sess, stack)
+		if err != nil {
+			return err
 		}
-	}
-	return nil, fmt.Errorf("stack %s does not have a parameter named %s", *stack.StackName, name)
-}
-
-func setRdsDeletionProtection(sess *session.Session, stack *cloudformation.Stack, protected bool) error {
-	rdsSvc := rds.New(sess)
-	DBID, err := getStackOutput(stack, "DBId")
-	if err != nil {
-		return err
-	}
-	DBType, err := getStackOutput(stack, "DBType")
-	if err != nil {
-		return err
-	}
-	if *DBType == "instance" {
-		_, err := rdsSvc.ModifyDBInstance(&rds.ModifyDBInstanceInput{
-			DBInstanceIdentifier: DBID,
-			DeletionProtection:   &protected,
-			ApplyImmediately:     aws.Bool(true),
-		})
-		return err
-	}
-	if *DBType == "cluster" {
-		_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
-			DBClusterIdentifier: DBID,
-			DeletionProtection:  &protected,
-			ApplyImmediately:    aws.Bool(true),
-		})
-		return err
-	}
-	return fmt.Errorf("unexpected DB type %s", *DBType)
-}
-
-// confirmDeleteStack will prompt the user to confirm stack deletion and return a Stack object
-func confirmDeleteStack(cfnSvc *cloudformation.CloudFormation, stackName, friendlyName string) (*cloudformation.Stack, error) {
-	startSpinner()
-	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-		StackName: &stackName,
-	})
-	if err != nil {
-		return nil, err
-	}
-	stack := *stackOutput.Stacks[0]
-	Spinner.Stop()
-	confirmAction(fmt.Sprintf("This will permanently destroy all resources in the %s stack.", *stack.StackName), *stack.StackName)
-	startSpinner()
-	return &stack, nil
-}
-
-// deleteStack will delete a Clouformation Stack, optionally retrying for problematic stacks
-func deleteStack(cfnSvc *cloudformation.CloudFormation, stackID, friendlyName string, retry bool) error {
-	startSpinner()
-	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
-		StackName: &stackID,
-	})
-	if err != nil {
-		return err
-	}
-	stack, err := waitForCloudformationStack(cfnSvc, stackID)
-	if err != nil {
-		return err
-	}
-	Spinner.Stop()
-	if *stack.StackStatus != "DELETE_COMPLETE" {
-		if retry {
-			printWarning("deletion did not complete successfully, retrying...")
-			return deleteStack(cfnSvc, stackID, friendlyName, false)
+		ui.Spinner.Stop()
+		if *stack.StackStatus != "DELETE_COMPLETE" {
+			if retry {
+				ui.PrintWarning("deletion did not complete successfully, retrying...")
+				retry = false
+				destroy()
+			}
+			return fmt.Errorf("failed to delete %s", *stack.StackName)
 		}
-		return fmt.Errorf("failed to delete %s", friendlyName)
+		return nil
 	}
-	printSuccess(fmt.Sprintf("%s destroyed", friendlyName))
-	return nil
+	checkErr(destroy())
 }
 
 // destroyCmd represents the destroy command
 var destroyCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "destroy AWS resources used by AppPack",
-	Long:  "All `destroy` subcommands require AWS credentials.",
+	Long:  "All `destroy` subcommands admin permissions.",
 }
 
 // destroyAccountCmd represents the destroy command
@@ -128,15 +77,10 @@ var destroyAccountCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
+		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		stackName := "apppack-account"
-		cfnSvc := cloudformation.New(sess)
-		friendlyName := "AppPack account"
-		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
-		checkErr(err)
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		checkErr(err)
+		DestroyStackCmd(sess, &stacks.AccountStack{Parameters: &stacks.AccountStackParameters{}}, "")
 	},
 }
 
@@ -147,22 +91,10 @@ var destroyRegionCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
+		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		stackName := fmt.Sprintf("apppack-region-%s", *sess.Config.Region)
-		ssmSvc := ssm.New(sess)
-		cfnSvc := cloudformation.New(sess)
-		friendlyName := fmt.Sprintf("region %s", *sess.Config.Region)
-		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
-		checkErr(err)
-		_, err = ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
-			Name: aws.String("/apppack/account/dockerhub-access-token"),
-		})
-		if err != nil {
-			printError(fmt.Sprintf("%v", err))
-		}
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		checkErr(err)
+		DestroyStackCmd(sess, &stacks.RegionStack{Parameters: &stacks.RegionStackParameters{}}, *sess.Config.Region)
 	},
 }
 
@@ -174,22 +106,10 @@ var destroyRedisCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		stackName := fmt.Sprintf(redisStackNameTmpl, args[0])
+		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		ssmSvc := ssm.New(sess)
-		cfnSvc := cloudformation.New(sess)
-		friendlyName := fmt.Sprintf("Redis stack %s", args[0])
-		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
-		checkErr(err)
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		if err != nil {
-			printError(fmt.Sprintf("%v", err))
-		}
-		_, err = ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
-			Name: aws.String(fmt.Sprintf(redisAuthTokenParameterTmpl, args[0])),
-		})
-		checkErr(err)
+		DestroyStackCmd(sess, &stacks.RedisStack{Parameters: &stacks.RedisStackParameters{}}, args[0])
 	},
 }
 
@@ -201,20 +121,10 @@ var destroyDatabaseCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stackName := fmt.Sprintf(databaseStackNameTmpl, args[0])
-		friendlyName := fmt.Sprintf("database %s", args[0])
-		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
-		checkErr(err)
-		err = setRdsDeletionProtection(sess, stack, false)
-		if err != nil {
-			printError(fmt.Sprintf("%v", err))
-		}
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		checkErr(err)
+		DestroyStackCmd(sess, &stacks.DatabaseStack{Parameters: &stacks.DefaultDatabaseStackParameters}, args[0])
 	},
 }
 
@@ -226,19 +136,10 @@ var destroyClusterCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		clusterName := args[0]
+		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		friendlyName := fmt.Sprintf("cluster %s", clusterName)
-		stackName := fmt.Sprintf("apppack-cluster-%s", clusterName)
-		stack, err := confirmDeleteStack(cfnSvc, stackName, friendlyName)
-		checkErr(err)
-		// Weird circular dependency causes this https://github.com/aws/containers-roadmap/issues/631
-		// Cluster depends on ASG for creation, but ASG must be deleted before the Cluster
-		// retrying works around this for now
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, true)
-		checkErr(err)
+		DestroyStackCmd(sess, &stacks.ClusterStack{Parameters: &stacks.ClusterStackParameters{}}, args[0])
 	},
 }
 
@@ -250,15 +151,10 @@ var destroyAppCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		appName := args[0]
+		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		friendlyName := fmt.Sprintf("app %s", appName)
-		stack, err := confirmDeleteStack(cfnSvc, appStackName(appName), friendlyName)
-		checkErr(err)
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		checkErr(err)
+		DestroyStackCmd(sess, &stacks.AppStack{Pipeline: false, Parameters: &stacks.AppStackParameters{}}, args[0])
 	},
 }
 
@@ -270,15 +166,10 @@ var destroyPipelineCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		pipelineName := args[0]
+		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		friendlyName := fmt.Sprintf("pipeline %s", pipelineName)
-		stack, err := confirmDeleteStack(cfnSvc, pipelineStackName(pipelineName), friendlyName)
-		checkErr(err)
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		checkErr(err)
+		DestroyStackCmd(sess, &stacks.AppStack{Pipeline: true, Parameters: &stacks.AppStackParameters{}}, args[0])
 	},
 }
 
@@ -290,15 +181,10 @@ var destroyCustomDomainCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		primaryDomain := args[0]
-		friendlyName := fmt.Sprintf("%s domain", primaryDomain)
+		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stack, err := confirmDeleteStack(cfnSvc, customDomainStackName(primaryDomain), friendlyName)
-		checkErr(err)
-		err = deleteStack(cfnSvc, *stack.StackId, friendlyName, false)
-		checkErr(err)
+		DestroyStackCmd(sess, &stacks.CustomDomainStack{Parameters: &stacks.CustomDomainStackParameters{}}, args[0])
 	},
 }
 

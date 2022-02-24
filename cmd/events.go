@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
@@ -37,13 +38,13 @@ var eventsCmd = &cobra.Command{
 	Example: "apppack -a my-app events web",
 	Args:    cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		events, err := a.GetECSEvents(args[0])
 		checkErr(err)
 		waitForSteadyState := cmd.Flag("wait-for-steady").Value.String() == "true"
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		fmt.Println("⏳", aurora.Blue(fmt.Sprintf("waiting for `%s` service to reach a steady state...", args[0])))
 		for _, event := range events {
 			// when waiting for steady, only show the last minute of events to start
@@ -54,7 +55,7 @@ var eventsCmd = &cobra.Command{
 		if !waitForSteadyState {
 			return
 		}
-		startSpinner()
+		ui.StartSpinner()
 		// if no events, wait for some to come in
 		if len(events) == 0 {
 			for {
@@ -77,7 +78,7 @@ var eventsCmd = &cobra.Command{
 				time.Sleep(time.Second * 5)
 				continue
 			}
-			Spinner.Stop()
+			ui.Spinner.Stop()
 			display := false
 			// loop through events, only printing new ones and break on steady state
 			for _, event := range events {
@@ -90,7 +91,7 @@ var eventsCmd = &cobra.Command{
 					display = true
 				}
 			}
-			startSpinner()
+			ui.StartSpinner()
 			cursor = *lastEvent.Id
 			time.Sleep(time.Second * 5)
 		}

@@ -33,10 +33,12 @@ jobs:
             ./bin/apppack create region --region us-east-2 \
                  --aws-credentials \
                 --dockerhub-username $DOCKERHUB_USERNAME \
-                --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN
+                --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN \
+                --non-interactive
             ./bin/apppack create cluster --region us-east-2 \
                 --aws-credentials \
                 --domain testclusters.apppack.io \
+                --non-interactive
         timeout-minutes: 15
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -59,6 +61,7 @@ jobs:
             ./bin/apppack create database --region us-east-2 \
                 --aws-credentials \
                 --non-interactive \
+                --cluster apppack \
                 --instance-class db.t3.micro \
                 --engine mysql \
                 --allocated-storage 10 \
@@ -94,6 +97,7 @@ jobs:
             ./bin/apppack create database --region us-east-2 \
                 --aws-credentials \
                 --non-interactive \
+                --cluster apppack \
                 --instance-class db.t3.micro \
                 --engine postgres \
                 --allocated-storage 10 \
@@ -129,9 +133,9 @@ jobs:
             ./bin/apppack create database --region us-east-2 \
                 --aws-credentials \
                 --non-interactive \
+                --cluster apppack \
                 --instance-class db.t3.medium \
-                --aurora \
-                --engine mysql \
+                --engine aurora-mysql \
                 --allocated-storage 10 \
                 --max-allocated-storage 20 \
                 aurora-mysql
@@ -165,9 +169,9 @@ jobs:
             ./bin/apppack create database --region us-east-2 \
                 --aws-credentials \
                 --non-interactive \
+                --cluster apppack \
                 --instance-class db.t3.medium \
-                --aurora \
-                --engine postgres \
+                --engine aurora-postgresql \
                 aurora-postgres
         timeout-minutes: 25
         env:
@@ -200,7 +204,9 @@ jobs:
         run: |
             chmod +x ./bin/apppack
             ./bin/apppack create redis --region us-east-2 \
-                --aws-credentials --non-interactive
+                --aws-credentials \
+                --non-interactive \
+                --cluster apppack
         timeout-minutes: 35
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

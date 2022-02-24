@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
@@ -33,7 +34,7 @@ import (
 )
 
 func downloadFile(sess *session.Session, objInput *s3.GetObjectInput, outputFile string) error {
-	Spinner.Suffix = fmt.Sprintf(" downloading %s", outputFile)
+	ui.Spinner.Suffix = fmt.Sprintf(" downloading %s", outputFile)
 	downloader := s3manager.NewDownloader(sess)
 	file, err := os.Create(outputFile)
 	if err != nil {
@@ -68,7 +69,7 @@ var dbShellCmd = &cobra.Command{
 	Short:                 "open an interactive shell prompt to the app database",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		family, exec, err := a.DBShellTaskInfo()
@@ -84,7 +85,7 @@ var dbDumpCmd = &cobra.Command{
 	Long:                  "Dump the database to `<app-name>.dump` in the current directory",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		// db dump load can be really slow, let people open longer sessions to wait for it to finish
 		app, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
@@ -92,10 +93,10 @@ var dbDumpCmd = &cobra.Command{
 		checkErr(err)
 		task, getObjectInput, err := app.DBDump()
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		fmt.Println(aurora.Faint(fmt.Sprintf("starting task %s", *task.TaskArn)))
-		startSpinner()
-		Spinner.Suffix = " dumping database"
+		ui.StartSpinner()
+		ui.Spinner.Suffix = " dumping database"
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
 		if *exitCode != 0 {
@@ -112,7 +113,7 @@ var dbDumpCmd = &cobra.Command{
 		localFile := fmt.Sprintf("%s.%s", app.Name, extension)
 		err = downloadFile(app.Session, getObjectInput, localFile)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		printSuccess(fmt.Sprintf("Dumped database to %s", localFile))
 	},
 }
@@ -157,20 +158,20 @@ var dbLoadCmd = &cobra.Command{
 	Use:   "load <dumpfile>",
 	Short: "load a dump file into the remote database",
 	Long: `The dump file can either be local (in which case it will first be uploaded to S3. Or you can specify a file already on S3 by using "s3://..." as the first argument.
-	
+
 WARNING: This is a destructive action which will delete the contents of your remote database in order to load the dump in.
 	`,
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		var remoteFile string
-		startSpinner()
+		ui.StartSpinner()
 		// db dump load can be really slow, let people open longer sessions to wait for it to finish
 		app, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		confirmAction("This will destroy any data that is currently in the database.", AppName)
-		startSpinner()
+		ui.StartSpinner()
 		if strings.HasPrefix(args[0], "s3://") {
 			remoteFile = args[0]
 		} else {
@@ -179,7 +180,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			getObjectInput, err := app.DBDumpLocation("uploads/")
 			checkErr(err)
 			remoteFile = fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)
-			Spinner.Suffix = fmt.Sprintf(" uploading %s", args[0])
+			ui.Spinner.Suffix = fmt.Sprintf(" uploading %s", args[0])
 			err = uploadFile(app.Session, &s3manager.UploadInput{
 				Bucket: getObjectInput.Bucket,
 				Key:    getObjectInput.Key,
@@ -195,14 +196,14 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			&ecs.TaskOverride{},
 			true,
 		)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		fmt.Println(aurora.Faint(fmt.Sprintf("starting task %s", *task.TaskArn)))
-		startSpinner()
-		Spinner.Suffix = " loading database"
+		ui.StartSpinner()
+		ui.Spinner.Suffix = " loading database"
 		checkErr(err)
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		// pg_restore can have inconsequential errors... don't assume failure, but notify user
 		if *exitCode != 0 && strings.Contains(app.Settings.DBUtils.Engine, "postgres") {
 			taskLogs(app.Session, task)

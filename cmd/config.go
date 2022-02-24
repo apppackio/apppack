@@ -30,6 +30,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/bridge"
+	"github.com/apppackio/apppack/ui"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
@@ -49,7 +51,7 @@ var getCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		svc := ssm.New(a.Session)
@@ -57,7 +59,7 @@ var getCmd = &cobra.Command{
 			Name:           aws.String(fmt.Sprintf("%s%s", a.ConfigPrefix(), args[0])),
 			WithDecryption: aws.Bool(true),
 		})
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		checkErr(err)
 		fmt.Println(*resp.Parameter.Value)
 	},
@@ -77,12 +79,12 @@ var setCmd = &cobra.Command{
 		parts := strings.SplitN(args[0], "=", 2)
 		name := parts[0]
 		value := parts[1]
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		err = a.SetConfig(name, value, true)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		printSuccess(fmt.Sprintf("stored config variable %s", name))
 	},
 }
@@ -94,7 +96,7 @@ var unsetCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		name := args[0]
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
@@ -102,7 +104,7 @@ var unsetCmd = &cobra.Command{
 		_, err = svc.DeleteParameter(&ssm.DeleteParameterInput{
 			Name: aws.String(fmt.Sprintf("%s%s", a.ConfigPrefix(), args[0])),
 		})
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		checkErr(err)
 		printSuccess(fmt.Sprintf("removed config variable %s", name))
 	},
@@ -118,31 +120,33 @@ var listCmd = &cobra.Command{
 		w := new(tabwriter.Writer)
 		// minwidth, tabwidth, padding, padchar, flags
 		w.Init(os.Stdout, 8, 8, 0, '\t', 0)
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		parameters, err := a.GetConfig()
 		checkErr(err)
-		Spinner.Stop()
+		bridge.SortParameters(parameters)
+		ui.Spinner.Stop()
 		for _, value := range parameters {
 			parts := strings.Split(*value.Name, "/")
 			varname := parts[len(parts)-1]
 			fmt.Fprintf(w, "%s\t%s\t\n", aurora.Green(fmt.Sprintf("%s:", varname)), *value.Value)
 		}
-		fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(fmt.Sprintf("%s Config Vars", AppName))))
+		ui.PrintHeaderln(fmt.Sprintf("%s Config Vars", AppName))
 		w.Flush()
 		if a.IsReviewApp() {
 			fmt.Println()
 			a.ReviewApp = nil
 			parameters, err := a.GetConfig()
 			checkErr(err)
-			Spinner.Stop()
+			bridge.SortParameters(parameters)
+			ui.Spinner.Stop()
 			for _, value := range parameters {
 				parts := strings.Split(*value.Name, "/")
 				varname := parts[len(parts)-1]
 				fmt.Fprintf(w, "%s\t%s\t\n", aurora.Green(fmt.Sprintf("%s:", varname)), *value.Value)
 			}
-			fmt.Println(aurora.Faint("==="), aurora.Bold(aurora.White(fmt.Sprintf("%s Config Vars (inherited)", a.Name))))
+			ui.PrintHeaderln(fmt.Sprintf("%s Config Vars (inherited)", a.Name))
 			w.Flush()
 		}
 	},
@@ -174,10 +178,11 @@ var configExportCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		parameters, err := a.GetConfig()
+		bridge.SortParameters(parameters)
 		checkErr(err)
 		config := make(map[string]string)
 		ssmSvc := ssm.New(a.Session)
@@ -195,9 +200,9 @@ var configExportCmd = &cobra.Command{
 		}
 		j, err := json.Marshal(config)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		b := bytes.NewBuffer([]byte{})
-		json.Indent(b, j, "", "  ")
+		checkErr(json.Indent(b, j, "", "  "))
 		fmt.Println(b.String())
 	},
 }
@@ -211,7 +216,7 @@ var configImportCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		data, err := ioutil.ReadFile(args[0])
@@ -241,7 +246,7 @@ var configImportCmd = &cobra.Command{
 		if skipped > 0 {
 			msg = fmt.Sprintf("%s / %d skipped", msg, skipped)
 		}
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		printSuccess(msg)
 
 	},

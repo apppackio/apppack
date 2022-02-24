@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
@@ -54,13 +55,13 @@ func indent(text, indent string) string {
 	return result[:len(result)-1]
 }
 
-func printBuild(buildStatus *app.BuildStatus) error {
+func printBuild(buildStatus *app.BuildStatus) {
 	icon := map[string]aurora.Value{
 		app.PhaseInProgress: aurora.Faint(aurora.Blue("ℹ")),
 		app.PhaseSuccess:    aurora.Green("✔"),
 		app.PhaseFailed:     aurora.Red("✖"),
 	}
-	fmt.Print(aurora.Faint("==="), aurora.White(fmt.Sprintf("%d", buildStatus.BuildNumber)))
+	ui.PrintHeader(fmt.Sprintf("%d", buildStatus.BuildNumber))
 	currentPhase := buildStatus.CurrentPhase()
 	if currentPhase != nil {
 		fmt.Print(" in progress")
@@ -84,10 +85,9 @@ func printBuild(buildStatus *app.BuildStatus) error {
 	} else {
 		fmt.Println(aurora.Faint(fmt.Sprintf("%sstarted %s ~ %s", indentStr, buildStatus.Build.StartTime().Local().Format(timeFmt), humanize.Time(buildStatus.Build.StartTime()))))
 	}
-	return nil
 }
 
-func printCommitLog(sess *session.Session, buildStatus *app.BuildStatus) error {
+func printCommitLog(sess *session.Session, buildStatus *app.BuildStatus) {
 	commitLog, err := buildStatus.GetCommitLog(sess)
 	if err == nil {
 		fmt.Println(indent(*commitLog, indentStr))
@@ -96,7 +96,6 @@ func printCommitLog(sess *session.Session, buildStatus *app.BuildStatus) error {
 		printWarning(fmt.Sprintf("unable to read commit data for build #%d", buildStatus.BuildNumber))
 		fmt.Println()
 	}
-	return nil
 }
 
 func pollBuildStatus(a *app.App, buildNumber, retries int) (*app.BuildStatus, error) {
@@ -107,9 +106,8 @@ func pollBuildStatus(a *app.App, buildNumber, retries int) (*app.BuildStatus, er
 		if retries > 0 {
 			time.Sleep(3 * time.Second)
 			return pollBuildStatus(a, buildNumber, retries-1)
-		} else {
-			return nil, err
 		}
+		return nil, err
 	}
 	return buildStatus, nil
 }
@@ -120,7 +118,7 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 	var failedPhase *app.BuildPhase
 	var lastUpdate time.Time
 	var status string
-	startSpinner()
+	ui.StartSpinner()
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
 	if err != nil {
 		return err
@@ -162,14 +160,14 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 		// phase changed since last iteration
 		if lastPhase == nil || lastPhase.Name != currentPhase.Name {
 			status = fmt.Sprintf("%s started", strings.Title(currentPhase.Name))
-			Spinner.Stop()
-			Spinner.Suffix = ""
+			ui.Spinner.Stop()
+			ui.Spinner.Suffix = ""
 			if lastPhase != nil && lastPhase.Name == "Test" {
 				// give test logs a chance to catch-up
 				time.Sleep(1 * time.Second)
 			}
 			fmt.Printf("\n⚡️ %s\t%s\n", aurora.Yellow(status), aurora.Faint(currentPhase.Phase.StartTime().Local().Format(timeFmt)))
-			startSpinner()
+			ui.StartSpinner()
 			lastPhase = currentPhase
 			switch currentPhase.Name {
 			case "Build":
@@ -177,42 +175,42 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 				if err != nil {
 					return err
 				}
-				Spinner.Suffix = ""
-				startSpinner()
+				ui.Spinner.Suffix = ""
+				ui.StartSpinner()
 			case "Test":
 				err = watchTestPhase(a, buildStatus)
 				if err != nil {
 					return err
 				}
-				Spinner.Suffix = ""
-				startSpinner()
+				ui.Spinner.Suffix = ""
+				ui.StartSpinner()
 			case "Release":
 				err = watchReleasePhase(a, buildStatus)
 				if err != nil {
 					return err
 				}
-				Spinner.Suffix = ""
-				startSpinner()
+				ui.Spinner.Suffix = ""
+				ui.StartSpinner()
 			case "Postdeploy":
 				err = watchPostdeployPhase(a, buildStatus)
 				if err != nil {
 					return err
 				}
-				Spinner.Suffix = ""
-				startSpinner()
+				ui.Spinner.Suffix = ""
+				ui.StartSpinner()
 			case "Deploy":
 				err = watchDeployPhase(a, buildStatus)
 				if err != nil {
 					return err
 				}
-				Spinner.Suffix = ""
-				startSpinner()
+				ui.Spinner.Suffix = ""
+				ui.StartSpinner()
 			default:
 				// sleep for a second so the spinner doesn't show "X running for now"
 				time.Sleep(500 * time.Millisecond)
 			}
 		} else {
-			Spinner.Suffix = fmt.Sprintf(" %s running for %s", currentPhase.Name, strings.Replace(humanize.Time(lastUpdate), " ago", "", 1))
+			ui.Spinner.Suffix = fmt.Sprintf(" %s running for %s", currentPhase.Name, strings.Replace(humanize.Time(lastUpdate), " ago", "", 1))
 		}
 		// sleep for a bit if we're not ready to move onto the next phase
 		if buildStatus.NextActivePhase(lastPhase) == lastPhase {
@@ -223,7 +221,7 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 			}
 		}
 	}
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	printSuccess(fmt.Sprintf("build #%d deployed successfully", buildStatus.BuildNumber))
 	return nil
 }
@@ -233,7 +231,7 @@ func logMarker(name string) string {
 }
 
 func printLogLine(line string) {
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	if strings.HasPrefix(line, "===> ") {
 		fmt.Printf("%s %s\n", aurora.Blue("===>"), aurora.White(strings.SplitN(line, " ", 2)[1]))
 	} else if strings.HasPrefix(line, "Unable to delete previous cache image: DELETE") {
@@ -368,7 +366,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 }
 
 func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
-	startSpinner()
+	ui.StartSpinner()
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
 	if err != nil {
 		return err
@@ -394,8 +392,8 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 				go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"), stopTailing)
 			}
 		} else if *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD" {
-			startSpinner()
-			Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", strings.Title(strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " "))))
+			ui.StartSpinner()
+			ui.Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", strings.Title(strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " "))))
 		} else {
 			logrus.WithFields(logrus.Fields{"phase": *build.CurrentPhase}).Debug("watch build stopped")
 			if buildLogTailing {
@@ -414,7 +412,7 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 }
 
 func watchTestPhase(a *app.App, buildStatus *app.BuildStatus) error {
-	startSpinner()
+	ui.StartSpinner()
 	stopTailing := make(chan bool)
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
 	if err != nil {
@@ -436,14 +434,16 @@ func watchTestPhase(a *app.App, buildStatus *app.BuildStatus) error {
 }
 
 func watchReleasePhase(a *app.App, buildStatus *app.BuildStatus) error {
-	startSpinner()
+	ui.StartSpinner()
 	stopTailing := make(chan bool)
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
 	if err != nil {
 		return err
 	}
 	ecsSvc := ecs.New(a.Session)
-	a.LoadSettings()
+	if err = a.LoadSettings(); err != nil {
+		return err
+	}
 	releaseLogTailing := false
 	if strings.HasPrefix(buildStatus.Release.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Release.Logs)
@@ -464,9 +464,9 @@ func watchReleasePhase(a *app.App, buildStatus *app.BuildStatus) error {
 			}
 			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 				stopTailing <- true
-				startSpinner()
+				ui.StartSpinner()
 			}
-			Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
+			ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
 		}
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
@@ -481,14 +481,16 @@ func watchReleasePhase(a *app.App, buildStatus *app.BuildStatus) error {
 
 // TODO DRY with watchReleasePhase. Combine to watchEcsTaskPhase
 func watchPostdeployPhase(a *app.App, buildStatus *app.BuildStatus) error {
-	startSpinner()
+	ui.StartSpinner()
 	stopTailing := make(chan bool)
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
 	if err != nil {
 		return err
 	}
 	ecsSvc := ecs.New(a.Session)
-	a.LoadSettings()
+	if err = a.LoadSettings(); err != nil {
+		return err
+	}
 	postdeployLogTailing := false
 	if strings.HasPrefix(buildStatus.Postdeploy.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Postdeploy.Logs)
@@ -509,9 +511,9 @@ func watchPostdeployPhase(a *app.App, buildStatus *app.BuildStatus) error {
 			}
 			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 				stopTailing <- true
-				startSpinner()
+				ui.StartSpinner()
 			}
-			Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
+			ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
 		}
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
@@ -529,7 +531,9 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 	}
 	serviceARNs := buildStatus.Deploy.Arns
 	ecsSvc := ecs.New(a.Session)
-	a.LoadSettings()
+	if err = a.LoadSettings(); err != nil {
+		return err
+	}
 	seenEventIDs := map[string]bool{}
 	var serviceStatus *ecs.DescribeServicesOutput
 	for buildStatus.Deploy.State == "started" {
@@ -559,11 +563,11 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 					continue
 				}
 				seenEventIDs[*event.Id] = true
-				Spinner.Stop()
+				ui.Spinner.Stop()
 				fmt.Printf("%s\n", *event.Message)
 			}
 		}
-		startSpinner()
+		ui.StartSpinner()
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
 		if err != nil {
@@ -574,7 +578,7 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 }
 
 func watchDeployPhase(a *app.App, buildStatus *app.BuildStatus) error {
-	startSpinner()
+	ui.StartSpinner()
 	return streamEcsServiceEvents(a, buildStatus)
 }
 
@@ -592,7 +596,7 @@ var buildStartCmd = &cobra.Command{
 	Short:                 "start a new build from the latest commit on the branch defined in AppPack",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		var duration int
 		if watchBuildFlag {
 			duration = MaxSessionDurationSeconds
@@ -603,13 +607,13 @@ var buildStartCmd = &cobra.Command{
 		checkErr(err)
 		build, err := a.StartBuild(false)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		printSuccess("build started")
-		startSpinner()
+		ui.StartSpinner()
 		buildStatus, err := pollBuildStatus(a, int(*build.BuildNumber), 10)
 		checkErr(err)
-		Spinner.Stop()
-		checkErr(printBuild(buildStatus))
+		ui.Spinner.Stop()
+		printBuild(buildStatus)
 		if watchBuildFlag {
 			checkErr(watchBuild(a, buildStatus))
 		}
@@ -633,7 +637,7 @@ var buildWatchCmd = &cobra.Command{
 	Args:                  cobra.MaximumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		var build *app.BuildStatus
@@ -646,9 +650,9 @@ var buildWatchCmd = &cobra.Command{
 			build, err = a.GetBuildStatus(-1)
 		}
 		checkErr(err)
-		Spinner.Stop()
-		checkErr(printBuild(build))
-		checkErr(printCommitLog(a.Session, build))
+		ui.Spinner.Stop()
+		printBuild(build)
+		printCommitLog(a.Session, build)
 		checkErr(watchBuild(a, build))
 	},
 }
@@ -659,15 +663,15 @@ var buildListCmd = &cobra.Command{
 	Short:                 "list recent builds",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		builds, err := a.RecentBuilds(15)
 		checkErr(err)
-		Spinner.Stop()
+		ui.Spinner.Stop()
 		for _, build := range builds {
-			checkErr(printBuild(&build))
-			checkErr(printCommitLog(a.Session, &build))
+			printBuild(&build)
+			printCommitLog(a.Session, &build)
 		}
 	},
 }

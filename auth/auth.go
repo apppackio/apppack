@@ -14,14 +14,12 @@ import (
 )
 
 const (
-	auth0AppURL   = "https://auth.apppack.io"
 	deviceCodeURL = "https://auth.apppack.io/oauth/device/code"
 	oauthTokenURL = "https://auth.apppack.io/oauth/token"
 	userInfoURL   = "https://auth.apppack.io/userinfo"
 	appListURL    = "https://api.apppack.io/apps"
 	adminListURL  = "https://api.apppack.io/accounts"
 	clientID      = "x15zAd2hgdbugNWSZz2mP2k5jcZfNFk3"
-	scope         = "openid profile email offline_access"
 	audience      = "https://paaws.lloop.us"
 	grantType     = "urn:ietf:params:oauth:grant-type:device_code"
 	cachePrefix   = "io.apppack"
@@ -66,7 +64,7 @@ func AppAWSSession(appName string, sessionDuration int) (*session.Session, *AppR
 	), appRole, nil
 }
 
-func AdminAWSSession(idOrAlias string, sessionDuration int) (*session.Session, *AdminRole, error) {
+func AdminAWSSession(idOrAlias string, sessionDuration int, region string) (*session.Session, *AdminRole, error) {
 	tokens, err := GetTokens()
 	if err != nil {
 		return nil, nil, err
@@ -80,6 +78,9 @@ func AdminAWSSession(idOrAlias string, sessionDuration int) (*session.Session, *
 		return nil, nil, err
 	}
 	logrus.WithFields(logrus.Fields{"access_key": *creds.AccessKeyId}).Debug("creating AWS session")
+	if region == "" {
+		region = adminRole.Region
+	}
 	return session.Must(
 		session.NewSessionWithOptions(
 			session.Options{
@@ -89,7 +90,7 @@ func AdminAWSSession(idOrAlias string, sessionDuration int) (*session.Session, *
 						*creds.SecretAccessKey,
 						*creds.SessionToken,
 					),
-				).WithRegion(adminRole.Region),
+				).WithRegion(region),
 			},
 		),
 	), adminRole, nil

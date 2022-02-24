@@ -19,20 +19,15 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/apppackio/apppack/auth"
+	"github.com/apppackio/apppack/ui"
 	"github.com/logrusorgru/aurora"
-	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-
-	"github.com/briandowns/spinner"
 )
 
 var debug bool
-
-const ()
 
 const (
 	timeFmt = "Jan 02, 2006 15:04:05 -0700"
@@ -43,23 +38,9 @@ var AppName string
 
 // AccountIDorAlias is the `--account` flag
 var AccountIDorAlias string
-var UseAWSCredentials bool = false
-var SessionDurationSeconds int = 900
-var MaxSessionDurationSeconds int = 3600
-
-// Spinner is the loading animation to use for all commands
-var Spinner *spinner.Spinner = spinner.New(spinner.CharSets[14], 50*time.Millisecond)
-
-func startSpinner() {
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		Spinner.Start()
-	}
-}
-
-func pauseUntilEnter(msg string) {
-	fmt.Println(aurora.Bold(aurora.White(msg)))
-	fmt.Scanln()
-}
+var UseAWSCredentials = false
+var SessionDurationSeconds = 900
+var MaxSessionDurationSeconds = 3600
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -72,6 +53,8 @@ var rootCmd = &cobra.Command{
 		if debug {
 			logrus.SetOutput(os.Stdout)
 			logrus.SetLevel(logrus.DebugLevel)
+		} else {
+			logrus.SetLevel(logrus.ErrorLevel)
 		}
 	},
 }
@@ -93,7 +76,7 @@ func checkErr(err error) {
 	if err == nil {
 		return
 	}
-	Spinner.Stop()
+	ui.Spinner.Stop()
 	if strings.HasPrefix(err.Error(), auth.TokenRefreshErr) {
 		fmt.Println(
 			aurora.Yellow(fmt.Sprintf("⚠  %s", auth.TokenRefreshErr)),

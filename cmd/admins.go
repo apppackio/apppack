@@ -18,12 +18,36 @@ package cmd
 import (
 	"fmt"
 	"sort"
-	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/apppackio/apppack/stacks"
+	"github.com/apppackio/apppack/ui"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/spf13/cobra"
 )
+
+func accountStack(sess *session.Session) (*stacks.AccountStack, error) {
+	stack := &stacks.AccountStack{}
+	err := stacks.LoadStackFromCloudformation(sess, stack, new(string))
+	if err != nil {
+		return nil, err
+	}
+	return stack, nil
+}
+
+func updateAdministrators(sess *session.Session, stack *stacks.AccountStack, name *string) error {
+	sort.Strings(stack.Parameters.Administrators)
+	ui.StartSpinner()
+	if err := stacks.ModifyStack(sess, stack, name); err != nil {
+		ui.Spinner.Stop()
+		return err
+	}
+	ui.Spinner.Stop()
+	printSuccess("Account administrators updated")
+	for _, u := range stack.Parameters.Administrators {
+		fmt.Printf("  • %s\n", u)
+	}
+	return nil
+}
 
 // accessCmd represents the access command
 var adminsCmd = &cobra.Command{
@@ -33,21 +57,13 @@ var adminsCmd = &cobra.Command{
 	Args:                  cobra.NoArgs,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		startSpinner()
+		ui.StartSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: aws.String(accountStackName),
-		})
+		stack, err := accountStack(sess)
 		checkErr(err)
-		stack := stackOutput.Stacks[0]
-		usersCSV, err := parameterValue(stack, "Administrators")
-		checkErr(err)
-		users := splitAndTrimCSV(usersCSV)
-		sort.Strings(users)
-		Spinner.Stop()
-		for _, u := range users {
+		ui.Spinner.Stop()
+		for _, u := range stack.Parameters.Administrators {
 			fmt.Println(u)
 		}
 	},
@@ -55,41 +71,32 @@ var adminsCmd = &cobra.Command{
 
 // adminsAddCmd represents the admins add command
 var adminsAddCmd = &cobra.Command{
-	Use:                   "add <email>",
-	Short:                 "add an administrator to the account",
-	Long:                  "*Requires admin permissions.*\nUpdates the account Cloudformation stack to add administrator access for the user.",
+	Use:                   "add <email>...",
+	Short:                 "add administrators to the account",
+	Long:                  "*Requires admin permissions.*\nUpdates the account Cloudformation stack to add administrators.",
 	DisableFlagsInUseLine: true,
-	Args:                  cobra.ExactArgs(1),
+	Args:                  cobra.MinimumNArgs(1),
+	Example:               "apppack admins add user1@example.com user2@example.com",
 	Run: func(cmd *cobra.Command, args []string) {
-		email := args[0]
-		if !validateEmail(email) {
-			checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
+		for _, email := range args {
+
+			if !validateEmail(email) {
+				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
+			}
 		}
-		startSpinner()
+		ui.StartSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: aws.String(accountStackName),
-		})
+		stack, err := accountStack(sess)
 		checkErr(err)
-		stack := stackOutput.Stacks[0]
-		usersCSV, err := parameterValue(stack, "Administrators")
-		checkErr(err)
-		usersCSV = aws.String(strings.Join([]string{*usersCSV, email}, ","))
-		checkErr(replaceParameter(stack, "Administrators", usersCSV))
-		stack, err = updateStackAndWait(sess, &cloudformation.UpdateStackInput{
-			StackName:           stack.StackName,
-			Parameters:          stack.Parameters,
-			UsePreviousTemplate: aws.Bool(true),
-			Capabilities:        []*string{aws.String("CAPABILITY_IAM")},
-		})
-		checkErr(err)
-		if *stack.StackStatus != cloudformation.StackStatusUpdateComplete {
-			checkErr(fmt.Errorf("stack did not update successfully -- %s", *stack.StackStatus))
+		stack.Parameters.Administrators = append(stack.Parameters.Administrators, args...)
+		var dupes []string
+		stack.Parameters.Administrators, dupes = deduplicate(stack.Parameters.Administrators)
+		ui.Spinner.Stop()
+		for _, d := range dupes {
+			printWarning(fmt.Sprintf("%s is already an administrator", d))
 		}
-		Spinner.Stop()
-		printSuccess(fmt.Sprintf("%s added as an administrator", email))
+		checkErr(updateAdministrators(sess, stack, &AppName))
 	},
 }
 
@@ -97,42 +104,27 @@ var adminsAddCmd = &cobra.Command{
 var adminsRemoveCmd = &cobra.Command{
 	Use:                   "remove <email>",
 	Short:                 "remove an administrator from the account",
-	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to remove an administrator.",
+	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to remove an administrators.",
 	DisableFlagsInUseLine: true,
-	Args:                  cobra.ExactArgs(1),
+	Args:                  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		email := args[0]
-		startSpinner()
+		for _, email := range args {
+			if !validateEmail(email) {
+				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
+			}
+		}
+		ui.StartSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		cfnSvc := cloudformation.New(sess)
-		stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			StackName: aws.String(accountStackName),
-		})
+		stack, err := accountStack(sess)
 		checkErr(err)
-		stack := stackOutput.Stacks[0]
-		usersCSV, err := parameterValue(stack, "Administrators")
-		checkErr(err)
-		userList := splitAndTrimCSV(usersCSV)
-		idx := indexOf(userList, email)
-		if idx < 0 {
-			checkErr(fmt.Errorf("%s is not an administrator", email))
+		var notFound []string
+		stack.Parameters.Administrators, notFound = removeFromSlice(stack.Parameters.Administrators, args)
+		ui.Spinner.Stop()
+		for _, n := range notFound {
+			printWarning(fmt.Sprintf("%s is not an administrator", n))
 		}
-		newUsersCSV := strings.Join(append(userList[:idx], userList[idx+1:]...), ",")
-		err = replaceParameter(stack, "Administrators", &newUsersCSV)
-		checkErr(err)
-		stack, err = updateStackAndWait(sess, &cloudformation.UpdateStackInput{
-			StackName:           stack.StackName,
-			Parameters:          stack.Parameters,
-			UsePreviousTemplate: aws.Bool(true),
-			Capabilities:        []*string{aws.String("CAPABILITY_IAM")},
-		})
-		checkErr(err)
-		if *stack.StackStatus != cloudformation.StackStatusUpdateComplete {
-			checkErr(fmt.Errorf("stack did not update successfully -- %s", *stack.StackStatus))
-		}
-		Spinner.Stop()
-		printSuccess(fmt.Sprintf("%s removed as an administrator", email))
+		checkErr(updateAdministrators(sess, stack, &AppName))
 	},
 }
 

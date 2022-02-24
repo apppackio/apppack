@@ -17,46 +17,15 @@ package cmd
 
 import (
 	"fmt"
-	"math/rand"
-	"net"
-	"net/url"
-	"os"
-	"sort"
 	"strings"
-	"time"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/apppackio/apppack/auth"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/apppackio/apppack/bridge"
+	"github.com/apppackio/apppack/stacks"
+	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/codebuild"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/getsentry/sentry-go"
-	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
-	"github.com/mattn/go-isatty"
-	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-)
-
-const (
-	appFormationURL             = "https://s3.amazonaws.com/apppack-cloudformations/latest/app.json"
-	clusterFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/cluster.json"
-	accountFormationURL         = "https://s3.amazonaws.com/apppack-cloudformations/latest/account.json"
-	regionFormationURL          = "https://s3.amazonaws.com/apppack-cloudformations/latest/region.json"
-	databaseFormationURL        = "https://s3.amazonaws.com/apppack-cloudformations/latest/database.json"
-	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
-	customDomainFormationURL    = "https://s3.amazonaws.com/apppack-cloudformations/latest/custom-domain.json"
-	accountStackName            = "apppack-account"
-	redisStackNameTmpl          = "apppack-redis-%s"
-	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token"
-	databaseStackNameTmpl       = "apppack-database-%s"
 )
 
 var createChangeSet bool
@@ -64,523 +33,34 @@ var nonInteractive bool
 var region string
 var release string
 
-func appStackName(appName string) string {
-	return fmt.Sprintf("apppack-app-%s", appName)
-}
-
-func pipelineStackName(appName string) string {
-	return fmt.Sprintf("apppack-pipeline-%s", appName)
-}
-
-// swap out latest URL for a pre-release
-func getReleaseUrl(url string) string {
-	if release == "" {
-		return url
-	}
-	return strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", release), 1)
-}
-
-func createStackOrChangeSet(sess *session.Session, input *cloudformation.CreateStackInput, changeSet bool, friendlyName string) error {
-	cfnSvc := cloudformation.New(sess)
-	if changeSet {
-		Spinner.Stop()
-		fmt.Printf("Creating Cloudformation Change Set for %s...\n", friendlyName)
-		startSpinner()
-		changeSet, err := createChangeSetAndWait(cfnSvc, input)
-		Spinner.Stop()
-		if err != nil {
-			return err
-		}
-		statusURL := cloudformationStackURL(sess.Config.Region, changeSet.ChangeSetId)
-		if *changeSet.Status != "CREATE_COMPLETE" {
-			return fmt.Errorf("Stack ChangeSet creation Failed.\nView status at %s", statusURL)
-		}
-		fmt.Println("View ChangeSet at:")
-		fmt.Println(aurora.White(statusURL))
-	} else {
-		Spinner.Stop()
-		fmt.Printf("Creating %s resources...\n", friendlyName)
-		startSpinner()
-		stack, err := createStackAndWait(cfnSvc, input, true)
-		Spinner.Stop()
-		if err != nil {
-			return err
-		}
-		if *stack.StackStatus != "CREATE_COMPLETE" {
-			return fmt.Errorf("Stack creation failed.\nView status at %s", cloudformationStackURL(sess.Config.Region, stack.StackId))
-		}
-		printSuccess(fmt.Sprintf("created %s", friendlyName))
-	}
-	return nil
-}
-
-func createChangeSetAndWait(cfnSvc *cloudformation.CloudFormation, stackInput *cloudformation.CreateStackInput) (*cloudformation.DescribeChangeSetOutput, error) {
-	changeSetName := fmt.Sprintf("create-%d", int32(time.Now().Unix()))
-	_, err := cfnSvc.CreateChangeSet(&cloudformation.CreateChangeSetInput{
-		ChangeSetType: aws.String("CREATE"),
-		ChangeSetName: &changeSetName,
-		StackName:     stackInput.StackName,
-		TemplateURL:   stackInput.TemplateURL,
-		Parameters:    stackInput.Parameters,
-		Capabilities:  stackInput.Capabilities,
-		Tags:          stackInput.Tags,
-	})
-	if err != nil {
-		return nil, err
-	}
-	describeChangeSetInput := cloudformation.DescribeChangeSetInput{
-		ChangeSetName: &changeSetName,
-		StackName:     stackInput.StackName,
-	}
-	err = cfnSvc.WaitUntilChangeSetCreateComplete(&describeChangeSetInput)
-	if err != nil {
-		return nil, err
-	}
-	changeSet, err := cfnSvc.DescribeChangeSet(&describeChangeSetInput)
-	if err != nil {
-		return nil, err
-	}
-	return changeSet, nil
-}
-
-func createStackAndWait(cfnSvc *cloudformation.CloudFormation, stackInput *cloudformation.CreateStackInput, retry bool) (*cloudformation.Stack, error) {
-	stackOutput, err := cfnSvc.CreateStack(stackInput)
-	if err != nil {
-		return nil, err
-	}
-	Spinner.Stop()
-	fmt.Println(aurora.Faint(*stackOutput.StackId))
-	stack, err := waitForCloudformationStack(cfnSvc, *stackInput.StackName)
-	if err != nil {
-		return nil, err
-	}
-	if retry && *stack.StackStatus == "ROLLBACK_COMPLETE" {
-		stack, err = retryStackCreation(cfnSvc, stack.StackId, stackInput)
-	}
-	return stack, err
-}
-
-// retryStackCreation will attempt to destroy and recreate the stack
-func retryStackCreation(cfnSvc *cloudformation.CloudFormation, stackID *string, input *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
-	printWarning("stack creation failed")
-	fmt.Println("retrying operation... deleting and recreating stack")
-	sentry.CaptureException(fmt.Errorf("Stack creation failed: %s", *input.StackName))
-	defer sentry.Flush(time.Second * 5)
-	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{StackName: stackID})
-	if err != nil {
-		return nil, err
-	}
-	stack, err := waitForCloudformationStack(cfnSvc, *stackID)
+func CreateStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.FlagSet, name string) {
+	stackName := stack.StackName(&name)
+	exists, err := bridge.StackExists(sess, *stackName)
 	checkErr(err)
-	if *stack.StackStatus != "DELETE_COMPLETE" {
-		err = fmt.Errorf("Stack destruction failed: %s", *stack.StackName)
-		sentry.CaptureException(err)
-		fmt.Printf("%s", aurora.Bold(aurora.White(
-			fmt.Sprintf("Unable to destroy stack. Check Cloudformation console for more details:\n%s", cloudformationStackURL(&region, stackID)),
-		)))
-		return nil, err
+	if *exists {
+		checkErr(fmt.Errorf("stack %s already exists", *stackName))
 	}
-	fmt.Println("successfully deleted failed stack...")
-	return createStackAndWait(cfnSvc, input, false)
-}
-
-func cloudformationStackURL(region, stackID *string) string {
-	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
-}
-
-// stackExists checks if a named Cfn Stack already exists in the region
-func stackExists(sess *session.Session, stackName string) (*bool, error) {
-	cfnSvc := cloudformation.New(sess)
-	stackOutput, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-		StackName: &stackName,
-	})
-	var exists bool
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == "ValidationError" {
-				exists = false
-				return &exists, nil
-			}
-		}
-		return nil, err
+	checkErr(stack.UpdateFromFlags(flags))
+	ui.Spinner.Stop()
+	fmt.Print(aurora.Green(fmt.Sprintf("🏗  Creating %s `%s` in %s", strings.Title(stack.StackType()), name, *sess.Config.Region)).String())
+	if CurrentAccountRole != nil {
+		fmt.Print(aurora.Green(fmt.Sprintf(" on %s", CurrentAccountRole.GetAccountName())).String())
 	}
-	exists = len(stackOutput.Stacks) > 0 && *stackOutput.Stacks[0].StackStatus != cloudformation.StackStatusDeleteComplete
-	return &exists, nil
-}
-
-type stackItem struct {
-	PrimaryID   string `json:"primary_id"`
-	SecondaryID string `json:"secondary_id"`
-	Stack       Stack  `json:"value"`
-}
-
-type Stack struct {
-	StackID        string `json:"stack_id"`
-	StackName      string `json:"stack_name"`
-	Name           string `json:"name"`
-	DatabaseEngine string `json:"engine"`
-}
-
-func listClusters(sess *session.Session) ([]string, error) {
-	ddbSvc := dynamodb.New(sess)
-	result, err := ddbSvc.Query(&dynamodb.QueryInput{
-		TableName:              aws.String("apppack"),
-		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":id1": {S: aws.String("CLUSTERS")},
-			":id2": {S: aws.String("CLUSTER#")},
-		},
-	})
-	if err != nil {
-		return nil, err
+	fmt.Println()
+	if !nonInteractive {
+		checkErr(stack.AskQuestions(sess))
 	}
-	if result.Items == nil {
-		return nil, fmt.Errorf("could not find any AppPack clusters")
-	}
-	i := []stackItem{}
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &i)
-	if err != nil {
-		return nil, err
-	}
-	clusters := []string{}
-	for idx := range i {
-		clusters = append(clusters, i[idx].Stack.Name)
-	}
-
-	return clusters, nil
-}
-
-func makeClusterQuestion(sess *session.Session, message *string) (*survey.Question, error) {
-	clusters, err := listClusters(sess)
-	if err != nil {
-		return nil, err
-	}
-	if len(clusters) == 0 {
-		return nil, fmt.Errorf("no AppPack clusters are setup")
-	}
-	var defaultCluster string
-	if contains(clusters, "apppack") {
-		defaultCluster = "apppack"
+	ui.StartSpinner()
+	if createChangeSet {
+		url, err := stacks.CreateStackChangeset(sess, stack, &name, &release)
+		checkErr(err)
+		ui.Spinner.Stop()
+		fmt.Println("View changeset at", aurora.White(url))
 	} else {
-		defaultCluster = clusters[0]
+		checkErr(stacks.CreateStack(sess, stack, &name, &release))
+		ui.Spinner.Stop()
+		ui.PrintSuccess(fmt.Sprintf("created %s stack %s", stack.StackType(), name))
 	}
-	return &survey.Question{
-		Name: "cluster",
-		Prompt: &survey.Select{
-			Message: *message,
-			Options: clusters,
-			Default: defaultCluster,
-		},
-	}, err
-}
-
-func getDDBClusterItem(sess *session.Session, cluster *string, addon string, name *string) (*Stack, error) {
-	ddbSvc := dynamodb.New(sess)
-	secondaryID := fmt.Sprintf("%s#%s#%s", *cluster, addon, *name)
-	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id": {
-				S: aws.String("CLUSTERS"),
-			},
-			"secondary_id": {
-				S: aws.String(secondaryID),
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.Item == nil {
-		return nil, fmt.Errorf("could not find CLUSTERS/%s", secondaryID)
-	}
-	i := stackItem{}
-	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
-	if err != nil {
-		return nil, err
-	}
-	return &i.Stack, nil
-}
-
-func ddbClusterQuery(sess *session.Session, cluster, addon *string) (*[]map[string]*dynamodb.AttributeValue, error) {
-	ddbSvc := dynamodb.New(sess)
-	result, err := ddbSvc.Query(&dynamodb.QueryInput{
-		TableName:              aws.String("apppack"),
-		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":id1": {S: aws.String("CLUSTERS")},
-			":id2": {S: aws.String(fmt.Sprintf("%s#%s#", *cluster, *addon))},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.Items == nil {
-		return nil, fmt.Errorf("could not find any AppPack %s stacks on %s cluster", strings.ToLower(*addon), *cluster)
-	}
-	return &result.Items, nil
-}
-
-// isHostedZoneForDomain verifies that the dnsName would be a valid record in the hosted zone
-func isHostedZoneForDomain(dnsName string, hostedZone *route53.HostedZone) bool {
-	return strings.HasSuffix(dnsName, strings.TrimSuffix(*hostedZone.Name, "."))
-}
-
-// hostedZoneForDomain searches AWS Hosted Zones for a place for this domain
-func hostedZoneForDomain(sess *session.Session, dnsName string) (*route53.HostedZone, error) {
-	r53Svc := route53.New(sess)
-	nameParts := strings.Split(dnsName, ".")
-	// keep stripping off subdomains until a match is found
-	for i := range nameParts {
-		input := route53.ListHostedZonesByNameInput{
-			DNSName: aws.String(strings.Join(nameParts[i:], ".")),
-		}
-		resp, err := r53Svc.ListHostedZonesByName(&input)
-		if err != nil {
-			return nil, err
-		}
-		for _, zone := range resp.HostedZones {
-			if isHostedZoneForDomain(dnsName, zone) && !*zone.Config.PrivateZone {
-				err = checkHostedZone(r53Svc, zone)
-				if err != nil {
-					printError(fmt.Sprintf("%v", err))
-				}
-				return zone, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("no hosted zones found for %s", dnsName)
-}
-
-// HasSameItems verifies two string slices contain the same elements
-func HasSameItems(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	sort.Strings(a)
-	sort.Strings(b)
-	for i, v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// checkHostedZone prompts the user if the NS records for the domain don't match what AWS expects
-func checkHostedZone(r53svc *route53.Route53, zone *route53.HostedZone) error {
-	results, err := net.LookupNS(*zone.Name)
-	if err != nil {
-		return err
-	}
-	actualServers := []string{}
-	for _, r := range results {
-		actualServers = append(actualServers, strings.TrimSuffix(r.Host, "."))
-	}
-	expectedServers := []string{}
-	resp, err := r53svc.GetHostedZone(&route53.GetHostedZoneInput{Id: zone.Id})
-	if err != nil {
-		return err
-	}
-	for _, ns := range resp.DelegationSet.NameServers {
-		expectedServers = append(expectedServers, strings.TrimSuffix(*ns, "."))
-	}
-	if HasSameItems(actualServers, expectedServers) {
-		return nil
-	}
-	Spinner.Stop()
-	printWarning(fmt.Sprintf("%s doesn't appear to be using AWS' domain servers", strings.TrimSuffix(*zone.Name, ".")))
-	fmt.Printf("Expected:\n  %s\n\n", strings.Join(expectedServers, "\n  "))
-	fmt.Printf("Actual:\n  %s\n\n", strings.Join(actualServers, "\n  "))
-	fmt.Printf("If nameservers are not setup properly, TLS certificate creation will fail.\n")
-	pauseUntilEnter("Once you've verified the nameservers are correct, press ENTER to continue.")
-	return nil
-}
-
-func listStacks(sess *session.Session, cluster *string, addon string) ([]string, error) {
-	items, err := ddbClusterQuery(sess, cluster, &addon)
-	if err != nil {
-		return nil, err
-	}
-	i := []stackItem{}
-	err = dynamodbattribute.UnmarshalListOfMaps(*items, &i)
-	if err != nil {
-		return nil, err
-	}
-	stacks := []string{}
-	var stack Stack
-	for idx := range i {
-		stack = i[idx].Stack
-		if len(stack.DatabaseEngine) > 0 {
-			stacks = append(stacks, fmt.Sprintf("%s (%s)", stack.Name, stack.DatabaseEngine))
-		} else {
-			stacks = append(stacks, stack.Name)
-		}
-	}
-	return stacks, nil
-}
-
-func makeDatabaseQuestion(sess *session.Session, cluster *string) (*survey.Question, error) {
-	databases, err := listStacks(sess, cluster, "DATABASE")
-	if err != nil {
-		return nil, err
-	}
-	if len(databases) == 0 {
-		return nil, fmt.Errorf("no AppPack databases are setup on %s cluster", *cluster)
-	}
-	defaultDatabase := databases[0]
-	return &survey.Question{
-		Name: "addon-database-name",
-		Prompt: &survey.Select{
-			Message: "Select a database cluster",
-			Options: databases,
-			Default: defaultDatabase,
-		},
-	}, err
-}
-
-func makeRedisQuestion(sess *session.Session, cluster *string) (*survey.Question, error) {
-	instances, err := listStacks(sess, cluster, "REDIS")
-	if err != nil {
-		return nil, err
-	}
-	if len(instances) == 0 {
-		return nil, fmt.Errorf("no AppPack Redis instances are setup on %s cluster", *cluster)
-	}
-	defaultInstance := instances[0]
-	return &survey.Question{
-		Name: "addon-redis-name",
-		Prompt: &survey.Select{
-			Message: "Select a Redis instance",
-			Options: instances,
-			Default: defaultInstance,
-		},
-	}, err
-}
-
-func addQuestionFromFlag(flag *pflag.Flag, questions *[]*survey.Question, override *survey.Question) {
-	if !flag.Changed {
-		if override != nil {
-			*questions = append(*questions, override)
-		} else if flag.DefValue == "true" {
-			*questions = append(*questions, &survey.Question{
-				Name:   flag.Name,
-				Prompt: &survey.Select{Message: flag.Usage, Options: []string{"yes", "no"}, FilterMessage: "", Default: "yes"},
-			})
-		} else if flag.DefValue == "false" {
-			*questions = append(*questions, &survey.Question{
-				Name:   flag.Name,
-				Prompt: &survey.Select{Message: flag.Usage, Options: []string{"yes", "no"}, FilterMessage: "", Default: "no"},
-			})
-		} else {
-			*questions = append(*questions, &survey.Question{
-				Name:   flag.Name,
-				Prompt: &survey.Input{Message: flag.Usage, Default: flag.DefValue},
-			})
-		}
-	}
-}
-
-func getArgValue(cmd *cobra.Command, answers *map[string]interface{}, name string, required bool) *string {
-	var val string
-	flag := cmd.Flags().Lookup(name)
-	// if the flag is set, use that value
-	if flag.Changed {
-		val = flag.Value.String()
-		return &val
-	}
-	// otherwise, check if there is a matching answer
-	answer, ok := (*answers)[name]
-	if ok {
-		switch v := answer.(type) {
-		case *string:
-			return answer.(*string)
-		case string:
-			val, _ = answer.(string)
-			return &val
-		case survey.OptionAnswer:
-			return aws.String(answer.(survey.OptionAnswer).Value)
-		default:
-			fmt.Printf("Unexpected type, %T\n", v)
-			return nil
-		}
-	}
-	// finally, if it is required and a value was not supplied, raise an error
-	if required {
-		if len(flag.DefValue) > 0 {
-			return &flag.DefValue
-		}
-		checkErr(fmt.Errorf("'--%s' is required", name))
-	}
-	return &flag.DefValue
-}
-
-func stackFromDDBItem(sess *session.Session, secondaryID string) (*cloudformation.Stack, error) {
-	ddbSvc := dynamodb.New(sess)
-	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id": {
-				S: aws.String("CLUSTERS"),
-			},
-			"secondary_id": {
-				S: aws.String(secondaryID),
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.Item == nil {
-		return nil, fmt.Errorf("could not find CLUSTERS/%s", secondaryID)
-	}
-	i := stackItem{}
-	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
-	if err != nil {
-		return nil, err
-	}
-	cfnSvc := cloudformation.New(sess)
-	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-		StackName: &i.Stack.StackID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(stacks.Stacks) == 0 {
-		return nil, fmt.Errorf("no stacks found with ID %s", i.Stack.StackID)
-	}
-	return stacks.Stacks[0], nil
-}
-
-func contains(arr []string, str string) bool {
-	for _, a := range arr {
-		if a == str {
-			return true
-		}
-	}
-	return false
-}
-
-func isTruthy(val *string) bool {
-	return *val == "yes" || *val == "true"
-}
-
-func enabledString(val bool) string {
-	if val {
-		return "enabled"
-	}
-	return "disabled"
-}
-
-func generatePassword() string {
-	rand.Seed(time.Now().UnixNano())
-	chars := []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-	length := 30
-	var b strings.Builder
-	for i := 0; i < length; i++ {
-		b.WriteRune(chars[rand.Intn(len(chars))])
-	}
-	return b.String()
 }
 
 // createCmd represents the create command
@@ -588,372 +68,10 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "create AppPack resources in your AWS account",
 	Long: `Use subcommands to create AppPack resources in your account.
-	
-These currently require AWS authentication credentials to operate unlike app-specific commands which use AppPack for authentication.
+
+These require administrator access.
 `,
 	DisableFlagsInUseLine: true,
-}
-
-// createRedisCmd represents the create redis command
-var createRedisCmd = &cobra.Command{
-	Use:                   "redis [<name>]",
-	Short:                 "setup resources for an AppPack Redis instance",
-	Long:                  "*Requires admin permissions.*\nCreates an AppPack Redis instance. If a `<name>` is not provided, the default name, `apppack` will be used.\nRequires admin permissions.",
-	DisableFlagsInUseLine: true,
-	Args:                  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		var name string
-		if len(args) == 0 {
-			name = "apppack"
-		} else {
-			name = args[0]
-		}
-		sess, err := adminSession(MaxSessionDurationSeconds)
-		checkErr(err)
-		answers := make(map[string]interface{})
-		if !nonInteractive {
-			questions := []*survey.Question{}
-			clusterQuestion, err := makeClusterQuestion(sess, aws.String("AppPack Cluster to use for Redis"))
-			checkErr(err)
-			questions = append(questions, clusterQuestion)
-			addQuestionFromFlag(cmd.Flags().Lookup("multi-az"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("instance-class"), &questions, nil)
-			if err := survey.Ask(questions, &answers); err != nil {
-				checkErr(err)
-			}
-		}
-		cluster := getArgValue(cmd, &answers, "cluster", true)
-		// check if a redis already exists on the cluster
-		_, err = getDDBClusterItem(sess, cluster, "REDIS", &name)
-		if err == nil {
-			checkErr(fmt.Errorf(fmt.Sprintf("a Redis instance named %s already exists on the cluster %s", name, *cluster)))
-		}
-		clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
-		checkErr(err)
-		var multiAZParameter string
-		if isTruthy((getArgValue(cmd, &answers, "multi-az", false))) {
-			multiAZParameter = "yes"
-		} else {
-			multiAZParameter = "no"
-		}
-		if createChangeSet {
-			fmt.Println("Creating Cloudformation Change Set for Redis resources...")
-		} else {
-			fmt.Println("Creating Redis resources, this may take a few minutes...")
-		}
-		startSpinner()
-		authToken := fmt.Sprintf(redisAuthTokenParameterTmpl, name)
-		ssmSvc := ssm.New(sess)
-		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-			Name:  &authToken,
-			Value: aws.String(generatePassword()),
-			Type:  aws.String("SecureString"),
-		})
-		checkErr(err)
-		cfnTags := []*cloudformation.Tag{
-			{Key: aws.String("apppack:redis"), Value: &name},
-			{Key: aws.String("apppack:cluster"), Value: cluster},
-			{Key: aws.String("apppack"), Value: aws.String("true")},
-		}
-
-		input := cloudformation.CreateStackInput{
-			StackName:   aws.String(fmt.Sprintf(redisStackNameTmpl, name)),
-			TemplateURL: aws.String(getReleaseUrl(redisFormationURL)),
-			Parameters: []*cloudformation.Parameter{
-				{
-					ParameterKey:   aws.String("Name"),
-					ParameterValue: &name,
-				},
-				{
-					ParameterKey:   aws.String("ClusterStackName"),
-					ParameterValue: clusterStack.StackName,
-				},
-				{
-					ParameterKey:   aws.String("AuthTokenParameter"),
-					ParameterValue: &authToken,
-				},
-				{
-					ParameterKey:   aws.String("InstanceClass"),
-					ParameterValue: getArgValue(cmd, &answers, "instance-class", true),
-				},
-				{
-					ParameterKey:   aws.String("MultiAZ"),
-					ParameterValue: &multiAZParameter,
-				},
-			},
-			Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-			Tags:         cfnTags,
-		}
-		err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s Redis instance", name))
-		checkErr(err)
-	},
-}
-
-func verifySourceCredentials(sess *session.Session, repositoryType string, interactive bool) error {
-	codebuildSvc := codebuild.New(sess)
-	sourceCredentialsOutput, err := codebuildSvc.ListSourceCredentials(&codebuild.ListSourceCredentialsInput{})
-	if err != nil {
-		return err
-	}
-	hasCredentials := false
-	for _, cred := range sourceCredentialsOutput.SourceCredentialsInfos {
-		if *cred.ServerType == repositoryType {
-			hasCredentials = true
-		}
-	}
-	if !hasCredentials {
-		var friendlySourceName string
-		if repositoryType == "BITBUCKET" {
-			friendlySourceName = "Bitbucket"
-		} else {
-			friendlySourceName = "GitHub"
-		}
-		Spinner.Stop()
-		printWarning(fmt.Sprintf("CodeBuild needs to be authenticated to access your repository at %s", friendlySourceName))
-		fmt.Println("On the CodeBuild new project page:")
-		fmt.Printf("    1. Scroll to the %s section\n", aurora.Bold("Source"))
-		fmt.Printf("    2. Select %s for the %s\n", aurora.Bold(friendlySourceName), aurora.Bold("Source provider"))
-		fmt.Printf("    3. Keep the default %s\n", aurora.Bold("Connect using OAuth"))
-		fmt.Printf("    4. Click %s\n", aurora.Bold(fmt.Sprintf("Connect to %s", friendlySourceName)))
-		fmt.Printf("    5. Click %s in the popup window\n", aurora.Bold("Confirm"))
-		fmt.Printf("    6. %s You can close the browser window and continue with app setup here.\n\n", aurora.Bold("That's it!"))
-		newProjectURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/project/new", *sess.Config.Region)
-		if !interactive {
-			fmt.Printf("Visit %s to complete the authentication\n", newProjectURL)
-			fmt.Println("No further steps are necessary. After you've completed the authentication, re-run this command.")
-			os.Exit(1)
-		}
-		url, err := auth.GetConsoleURL(sess, newProjectURL)
-		if err == nil && isatty.IsTerminal(os.Stdin.Fd()) {
-			fmt.Println("Opening the CodeBuild new project page now...")
-			browser.OpenURL(*url)
-		} else {
-			fmt.Printf("Visit the following URL to authenticate: %s", newProjectURL)
-		}
-		pauseUntilEnter("Finish authentication in your web browser then press ENTER to continue.")
-		return verifySourceCredentials(sess, repositoryType, interactive)
-	}
-	return nil
-}
-
-func createAppOrPipeline(cmd *cobra.Command, args []string, pipeline bool) {
-	answers := make(map[string]interface{})
-	var databaseAddonEnabled bool
-	var redisAddonEnabled bool
-	name := args[0]
-	var appType string
-	if pipeline {
-		appType = "pipeline"
-	} else {
-		appType = "app"
-	}
-	sess, err := adminSession(MaxSessionDurationSeconds)
-	checkErr(err)
-	if !nonInteractive {
-		questions := []*survey.Question{}
-		clusterQuestion, err := makeClusterQuestion(sess, aws.String("cluster to install app into"))
-		checkErr(err)
-		questions = append(questions, clusterQuestion)
-		addQuestionFromFlag(cmd.Flags().Lookup("repository"), &questions, nil)
-		if !pipeline {
-			addQuestionFromFlag(cmd.Flags().Lookup("branch"), &questions, nil)
-			addQuestionFromFlag(cmd.Flags().Lookup("domain"), &questions, nil)
-		}
-		addQuestionFromFlag(cmd.Flags().Lookup("healthcheck-path"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-private-s3"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-public-s3"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-database"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-redis"), &questions, nil)
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
-		}
-		questions = []*survey.Question{}
-		databaseAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-database", false))
-		if databaseAddonEnabled {
-			databaseClusterQuestion, err := makeDatabaseQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
-			checkErr(err)
-			questions = append(questions, databaseClusterQuestion)
-		}
-		redisAddonEnabled = isTruthy(getArgValue(cmd, &answers, "addon-redis", false))
-		if redisAddonEnabled {
-			redisInstanceQuestion, err := makeRedisQuestion(sess, getArgValue(cmd, &answers, "cluster", false))
-			checkErr(err)
-			questions = append(questions, redisInstanceQuestion)
-		}
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-sqs"), &questions, nil)
-		addQuestionFromFlag(cmd.Flags().Lookup("addon-ses"), &questions, nil)
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
-		}
-		questions = []*survey.Question{}
-		if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
-			addQuestionFromFlag(cmd.Flags().Lookup("addon-ses-domain"), &questions, nil)
-		}
-		addQuestionFromFlag(cmd.Flags().Lookup("users"), &questions, nil)
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
-		}
-	}
-	startSpinner()
-	cluster := getArgValue(cmd, &answers, "cluster", true)
-	cfnTags := []*cloudformation.Tag{
-		{Key: aws.String("apppack:appName"), Value: &name},
-		{Key: aws.String("apppack:cluster"), Value: cluster},
-		{Key: aws.String("apppack"), Value: aws.String("true")},
-	}
-	if pipeline {
-		pipelineTag := cloudformation.Tag{Key: aws.String("apppack:pipeline"), Value: aws.String("true")}
-		cfnTags = append(cfnTags, &pipelineTag)
-	}
-
-	clusterStack, err := stackFromDDBItem(sess, fmt.Sprintf("CLUSTER#%s", *cluster))
-	checkErr(err)
-	sesDomain := ""
-	if isTruthy(getArgValue(cmd, &answers, "addon-ses", false)) {
-		sesDomain = *getArgValue(cmd, &answers, "addon-ses-domain", false)
-	}
-	var databaseStackName string
-	if isTruthy(getArgValue(cmd, &answers, "addon-database", false)) {
-		databaseDisplay := getArgValue(cmd, &answers, "addon-database-name", false)
-		// remove ' (engine)' from the database display text
-		database := strings.Split(*databaseDisplay, " ")[0]
-		databaseStack, err := getDDBClusterItem(sess, cluster, "DATABASE", &database)
-		checkErr(err)
-		databaseStackName = strings.Split(databaseStack.StackID, "/")[1]
-	} else {
-		databaseStackName = ""
-	}
-	var redisStackName string
-	if isTruthy(getArgValue(cmd, &answers, "addon-redis", false)) {
-		redis := getArgValue(cmd, &answers, "addon-redis-name", false)
-		redisStack, err := getDDBClusterItem(sess, cluster, "REDIS", redis)
-		checkErr(err)
-		redisStackName = strings.Split(redisStack.StackID, "/")[1]
-	} else {
-		redisStackName = ""
-	}
-	repositoryURL := getArgValue(cmd, &answers, "repository", true)
-	var repositoryType string
-	if strings.Contains(*repositoryURL, "github.com") {
-		repositoryType = "GITHUB"
-	} else if strings.Contains(*repositoryURL, "bitbucket.org") {
-		repositoryType = "BITBUCKET"
-	} else {
-		checkErr(fmt.Errorf("unknown repository source"))
-	}
-	err = verifySourceCredentials(sess, repositoryType, !nonInteractive)
-	checkErr(err)
-	var fargateParameter string
-	if isTruthy(aws.String(cmd.Flags().Lookup("ec2").Value.String())) {
-		// TODO: verify cluster is EC2 compatible
-		fargateParameter = "disabled"
-	} else {
-		fargateParameter = "enabled"
-	}
-	var buildWebhookParameter string
-	flag := cmd.Flags().Lookup("disable-build-webhook")
-	if flag != nil && isTruthy(aws.String(flag.Value.String())) {
-		buildWebhookParameter = "disabled"
-	} else {
-		buildWebhookParameter = "enabled"
-	}
-	rand.Seed(time.Now().UnixNano())
-
-	input := cloudformation.CreateStackInput{
-		TemplateURL: aws.String(getReleaseUrl(appFormationURL)),
-		Parameters: []*cloudformation.Parameter{
-			{
-				ParameterKey:   aws.String("Type"),
-				ParameterValue: &appType,
-			},
-			{
-				ParameterKey:   aws.String("HealthCheckPath"),
-				ParameterValue: getArgValue(cmd, &answers, "healthcheck-path", true),
-			},
-			{
-				ParameterKey:   aws.String("LoadBalancerRulePriority"),
-				ParameterValue: aws.String(fmt.Sprintf("%d", rand.Intn(50000-200)+200)), // TODO: verify empty slot
-			},
-			{
-				ParameterKey:   aws.String("Name"),
-				ParameterValue: &name,
-			},
-			{
-				ParameterKey:   aws.String("ClusterStackName"),
-				ParameterValue: clusterStack.StackName,
-			},
-			{
-				ParameterKey:   aws.String("AppPackRoleExternalId"),
-				ParameterValue: aws.String(strings.ReplaceAll(uuid.New().String(), "-", "")),
-			},
-			{
-				ParameterKey:   aws.String("PrivateS3BucketEnabled"),
-				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-private-s3", false)))),
-			},
-			{
-				ParameterKey:   aws.String("PublicS3BucketEnabled"),
-				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-public-s3", false)))),
-			},
-			{
-				ParameterKey:   aws.String("SesDomain"),
-				ParameterValue: &sesDomain,
-			},
-			{
-				ParameterKey:   aws.String("DatabaseStackName"),
-				ParameterValue: &databaseStackName,
-			},
-			{
-				ParameterKey:   aws.String("RedisStackName"),
-				ParameterValue: &redisStackName,
-			},
-			{
-				ParameterKey:   aws.String("SQSQueueEnabled"),
-				ParameterValue: aws.String(enabledString(isTruthy(getArgValue(cmd, &answers, "addon-sqs", false)))),
-			},
-			{
-				ParameterKey:   aws.String("RepositoryType"),
-				ParameterValue: &repositoryType,
-			},
-			{
-				ParameterKey:   aws.String("RepositoryUrl"),
-				ParameterValue: repositoryURL,
-			},
-			{
-				ParameterKey:   aws.String("Fargate"),
-				ParameterValue: &fargateParameter,
-			},
-			{
-				ParameterKey:   aws.String("AllowedUsers"),
-				ParameterValue: aws.String(strings.Trim(*(getArgValue(cmd, &answers, "users", true)), "[]")),
-			},
-			{
-				ParameterKey:   aws.String("BuildWebhook"),
-				ParameterValue: &buildWebhookParameter,
-			},
-		},
-		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
-		Tags:         cfnTags,
-	}
-	if pipeline {
-		input.StackName = aws.String(pipelineStackName(name))
-		pipelineParameters := []*cloudformation.Parameter{
-			{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("")},
-			{ParameterKey: aws.String("Domains"), ParameterValue: aws.String("")},
-		}
-		input.Parameters = append(input.Parameters, pipelineParameters...)
-	} else {
-		input.StackName = aws.String(appStackName(name))
-		appParameters := []*cloudformation.Parameter{
-			{ParameterKey: aws.String("Branch"), ParameterValue: getArgValue(cmd, &answers, "branch", true)},
-			{ParameterKey: aws.String("Domains"), ParameterValue: getArgValue(cmd, &answers, "domain", false)},
-		}
-		input.Parameters = append(input.Parameters, appParameters...)
-	}
-	err = createStackOrChangeSet(sess, &input, createChangeSet, fmt.Sprintf("%s %s", name, appType))
-	checkErr(err)
-	if !pipeline {
-		fmt.Println(aurora.White(fmt.Sprintf("  %s app created\n  Push to your git repository to trigger a build or run `apppack -a %s build start`", name, name)))
-	}
 }
 
 // appCmd represents the create app command
@@ -964,7 +82,27 @@ var appCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		createAppOrPipeline(cmd, args, false)
+		ui.StartSpinner()
+		sess, err := adminSession(MaxSessionDurationSeconds)
+		checkErr(err)
+		name := args[0]
+		exists, err := bridge.StackExists(sess, fmt.Sprintf(stacks.PipelineStackNameTmpl, name))
+		checkErr(err)
+		if *exists {
+			checkErr(fmt.Errorf("a pipeline named %s already exists -- app and pipeline names must be unique", name))
+		}
+		appParameters := stacks.DefaultAppStackParameters
+		appParameters.Name = name
+		CreateStackCommand(
+			sess,
+			&stacks.AppStack{
+				Parameters: &appParameters,
+				Pipeline:   false,
+			},
+			cmd.Flags(),
+			name,
+		)
+		fmt.Println(aurora.White(fmt.Sprintf("Push to your git repository to trigger a build or run `apppack -a %s build start`", name)))
 	},
 }
 
@@ -976,66 +114,190 @@ var pipelineCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		createAppOrPipeline(cmd, args, true)
+		ui.StartSpinner()
+		sess, err := adminSession(MaxSessionDurationSeconds)
+		checkErr(err)
+		name := args[0]
+		exists, err := bridge.StackExists(sess, fmt.Sprintf(stacks.AppStackNameTmpl, name))
+		checkErr(err)
+		if *exists {
+			checkErr(fmt.Errorf("an app named %s already exists -- app and pipeline names must be unique", name))
+		}
+		pipelineParameters := stacks.DefaultPipelineStackParameters
+		pipelineParameters.Name = name
+		CreateStackCommand(
+			sess,
+			&stacks.AppStack{
+				Parameters: &pipelineParameters,
+				Pipeline:   true,
+			},
+			cmd.Flags(),
+			name,
+		)
 	},
 }
 
-// stackHasFailure is used to track the first occurrence of a failure while waiting for a Cloudformation stack
-var stackHasFailure = false
-
-// waitForCloudformationStack displays the progress of a Stack while it waits for it to complete
-func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName string) (*cloudformation.Stack, error) {
-	startSpinner()
-	stackDesc, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-		StackName: &stackName,
-	})
-	if err != nil {
-		return nil, err
-	}
-	stack := stackDesc.Stacks[0]
-
-	if strings.HasSuffix(*stack.StackStatus, "_COMPLETE") || strings.HasSuffix(*stack.StackStatus, "_FAILED") {
-		Spinner.Stop()
-		return stack, nil
-	}
-	stackresources, err := cfnSvc.DescribeStackResources(&cloudformation.DescribeStackResourcesInput{
-		StackName: &stackName,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	inProgress := []string{}
-	created := []string{}
-	deleted := []string{}
-	failed := []string{}
-	for _, resource := range stackresources.StackResources {
-		// CREATE_IN_PROGRESS | CREATE_FAILED | CREATE_COMPLETE | DELETE_IN_PROGRESS | DELETE_FAILED | DELETE_COMPLETE | DELETE_SKIPPED | UPDATE_IN_PROGRESS | UPDATE_FAILED | UPDATE_COMPLETE | IMPORT_FAILED | IMPORT_COMPLETE | IMPORT_IN_PROGRESS | IMPORT_ROLLBACK_IN_PROGRESS | IMPORT_ROLLBACK_FAILED | IMPORT_ROLLBACK_COMPLETE
-		if strings.HasSuffix(*resource.ResourceStatus, "_FAILED") {
-			// only warn on the first failure
-			// failures will cascade and end up being extra noise
-			if !stackHasFailure {
-				Spinner.Stop()
-				printError(fmt.Sprintf("%s failed: %s", *resource.LogicalResourceId, *resource.ResourceStatusReason))
-				startSpinner()
-				stackHasFailure = true
-			}
-			failed = append(failed, *resource.ResourceStatus)
-		} else if strings.HasSuffix(*resource.ResourceStatus, "_IN_PROGRESS") {
-			inProgress = append(inProgress, *resource.ResourceStatus)
-		} else if *resource.ResourceStatus == "CREATE_COMPLETE" {
-			created = append(created, *resource.ResourceStatus)
-		} else if *resource.ResourceStatus == "DELETE_COMPLETE" {
-			deleted = append(deleted, *resource.ResourceStatus)
+// createClusterCmd represents the create cluster command
+var createClusterCmd = &cobra.Command{
+	Use:                   "cluster [<name>]",
+	Short:                 "setup resources for an AppPack Cluster",
+	Long:                  "*Requires admin permissions.*\nCreates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		var name string
+		if len(args) == 0 {
+			name = "apppack"
+		} else {
+			name = args[0]
 		}
-	}
-	status := fmt.Sprintf(" resources: %d in progress / %d created / %d deleted", len(inProgress), len(created), len(deleted))
-	if len(failed) > 0 {
-		status = fmt.Sprintf("%s / %d failed", status, len(failed))
-	}
-	Spinner.Suffix = status
-	time.Sleep(5 * time.Second)
-	return waitForCloudformationStack(cfnSvc, stackName)
+		ui.StartSpinner()
+		sess, err := adminSession(MaxSessionDurationSeconds)
+		checkErr(err)
+		regionExists, err := bridge.StackExists(sess, fmt.Sprintf("apppack-region-%s", *sess.Config.Region))
+		checkErr(err)
+		// handle region creation if the user wants
+		if !*regionExists {
+			ui.Spinner.Stop()
+			fmt.Println(aurora.Blue(fmt.Sprintf("ℹ %s region is not initialized", *sess.Config.Region)))
+			createRegion, err := cmd.Flags().GetBool("create-region")
+			checkErr(err)
+			if !nonInteractive && !createRegion {
+				fmt.Printf("If this is your first cluster or you want to setup up a new region, type '%s' to continue.\n", aurora.White("yes"))
+				fmt.Print(aurora.White(fmt.Sprintf("Create cluster in %s region? ", *sess.Config.Region)).String())
+				var confirm string
+				fmt.Scanln(&confirm)
+				if confirm != "yes" {
+					checkErr(fmt.Errorf("aborting due to user input"))
+				}
+			} else if !createRegion {
+				checkErr(fmt.Errorf("%s region isn't setup -- either change the --region or use --create-region to setup this region", *sess.Config.Region))
+			}
+			fmt.Printf("running %s...\n", aurora.White("apppack create region"))
+			createRegionCmd.Run(cmd, []string{})
+			fmt.Println("")
+		}
+		clusterParameters := stacks.DefaultClusterStackParameters
+		clusterParameters.Name = name
+		CreateStackCommand(
+			sess,
+			&stacks.ClusterStack{
+				Parameters: &clusterParameters,
+			},
+			cmd.Flags(),
+			name,
+		)
+	},
+}
+
+// createCustomDomainCmd represents the createCustomDomain command
+var createCustomDomainCmd = &cobra.Command{
+	Use:   "custom-domain <domain-name>...",
+	Args:  cobra.RangeArgs(1, 6),
+	Short: "setup TLS certificate and point one or more domains to an AppPack Cluster",
+	Long: `*Requires admin permissions.*
+
+The domain(s) provided must all be a part of the same parent domain and a Route53 Hosted Zone must already be setup.`,
+	Example:               "apppack create custom-domain example.com www.example.com",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		primaryDomain := args[0]
+		ui.StartSpinner()
+		sess, err := adminSession(MaxSessionDurationSeconds)
+		checkErr(err)
+		parameters := &stacks.CustomDomainStackParameters{}
+		domainParameters := []*string{&parameters.PrimaryDomain, &parameters.AltDomain1, &parameters.AltDomain2, &parameters.AltDomain3, &parameters.AltDomain4, &parameters.AltDomain5}
+		for i, domain := range args[1:] {
+			*domainParameters[i] = domain
+		}
+		CreateStackCommand(
+			sess,
+			&stacks.CustomDomainStack{Parameters: parameters},
+			cmd.Flags(),
+			primaryDomain,
+		)
+	},
+}
+
+// createRedisCmd represents the create redis command
+var createRedisCmd = &cobra.Command{
+	Use:                   "redis [<name>]",
+	Short:                 "setup resources for an AppPack Redis instance",
+	Long:                  "*Requires admin permissions.*\nCreates an AppPack Redis instance. If a `<name>` is not provided, the default name, `apppack` will be used.",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		ui.StartSpinner()
+		sess, err := adminSession(MaxSessionDurationSeconds)
+		checkErr(err)
+		var name string
+		if len(args) == 0 {
+			name = "apppack"
+		} else {
+			name = args[0]
+		}
+		redisParameters := stacks.DefaultRedisStackParameters
+		redisParameters.Name = name
+		CreateStackCommand(
+			sess,
+			&stacks.RedisStack{
+				Parameters: &redisParameters,
+			},
+			cmd.Flags(),
+			name,
+		)
+	},
+}
+
+// createDatabaseCmd represents the create redis command
+var createDatabaseCmd = &cobra.Command{
+	Use:                   "database [<name>]",
+	Short:                 "setup resources for an AppPack Database",
+	Long:                  "*Requires admin permissions.*\nCreates an AppPack Database. If a `<name>` is not provided, the default name, `apppack` will be used.",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		ui.StartSpinner()
+		sess, err := adminSession(MaxSessionDurationSeconds)
+		checkErr(err)
+		var name string
+		if len(args) == 0 {
+			name = "apppack"
+		} else {
+			name = args[0]
+		}
+		dbParameters := stacks.DefaultDatabaseStackParameters
+		dbParameters.Name = name
+		CreateStackCommand(
+			sess,
+			&stacks.DatabaseStack{
+				Parameters: &dbParameters,
+			},
+			cmd.Flags(),
+			name,
+		)
+	},
+}
+
+// createRegionCmd represents the create command
+var createRegionCmd = &cobra.Command{
+	Use:                   "region",
+	Short:                 "setup AppPack resources for an AWS region",
+	Long:                  "*Requires admin permissions.*",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		sess, err := adminSession(MaxSessionDurationSeconds)
+		checkErr(err)
+		region := sess.Config.Region
+		CreateStackCommand(
+			sess,
+			&stacks.RegionStack{
+				Parameters: &stacks.RegionStackParameters{},
+			},
+			cmd.Flags(),
+			*region,
+		)
+	},
 }
 
 func init() {
@@ -1056,7 +318,7 @@ func init() {
 	appCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
 	appCmd.Flags().StringP("branch", "b", "", "branch to setup for continuous deployment")
 	appCmd.Flags().StringP("domain", "d", "", "custom domain to route to app (optional)")
-	appCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
+	appCmd.Flags().String("healthcheck-path", stacks.DefaultAppStackParameters.HealthCheckPath, "path which will return a 200 status code for healthchecks")
 	appCmd.Flags().Bool("addon-private-s3", false, "setup private S3 bucket add-on")
 	appCmd.Flags().Bool("addon-public-s3", false, "setup public S3 bucket add-on")
 	appCmd.Flags().Bool("addon-database", false, "setup database add-on")
@@ -1074,7 +336,7 @@ func init() {
 	pipelineCmd.Flags().String("cluster", "apppack", "Cluster name")
 	pipelineCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")
 	pipelineCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
-	pipelineCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
+	pipelineCmd.Flags().String("healthcheck-path", stacks.DefaultAppStackParameters.HealthCheckPath, "path which will return a 200 status code for healthchecks")
 	pipelineCmd.Flags().Bool("addon-private-s3", false, "setup private S3 bucket add-on")
 	pipelineCmd.Flags().Bool("addon-public-s3", false, "setup public S3 bucket add-on")
 	pipelineCmd.Flags().Bool("addon-database", false, "setup database add-on")
@@ -1086,9 +348,34 @@ func init() {
 	pipelineCmd.Flags().String("addon-ses-domain", "*", "domain approved for sending via SES add-on. Use '*' for all domains.")
 	pipelineCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
 
+	createCmd.AddCommand(createCustomDomainCmd)
+
+	createCmd.AddCommand(createClusterCmd)
+	createClusterCmd.Flags().String("domain", "", "cluster domain name")
+	createClusterCmd.Flags().String("instance-class", "", "ec2 cluster autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
+	createClusterCmd.Flags().MarkHidden("instance-class")
+	createClusterCmd.Flags().String("cidr", stacks.DefaultClusterStackParameters.Cidr, "network CIDR for VPC")
+	createClusterCmd.Flags().Bool("create-region", false, "also create the region stack if it does not exist")
+
 	createCmd.AddCommand(createRedisCmd)
 	createRedisCmd.Flags().String("cluster", "apppack", "cluster name")
-	createRedisCmd.Flags().String("instance-class", "cache.t3.micro", "instance class -- see https://aws.amazon.com/elasticache/pricing/#On-Demand_Nodes")
-	createRedisCmd.Flags().Bool("multi-az", false, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html")
+	createRedisCmd.Flags().String("instance-class", stacks.DefaultRedisStackParameters.InstanceClass, "instance class -- see https://aws.amazon.com/elasticache/pricing/#On-Demand_Nodes")
+	createRedisCmd.Flags().Bool("multi-az", stacks.DefaultRedisStackParameters.MultiAZ, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html")
 
+	createCmd.AddCommand(createDatabaseCmd)
+	createDatabaseCmd.Flags().String("cluster", "apppack", "cluster name")
+	createDatabaseCmd.Flags().StringP("instance-class", "i", stacks.DefaultDatabaseStackParameters.InstanceClass, "instance class -- see https://aws.amazon.com/rds/postgresql/pricing/?pg=pr&loc=3")
+	createDatabaseCmd.Flags().StringP("engine", "e", stacks.DefaultDatabaseStackParameters.Engine, "engine -- one of mysql, postgres, aurora-mysql, aurora-postgresql")
+	createDatabaseCmd.Flags().Bool("multi-az", stacks.DefaultDatabaseStackParameters.MultiAZ, "enable multi-AZ -- see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html")
+	createDatabaseCmd.Flags().Int("allocated-storage", stacks.DefaultDatabaseStackParameters.AllocatedStorage, "initial storage allocated in GB (does not apply to Aurora engines)")
+	createDatabaseCmd.Flags().Int("max-allocated-storage", stacks.DefaultDatabaseStackParameters.MaxAllocatedStorage, "maximum storage allocated on-demand in GB (does not apply to Aurora engines)")
+
+	createCmd.AddCommand(createRegionCmd)
+	createRegionCmd.Flags().String("dockerhub-username", "", "Docker Hub username")
+	createRegionCmd.Flags().String("dockerhub-access-token", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
+	// All flags need to be added to `createCluster` as well so it can call this cmd
+	createClusterCmd.Flags().String("dockerhub-username", "", "Docker Hub username")
+	createClusterCmd.Flags().String("dockerhub-access-token", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
+	createClusterCmd.Flags().MarkHidden("dockerhub-username")
+	createClusterCmd.Flags().MarkHidden("dockerhub-access-token")
 }
