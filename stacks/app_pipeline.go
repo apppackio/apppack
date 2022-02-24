@@ -81,7 +81,7 @@ func (p *AppStackParameters) SetInternalFields(_ *session.Session, name *string)
 	// update values from flags if they are set
 	if p.LoadBalancerRulePriority == 0 {
 		rand.Seed(time.Now().UnixNano())
-		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200
+		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // skipcq: GSC-G404
 	}
 	if err := p.SetRepositoryType(); err != nil {
 		return err

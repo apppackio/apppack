@@ -125,14 +125,17 @@ func (p *DatabaseStackParameters) ToCloudFormationParameters() ([]*cloudformatio
 
 // SetInternalFields updates fields that aren't exposed to the user
 func (p *DatabaseStackParameters) SetInternalFields(sess *session.Session, name *string) error {
+	var err error
 	if p.Version == "" {
-		var err error
 		p.Version, err = getLatestRdsVersion(sess, &p.Engine)
 		if err != nil {
 			return err
 		}
 	}
-	p.OneTimePassword = GeneratePassword()
+	p.OneTimePassword, err = GeneratePassword()
+	if err != nil {
+		return err
+	}
 	if p.Name == "" {
 		p.Name = *name
 	}
