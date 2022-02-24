@@ -196,7 +196,7 @@ func (a *DatabaseStack) PreDelete(sess *session.Session) error {
 	return fmt.Errorf("unexpected DB type %s", *DBType)
 }
 
-func (a *DatabaseStack) PostDelete(_ *session.Session, _ *string) error {
+func (*DatabaseStack) PostDelete(_ *session.Session, _ *string) error {
 	return nil
 }
 
