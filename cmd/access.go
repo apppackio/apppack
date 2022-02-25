@@ -79,7 +79,7 @@ func removeFromSlice(slice, toRemove []string) ([]string, []string) {
 }
 
 func appOrPipelineStack(sess *session.Session, name string) (*stacks.AppStack, error) {
-	stack := stacks.AppStack{Pipeline: false}
+	stack := stacks.AppStack{Pipeline: false, Parameters: &stacks.AppStackParameters{}}
 	err := stacks.LoadStackFromCloudformation(sess, &stack, &name)
 	if err != nil {
 		stack.Pipeline = true
@@ -169,6 +169,7 @@ var accessAddCmd = &cobra.Command{
 		stack.Parameters.AllowedUsers = append(stack.Parameters.AllowedUsers, args...)
 		var dupes []string
 		stack.Parameters.AllowedUsers, dupes = deduplicate(stack.Parameters.AllowedUsers)
+		sort.Strings(stack.Parameters.AllowedUsers)
 		ui.Spinner.Stop()
 		for _, d := range dupes {
 			printWarning(fmt.Sprintf("%s already has access to %s", d, AppName))
@@ -198,6 +199,7 @@ var accessRemoveCmd = &cobra.Command{
 		checkErr(err)
 		var notFound []string
 		stack.Parameters.AllowedUsers, notFound = removeFromSlice(stack.Parameters.AllowedUsers, args)
+		sort.Strings(stack.Parameters.AllowedUsers)
 		ui.Spinner.Stop()
 		for _, n := range notFound {
 			printWarning(fmt.Sprintf("%s does not have access to %s", n, AppName))
