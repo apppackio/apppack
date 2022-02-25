@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,6 +33,8 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
+
+var dbOutputFile string
 
 func downloadFile(sess *session.Session, objInput *s3.GetObjectInput, outputFile string) error {
 	ui.Spinner.Suffix = fmt.Sprintf(" downloading %s", outputFile)
@@ -91,6 +94,12 @@ var dbDumpCmd = &cobra.Command{
 		checkErr(err)
 		err = app.LoadSettings()
 		checkErr(err)
+		if dbOutputFile != "" {
+			dir, _ := filepath.Split(dbOutputFile)
+			if dir != "" {
+				os.MkdirAll(dir, 0755)
+			}
+		}
 		task, getObjectInput, err := app.DBDump()
 		checkErr(err)
 		ui.Spinner.Stop()
@@ -104,17 +113,17 @@ var dbDumpCmd = &cobra.Command{
 			printError("database dump failed")
 			return
 		}
-		var extension string
-		if strings.HasSuffix(*getObjectInput.Key, ".sql.gz") {
-			extension = "sql.gz"
-		} else {
-			extension = "dump"
+		if dbOutputFile == "" {
+			if strings.HasSuffix(*getObjectInput.Key, ".sql.gz") {
+				dbOutputFile = fmt.Sprintf("%s.sql.gz", app.Name)
+			} else {
+				dbOutputFile = fmt.Sprintf("%s.dump", app.Name)
+			}
 		}
-		localFile := fmt.Sprintf("%s.%s", app.Name, extension)
-		err = downloadFile(app.Session, getObjectInput, localFile)
+		err = downloadFile(app.Session, getObjectInput, dbOutputFile)
 		checkErr(err)
 		ui.Spinner.Stop()
-		printSuccess(fmt.Sprintf("Dumped database to %s", localFile))
+		printSuccess(fmt.Sprintf("Dumped database to %s", dbOutputFile))
 	},
 }
 
@@ -225,5 +234,6 @@ func init() {
 	dbCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	dbCmd.AddCommand(dbShellCmd)
 	dbCmd.AddCommand(dbDumpCmd)
+	dbDumpCmd.Flags().StringVarP(&dbOutputFile, "output", "o", "", "path to output file -- default will be <app-name> with the appropriate extension for the database")
 	dbCmd.AddCommand(dbLoadCmd)
 }
