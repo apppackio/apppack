@@ -71,6 +71,7 @@ var psCmd = &cobra.Command{
 	Use:                   "ps",
 	Short:                 "show running processes",
 	DisableFlagsInUseLine: true,
+	Args:                  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
@@ -217,6 +218,7 @@ apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 pr
 // execCmd represents the exec command
 var psExecCmd = &cobra.Command{
 	Use:   "exec -- <command>",
+	Args:  cobra.MinimumNArgs(1),
 	Short: "run an interactive command in the remote environment",
 	Long: `Run an interactive command in the remote environment
 
