@@ -169,6 +169,8 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		// db dump load can be really slow, let people open longer sessions to wait for it to finish
 		app, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
+		family, err := app.DBDumpLoadFamily()
+		checkErr(err)
 		ui.Spinner.Stop()
 		confirmAction("This will destroy any data that is currently in the database.", AppName)
 		ui.StartSpinner()
@@ -188,8 +190,6 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			})
 			checkErr(err)
 		}
-		family, err := app.DBDumpLoadFamily()
-		checkErr(err)
 		task, err := app.StartTask(
 			family,
 			[]string{"load-from-s3.sh", remoteFile},

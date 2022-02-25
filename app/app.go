@@ -253,17 +253,31 @@ func (a *App) ReviewAppSettings() (*Settings, error) {
 	return &i.Settings, nil
 }
 
-func (a *App) ShellTaskFamily() (*string, error) {
+// TaskDefinition gets the Task Definition for a specific task type
+func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, error) {
+	var family string
 	if a.IsReviewApp() {
-		return aws.String(fmt.Sprintf("%s-pr%s-shell", a.Name, *a.ReviewApp)), nil
+		family = fmt.Sprintf("%s-pr%s-%s", a.Name, *a.ReviewApp, name)
+	} else {
+		family = fmt.Sprintf("%s-%s", a.Name, name)
 	}
-	err := a.LoadSettings()
+	ecsSvc := ecs.New(a.Session)
+	// verify task exists
+	task, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
+		TaskDefinition: &family,
+	})
 	if err != nil {
 		return nil, err
 	}
-	settings := a.Settings
+	return task.TaskDefinition, nil
+}
 
-	return &settings.Shell.TaskFamily, nil
+func (a *App) ShellTaskFamily() (*string, error) {
+	taskDefn, err := a.TaskDefinition("shell")
+	if err != nil {
+		return nil, err
+	}
+	return taskDefn.Family, nil
 }
 
 // URL is used to lookup the app url from settings
@@ -759,14 +773,11 @@ func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 }
 
 func (a *App) DBDumpLoadFamily() (*string, error) {
-	err := a.LoadSettings()
+	taskDefn, err := a.TaskDefinition("dbutils")
 	if err != nil {
 		return nil, err
 	}
-	if a.IsReviewApp() {
-		return aws.String(fmt.Sprintf("%s-pr%s-dbutils", a.Name, *a.ReviewApp)), nil
-	}
-	return &a.Settings.DBUtils.DumpLoadTaskFamily, nil
+	return taskDefn.Family, nil
 }
 
 func (a *App) DBDump() (*ecs.Task, *s3.GetObjectInput, error) {
