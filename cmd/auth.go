@@ -125,9 +125,9 @@ var appsCmd = &cobra.Command{
 		}
 		ui.Spinner.Stop()
 		if len(appGroups) > 0 {
-			ui.PrintHeader("Apps")
+			ui.PrintHeaderln("Apps")
 			for _, group := range appGroups {
-				fmt.Println(aurora.Faint(fmt.Sprintf("Account: %s (%s)", group[0].AccountID, group[0].Region)))
+				fmt.Println("Account", group[0].AccountID, aurora.Faint(fmt.Sprintf("(%s)", group[0].Region)))
 				for _, app := range group {
 					fmt.Printf("  %s\n", aurora.Green(app.AppName))
 				}
@@ -137,9 +137,9 @@ var appsCmd = &cobra.Command{
 			fmt.Print("\n")
 		}
 		if len(pipelineGroups) > 0 {
-			ui.PrintHeader("Pipelines")
+			ui.PrintHeaderln("Pipelines")
 			for _, group := range pipelineGroups {
-				fmt.Println(aurora.Faint(fmt.Sprintf("Account: %s (%s)", group[0].AccountID, group[0].Region)))
+				fmt.Println("Account", group[0].AccountID, aurora.Faint(fmt.Sprintf("(%s)", group[0].Region)))
 				for _, app := range group {
 					fmt.Printf("  %s\n", aurora.Green(app.AppName))
 				}

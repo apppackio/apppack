@@ -36,5 +36,5 @@ func PrintHeaderln(text string) {
 }
 
 func PrintHeader(text string) {
-	fmt.Printf(aurora.Faint("===").String(), aurora.Bold(aurora.White(text)))
+	fmt.Printf("%s %s", aurora.Faint("===").String(), aurora.Bold(aurora.White(text)))
 }
