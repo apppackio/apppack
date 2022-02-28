@@ -30,7 +30,9 @@ archives:
       - goos: windows
         format: zip
 brews:
-  - tap:
+  -
+    skip_upload: auto
+    tap:
       owner: apppackio
       name: homebrew-apppack
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
