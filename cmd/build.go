@@ -387,6 +387,9 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 		}
 		build := builds.Builds[0]
 		if *build.CurrentPhase == "BUILD" {
+			if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
+				return S3Log(a.Session, buildStatus.Build.Logs)
+			}
 			if !buildLogTailing {
 				buildLogTailing = true
 				go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"), stopTailing)
