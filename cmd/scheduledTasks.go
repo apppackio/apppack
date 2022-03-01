@@ -68,7 +68,7 @@ var scheduledTasksCreateCmd = &cobra.Command{
 apppack -a my-app scheduled-tasks create --schedule "0/10 * * * ? *" "your-command --args"  # run every 10 minutes`,
 	Long: `Schedule a command to run on a recurring schedule in the future.
 
-Be sure to wrap your command and schedule in quotes to ensure they are read as a single argument. The schedule flag should use the AWS cron-like format as described at https://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions`,
+Be sure to wrap your command and schedule in quotes to ensure they are read as a single argument and note that the timezone is always UTC. The schedule flag should use the AWS cron-like format as described at https://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(strings.Split(schedule, " ")) != 6 {
