@@ -61,6 +61,8 @@ func DestroyStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 		return nil
 	}
 	checkErr(destroy())
+	ui.Spinner.Stop()
+	ui.PrintSuccess(fmt.Sprintf("destroyed %s stack %s", stack.StackType(), name))
 }
 
 // destroyCmd represents the destroy command
