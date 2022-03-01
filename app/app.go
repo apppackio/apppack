@@ -13,6 +13,7 @@ import (
 	"github.com/apppackio/apppack/auth"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -473,7 +474,13 @@ func (a *App) WaitForTaskStopped(task *ecs.Task) (*int64, error) {
 		Cluster: task.ClusterArn,
 		Tasks:   []*string{task.TaskArn},
 	}
-	err := ecsSvc.WaitUntilTasksStopped(&input)
+	// MaxSessionDurationSeconds is 3600. This will wait _almost_ that long
+	err := ecsSvc.WaitUntilTasksStoppedWithContext(
+		aws.BackgroundContext(),
+		&input,
+		request.WithWaiterMaxAttempts(595),
+		request.WithWaiterDelay(request.ConstantWaiterDelay(6*time.Second)),
+	)
 	if err != nil {
 		return nil, err
 	}
