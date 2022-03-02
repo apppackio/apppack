@@ -59,7 +59,7 @@ func UpgradeStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 		if name != "" {
 			nameSuccessMsg = fmt.Sprintf(" for %s", name)
 		}
-		ui.PrintSuccess(fmt.Sprintf("updated %s stack %s", stack.StackType(), nameSuccessMsg))
+		ui.PrintSuccess(fmt.Sprintf("updated %s stack%s", stack.StackType(), nameSuccessMsg))
 	}
 }
 
