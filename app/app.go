@@ -818,7 +818,11 @@ func (a *App) DBShellTaskInfo() (*string, *string, error) {
 
 	var exec string
 	if strings.Contains(a.Settings.DBUtils.Engine, "mysql") {
-		exec = "mysql"
+		database := a.Name
+		if a.IsReviewApp() {
+			database = fmt.Sprintf("%s-pr%s", database, *a.ReviewApp)
+		}
+		exec = fmt.Sprintf("mysql --database=%s", database)
 	} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
 		exec = "psql"
 	} else {
