@@ -215,6 +215,7 @@ func init() {
 	accessCmd.MarkPersistentFlagRequired("app-name")
 	accessCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
 	accessCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
+	accessCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to use (defaults to the region of the account)")
 
 	accessCmd.AddCommand(accessAddCmd)
 	accessAddCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region of app")
