@@ -43,6 +43,7 @@ var scheduledTasksCmd = &cobra.Command{
 	Use:                   "scheduled-tasks",
 	Short:                 "list scheduled tasks",
 	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)

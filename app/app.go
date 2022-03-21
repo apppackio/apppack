@@ -961,9 +961,19 @@ func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, e
 		return nil, err
 	}
 	tasks = append(tasks, &ScheduledTask{
-		Schedule: schedule,
-		Command:  command,
+		Schedule: strings.TrimSpace(schedule),
+		Command:  strings.TrimSpace(command),
 	})
+	// avoid exceeding AWS quota
+	tasksBySchedule := map[string][]string{}
+	for _, task := range tasks {
+		tasksBySchedule[task.Schedule] = append(tasksBySchedule[task.Schedule], task.Command)
+	}
+	for schedule, commands := range tasksBySchedule {
+		if len(commands) > 5 {
+			return nil, fmt.Errorf("AWS quota limits a single schedule to no more than 5 tasks (%s)", schedule)
+		}
+	}
 	tasksBytes, err := json.Marshal(tasks)
 	if err != nil {
 		return nil, err
