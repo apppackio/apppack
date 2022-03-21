@@ -170,33 +170,37 @@ func (a *DatabaseStack) SetStack(stack *cloudformation.Stack) {
 // PreDelete will remove deletion protection on the stack
 func (a *DatabaseStack) PreDelete(sess *session.Session) error {
 	rdsSvc := rds.New(sess)
-	DBID, err := bridge.GetStackOutput(a.Stack.Outputs, "DBId")
-	if err != nil {
-		return err
+	DBID, err1 := bridge.GetStackOutput(a.Stack.Outputs, "DBId")
+	DBType, err2 := bridge.GetStackOutput(a.Stack.Outputs, "DBType")
+	// If stack failed to complete successfully, we may not have a DB instance to modify
+	if DBID != nil && DBType != nil {
+		input := rds.ModifyDBInstanceInput{
+			DBInstanceIdentifier: DBID,
+			DeletionProtection:   aws.Bool(false),
+			ApplyImmediately:     aws.Bool(true),
+		}
+		logrus.WithFields(logrus.Fields{"identifier": DBID}).Debug("disabling RDS deletion protection")
+		if *DBType == "instance" {
+			_, err := rdsSvc.ModifyDBInstance(&input)
+			return err
+		}
+		if *DBType == "cluster" {
+			_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
+				DBClusterIdentifier: input.DBInstanceIdentifier,
+				DeletionProtection:  input.DeletionProtection,
+				ApplyImmediately:    input.ApplyImmediately,
+			})
+			return err
+		}
+		return fmt.Errorf("unexpected DB type %s", *DBType)
 	}
-	DBType, err := bridge.GetStackOutput(a.Stack.Outputs, "DBType")
-	if err != nil {
-		return err
+	if err1 != nil {
+		logrus.WithFields(logrus.Fields{"error": err1}).Debug("unable to lookup Cloudformation outputs to disable RDS deletion protection")
 	}
-	input := rds.ModifyDBInstanceInput{
-		DBInstanceIdentifier: DBID,
-		DeletionProtection:   aws.Bool(false),
-		ApplyImmediately:     aws.Bool(true),
+	if err2 != nil {
+		logrus.WithFields(logrus.Fields{"error": err2}).Debug("unable to lookup Cloudformation outputs to disable RDS deletion protection")
 	}
-	logrus.WithFields(logrus.Fields{"identifier": DBID}).Debug("disabling RDS deletion protection")
-	if *DBType == "instance" {
-		_, err := rdsSvc.ModifyDBInstance(&input)
-		return err
-	}
-	if *DBType == "cluster" {
-		_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
-			DBClusterIdentifier: input.DBInstanceIdentifier,
-			DeletionProtection:  input.DeletionProtection,
-			ApplyImmediately:    input.ApplyImmediately,
-		})
-		return err
-	}
-	return fmt.Errorf("unexpected DB type %s", *DBType)
+	return nil
 }
 
 func (*DatabaseStack) PostDelete(_ *session.Session, _ *string) error {
