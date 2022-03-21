@@ -500,7 +500,7 @@ func (a *App) WaitForTaskStopped(task *ecs.Task) (*int64, error) {
 	return task.Containers[0].ExitCode, nil
 }
 
-func (a *App) CreateEcsSession(task ecs.Task, shellCmd string) (*ecs.Session, error) {
+func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, error) {
 	ecsSvc := ecs.New(a.Session)
 	err := a.LoadSettings()
 	if err != nil {

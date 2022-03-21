@@ -70,7 +70,7 @@ func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskOverrid
 	ui.Spinner.Stop()
 	fmt.Println(aurora.Faint("waiting for SSM Agent to startup"))
 	ui.StartSpinner()
-	ecsSession, err := a.CreateEcsSession(*task, *shellCmd)
+	ecsSession, err := a.CreateEcsSession(task, *shellCmd)
 	checkErr(err)
 	ui.Spinner.Stop()
 	err = a.ConnectToEcsSession(ecsSession)
@@ -158,7 +158,7 @@ func interactiveCmd(a *app.App, cmd string) {
 		}
 		ui.StartSpinner()
 		ecsSession, err := a.CreateEcsSession(
-			*tasks[answers["task"].(survey.OptionAnswer).Index],
+			tasks[answers["task"].(survey.OptionAnswer).Index],
 			exec,
 		)
 		checkErr(err)
