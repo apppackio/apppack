@@ -852,26 +852,25 @@ type Scaling struct {
 }
 
 func (a *App) ResizeProcess(processType string, cpu, memory int) error {
-	err := a.SetScaleParameter(processType, nil, nil, &cpu, &memory)
-	if err != nil {
-		return err
-	}
-	return nil
+	return a.SetScaleParameter(processType, nil, nil, &cpu, &memory)
 }
 
 func (a *App) ScaleProcess(processType string, minProcessCount, maxProcessCount int) error {
-	err := a.SetScaleParameter(processType, &minProcessCount, &maxProcessCount, nil, nil)
-	if err != nil {
-		return err
-	}
-	return nil
+	return a.SetScaleParameter(processType, &minProcessCount, &maxProcessCount, nil, nil)
 }
 
 // SetScaleParameter updates process count and cpu/ram with any non-nil values provided
 // if it is not yet set, the defaults from ECSConfig will be used
 func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessCount, cpu, memory *int) error {
 	ssmSvc := ssm.New(a.Session)
-	parameterName := fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
+	var parameterName string
+	if a.IsReviewApp() {
+		parameterName = fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s/scaling", a.Name, *a.ReviewApp)
+	} else if a.Pipeline {
+		return fmt.Errorf("scaling/resizing is not supported directly on pipelines")
+	} else {
+		parameterName = fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
+	}
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
 		Name: &parameterName,
 	})
