@@ -118,6 +118,10 @@ func (a *ReviewAppStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
 }
 
+func (*ReviewAppStack) PostCreate(_ *session.Session) error {
+	return nil
+}
+
 func (*ReviewAppStack) PreDelete(_ *session.Session) error {
 	return nil
 }

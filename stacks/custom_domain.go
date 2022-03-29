@@ -161,6 +161,10 @@ func (a *CustomDomainStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
 }
 
+func (*CustomDomainStack) PostCreate(_ *session.Session) error {
+	return nil
+}
+
 func (*CustomDomainStack) PreDelete(_ *session.Session) error {
 	return nil
 }

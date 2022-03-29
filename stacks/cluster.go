@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -13,7 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
@@ -165,8 +168,32 @@ func (a *ClusterStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
 }
 
-func (*ClusterStack) PreDelete(_ *session.Session) error {
-	return nil
+// SetDeletionProtection toggles the deletion protection flag on the load balancer
+func (a *ClusterStack) SetDeletionProtection(sess *session.Session, value bool) error {
+	elbSvc := elbv2.New(sess)
+	lbARN, err := bridge.GetStackOutput(a.Stack.Outputs, "LoadBalancerArn")
+	if err != nil {
+		return err
+	}
+	logrus.WithFields(logrus.Fields{"value": value}).Debug("setting load balancer deletion protection")
+	_, err = elbSvc.ModifyLoadBalancerAttributes(&elbv2.ModifyLoadBalancerAttributesInput{
+		LoadBalancerArn: lbARN,
+		Attributes: []*elbv2.LoadBalancerAttribute{
+			{
+				Key:   aws.String("deletion_protection.enabled"),
+				Value: aws.String(strconv.FormatBool(value)),
+			},
+		},
+	})
+	return err
+}
+
+func (a *ClusterStack) PostCreate(sess *session.Session) error {
+	return a.SetDeletionProtection(sess, true)
+}
+
+func (a *ClusterStack) PreDelete(sess *session.Session) error {
+	return a.SetDeletionProtection(sess, false)
 }
 
 func (*ClusterStack) PostDelete(_ *session.Session, _ *string) error {

@@ -32,6 +32,7 @@ type Stack interface {
 	Tags(name *string) []*cloudformation.Tag
 	Capabilities() []*string
 	TemplateURL(release *string) *string
+	PostCreate(sess *session.Session) error
 	PreDelete(sess *session.Session) error
 	PostDelete(sess *session.Session, name *string) error
 }
@@ -169,6 +170,7 @@ func CreateStack(sess *session.Session, s Stack, name, release *string) error {
 		return fmt.Errorf("stack creation failed: %s", *cfnStack.StackStatus)
 	}
 	s.SetStack(cfnStack)
+	s.PostCreate(sess)
 	return nil
 }
 

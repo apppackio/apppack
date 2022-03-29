@@ -127,6 +127,10 @@ func (a *AppStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
 }
 
+func (*AppStack) PostCreate(_ *session.Session) error {
+	return nil
+}
+
 func (*AppStack) PreDelete(_ *session.Session) error {
 	return nil
 }

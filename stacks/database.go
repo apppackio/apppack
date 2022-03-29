@@ -167,8 +167,8 @@ func (a *DatabaseStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
 }
 
-// PreDelete will remove deletion protection on the stack
-func (a *DatabaseStack) PreDelete(sess *session.Session) error {
+// SetDeletionProtection toggles the deletion protection flag on the database instance or cluster
+func (a *DatabaseStack) SetDeletionProtection(sess *session.Session, value bool) error {
 	rdsSvc := rds.New(sess)
 	DBID, err1 := bridge.GetStackOutput(a.Stack.Outputs, "DBId")
 	DBType, err2 := bridge.GetStackOutput(a.Stack.Outputs, "DBType")
@@ -176,10 +176,10 @@ func (a *DatabaseStack) PreDelete(sess *session.Session) error {
 	if DBID != nil && DBType != nil {
 		input := rds.ModifyDBInstanceInput{
 			DBInstanceIdentifier: DBID,
-			DeletionProtection:   aws.Bool(false),
+			DeletionProtection:   &value,
 			ApplyImmediately:     aws.Bool(true),
 		}
-		logrus.WithFields(logrus.Fields{"identifier": DBID}).Debug("disabling RDS deletion protection")
+		logrus.WithFields(logrus.Fields{"identifier": DBID, "value": value}).Debug("setting RDS deletion protection")
 		if *DBType == "instance" {
 			_, err := rdsSvc.ModifyDBInstance(&input)
 			return err
@@ -194,13 +194,31 @@ func (a *DatabaseStack) PreDelete(sess *session.Session) error {
 		}
 		return fmt.Errorf("unexpected DB type %s", *DBType)
 	}
+	// if we get an error trying to set deletion protection, return it
+	// just log errors trying to turn it off because the instance/cluster may not exist
+	// in the case of a stack failure
 	if err1 != nil {
-		logrus.WithFields(logrus.Fields{"error": err1}).Debug("unable to lookup Cloudformation outputs to disable RDS deletion protection")
+		logrus.WithFields(logrus.Fields{"error": err1}).Debug("unable to lookup Cloudformation outputs to set RDS deletion protection")
+		if value {
+			return err1
+		}
 	}
 	if err2 != nil {
-		logrus.WithFields(logrus.Fields{"error": err2}).Debug("unable to lookup Cloudformation outputs to disable RDS deletion protection")
+		logrus.WithFields(logrus.Fields{"error": err2}).Debug("unable to lookup Cloudformation outputs to set RDS deletion protection")
+		if value {
+			return err2
+		}
 	}
 	return nil
+}
+
+// PreDelete will remove deletion protection on the stack
+func (a *DatabaseStack) PreDelete(sess *session.Session) error {
+	return a.SetDeletionProtection(sess, false)
+}
+
+func (a *DatabaseStack) PostCreate(sess *session.Session) error {
+	return a.SetDeletionProtection(sess, true)
 }
 
 func (*DatabaseStack) PostDelete(_ *session.Session, _ *string) error {

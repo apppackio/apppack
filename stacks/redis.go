@@ -75,6 +75,10 @@ func (a *RedisStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
 }
 
+func (*RedisStack) PostCreate(_ *session.Session) error {
+	return nil
+}
+
 func (*RedisStack) PreDelete(_ *session.Session) error {
 	return nil
 }

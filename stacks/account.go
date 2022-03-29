@@ -47,6 +47,10 @@ func (a *AccountStack) SetStack(stack *cloudformation.Stack) {
 	a.Stack = stack
 }
 
+func (*AccountStack) PostCreate(_ *session.Session) error {
+	return nil
+}
+
 func (*AccountStack) PreDelete(_ *session.Session) error {
 	return nil
 }
