@@ -65,6 +65,7 @@ var stacksCmd = &cobra.Command{
 	Short:                 "list the stacks installed at AWS",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
+	Args:                  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
