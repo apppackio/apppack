@@ -5,14 +5,63 @@ import (
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/pricing"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
+
+// listElasticacheInstanceClasses returns an ordered array of current generation Redis Elasticache instance classes in the region
+func listElasticacheInstanceClasses(sess *session.Session) ([]string, error) {
+	regionName, ok := bridge.RegionMap[*sess.Config.Region]
+	if !ok {
+		regionName = "US East (Ohio)"
+	}
+	pricingSvc := pricing.New(sess)
+	var instanceClasses []string
+	resp, err := pricingSvc.GetProducts(&pricing.GetProductsInput{
+		ServiceCode: aws.String("AmazonElastiCache"),
+		MaxResults:  aws.Int64(100),
+		Filters: []*pricing.Filter{
+			{
+				Field: aws.String("cacheEngine"),
+				Type:  aws.String("TERM_MATCH"),
+				Value: aws.String("Redis"),
+			},
+			{
+				Field: aws.String("currentGeneration"),
+				Type:  aws.String("TERM_MATCH"),
+				Value: aws.String("Yes"),
+			},
+			{
+				Field: aws.String("locationType"),
+				Type:  aws.String("TERM_MATCH"),
+				Value: aws.String("AWS Region"),
+			},
+			{
+				Field: aws.String("location"),
+				Type:  aws.String("TERM_MATCH"),
+				Value: &regionName,
+			},
+		},
+	})
+	if err != nil {
+		return instanceClasses, err
+	}
+	for _, product := range resp.PriceList {
+		instanceClasses = append(
+			instanceClasses,
+			product["product"].(map[string]interface{})["attributes"].(map[string]interface{})["instanceType"].(string),
+		)
+	}
+	bridge.SortInstanceClasses(instanceClasses)
+	return instanceClasses, nil
+}
 
 type RedisStackParameters struct {
 	Name               string
@@ -128,7 +177,45 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 	if a.Parameters.InstanceClass == "" {
 		a.Parameters.InstanceClass = DefaultRedisStackParameters.InstanceClass
 	}
+	ui.StartSpinner()
+	ui.Spinner.Suffix = " retrieving instance classes"
+	var instanceQuestion *ui.QuestionExtra
+	verbose := "What instance class should be used for this Redis instance?"
+	help := "Enter the Redis instance class. For more info see https://aws.amazon.com/elasticache/pricing/."
+	instanceClasses, err := listElasticacheInstanceClasses(sess)
+	if err == nil {
+		instanceQuestion = &ui.QuestionExtra{
+			Verbose:  verbose,
+			HelpText: help,
+			Question: &survey.Question{
+				Prompt: &survey.Select{
+					Message:       "Instance Class",
+					Options:       instanceClasses,
+					FilterMessage: "",
+					Default:       a.Parameters.InstanceClass,
+				},
+				Validate: survey.Required,
+			},
+		}
+	} else {
+		// client may not have permissions to lookup pricing info yet
+		// revert to standard text entry
+		ui.Spinner.Suffix = " unable to retrieve instance classes"
+		logrus.WithFields(logrus.Fields{"error": err}).Debug("unable to retrieve instance classes")
+		instanceQuestion = &ui.QuestionExtra{
+			Verbose:  verbose,
+			HelpText: help,
+			Question: &survey.Question{
+				Name:     "InstanceClass",
+				Prompt:   &survey.Input{Message: "InstanceClass", Default: a.Parameters.InstanceClass},
+				Validate: survey.Required,
+			},
+		}
+	}
+	ui.Spinner.Stop()
+	ui.Spinner.Suffix = ""
 	questions = append(questions, []*ui.QuestionExtra{
+		instanceQuestion,
 		{
 			Verbose:  "Should this Redis instance be setup in multiple availability zones?",
 			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, but double the cost at AWS. For more info see https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html.",
@@ -140,15 +227,6 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 					FilterMessage: "",
 					Default:       ui.BooleanAsYesNo(a.Parameters.MultiAZ),
 				},
-			},
-		},
-		{
-			Verbose:  "What instance class should be used for this Redis instance?",
-			HelpText: "Enter the Redis instance class. For more info see https://aws.amazon.com/elasticache/pricing/.",
-			Question: &survey.Question{
-				Name:     "InstanceClass",
-				Prompt:   &survey.Input{Message: "InstanceClass", Default: a.Parameters.InstanceClass},
-				Validate: survey.Required,
 			},
 		},
 	}...)
