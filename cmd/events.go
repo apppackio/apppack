@@ -34,7 +34,7 @@ func printEvent(event *ecs.ServiceEvent) {
 // eventsCmd represents the events command
 var eventsCmd = &cobra.Command{
 	Use:     "events <service>",
-	Short:   "Show recent events for the given service",
+	Short:   "show recent events for the given service",
 	Example: "apppack -a my-app events web",
 	Args:    cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
