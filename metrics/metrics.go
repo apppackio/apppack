@@ -198,6 +198,69 @@ func (s *ResponseTimeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery 
 	}
 }
 
+// status codes
+type StatusCodeMetrics struct {
+	App     *app.App
+	Options *MetricOptions
+	Code    string
+}
+
+func (m *StatusCodeMetrics) GetApp() *app.App { return m.App }
+
+func (m *StatusCodeMetrics) GetOptions() *MetricOptions { return m.Options }
+
+func (m *StatusCodeMetrics) GetService() string { return "web" }
+
+func (m *StatusCodeMetrics) Title() string { return fmt.Sprintf("%s responses (count)", m.Code) }
+
+func (m *StatusCodeMetrics) ShortName() string { return fmt.Sprintf("%s responses", m.Code) }
+
+func (m *StatusCodeMetrics) MetricColor(name *string) cell.Color {
+	switch *name {
+	case "2xx":
+		return cell.ColorGreen
+	case "3xx":
+		return cell.ColorBlue
+	case "4xx":
+		return cell.ColorYellow
+	case "5xx":
+		return cell.ColorRed
+	default:
+		return cell.ColorGray
+	}
+}
+
+func (s *StatusCodeMetrics) LineChartOptions() []linechart.Option {
+	return []linechart.Option{}
+}
+
+func (s *StatusCodeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
+	metricDataQueries := []*cloudwatch.MetricDataQuery{
+		{
+			Id: aws.String(fmt.Sprintf("mm%s", s.Code)),
+			MetricStat: &cloudwatch.MetricStat{
+				Metric: &cloudwatch.Metric{
+					Namespace:  aws.String("AWS/ApplicationELB"),
+					MetricName: aws.String(fmt.Sprintf("HTTPCode_Target_%s_Count", strings.ToUpper(s.Code))),
+					Dimensions: []*cloudwatch.Dimension{
+						{
+							Name:  aws.String("TargetGroup"),
+							Value: aws.String(s.App.Settings.TargetGroup.Suffix),
+						},
+						{
+							Name:  aws.String("LoadBalancer"),
+							Value: aws.String(s.App.Settings.LoadBalancer.Suffix),
+						},
+					},
+				},
+				Period: aws.Int64(s.Options.Timeframe.Period()),
+				Stat:   aws.String("Sum"),
+			},
+		},
+	}
+	return metricDataQueries
+}
+
 func FetchMetrics(metrics AppMetrics) (*cloudwatch.GetMetricDataOutput, error) {
 	app := metrics.GetApp()
 	options := metrics.GetOptions()

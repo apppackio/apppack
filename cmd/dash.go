@@ -175,21 +175,22 @@ func populateLineChart(appMetrics metrics.AppMetrics, lc *linechart.LineChart) (
 	}
 	var legend []*LegendItem
 	for _, metric := range metrics.MetricDataResults {
-		name := metric.Id
-		color := appMetrics.MetricColor(name)
+		// "mm" is a special prefix for metrics that start with numbers to make them valid for Cloudwatch (e.g. "mm2xx")
+		name := strings.TrimPrefix(*metric.Id, "mm")
+		color := appMetrics.MetricColor(&name)
 		var values []float64
 		for _, v := range metric.Values {
 			values = append(values, *v)
 		}
 		labels := labelsFromTimestamps(metric.Timestamps, appMetrics.GetOptions().UTC)
-		err = lc.Series(*name, values,
+		err = lc.Series(name, values,
 			linechart.SeriesCellOpts(cell.FgColor(color)),
 			linechart.SeriesXLabels(labels),
 		)
 		if err != nil {
 			return nil, err
 		}
-		legend = append(legend, &LegendItem{Name: *metric.Id, Color: color})
+		legend = append(legend, &LegendItem{Name: name, Color: color})
 	}
 	return legend, nil
 }
@@ -283,6 +284,10 @@ var dashCmd = &cobra.Command{
 			appMetrics = append(appMetrics, &metrics.ServiceUtilizationMetrics{App: a, Options: &options, Service: svc})
 		}
 		appMetrics = append(appMetrics,
+			&metrics.StatusCodeMetrics{App: a, Options: &options, Code: "2xx"},
+			&metrics.StatusCodeMetrics{App: a, Options: &options, Code: "3xx"},
+			&metrics.StatusCodeMetrics{App: a, Options: &options, Code: "4xx"},
+			&metrics.StatusCodeMetrics{App: a, Options: &options, Code: "5xx"},
 			&metrics.ResponseTimeMetrics{App: a, Options: &options, Stat: "Average"},
 			&metrics.ResponseTimeMetrics{App: a, Options: &options, Stat: "p99"},
 		)
