@@ -245,11 +245,6 @@ var dashCmd = &cobra.Command{
 			container.SplitVertical(
 				container.Left(
 					container.ID("navigation"),
-					container.SplitHorizontal(
-						container.Top(container.ID("graphNav")),
-						container.Bottom(container.ID("timeframeNav")),
-						container.SplitPercent(25),
-					),
 				),
 				container.Right(
 					container.ID(contentContainerID),
@@ -339,7 +334,13 @@ var dashCmd = &cobra.Command{
 			container.Border(linestyle.Light),
 			container.BorderColor(cell.ColorGray),
 		)
-		err = rootContainer.Update("graphNav", gridOpts...)
+		err = rootContainer.Update("navigation",
+			container.SplitHorizontal(
+				container.Top(gridOpts...),
+				container.Bottom(container.ID("timeframeNav")),
+				container.SplitFixed(len(graphButtons)+4),
+			),
+		)
 		checkErr(err)
 		timeframeButtons := []widgetapi.Widget{}
 
