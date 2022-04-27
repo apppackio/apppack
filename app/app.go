@@ -450,22 +450,20 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 	startedBy := fmt.Sprintf("apppack-cli/shell/%s", *email)
 	runTaskArgs.TaskDefinition = taskDefn.TaskDefinition.TaskDefinitionArn
 	runTaskArgs.StartedBy = &startedBy
-	memory, err := strconv.Atoi(*taskOverride.Memory)
-	if err != nil {
-		return nil, err
-	}
-	if len(taskOverride.ContainerOverrides) == 1 {
-		taskOverride.ContainerOverrides[0].Name = taskDefn.TaskDefinition.ContainerDefinitions[0].Name
-		taskOverride.ContainerOverrides[0].Command = cmd
-		taskOverride.ContainerOverrides[0].Memory = aws.Int64(int64(memory))
-	} else {
-		taskOverride.ContainerOverrides = []*ecs.ContainerOverride{
-			{
-				Name:    taskDefn.TaskDefinition.ContainerDefinitions[0].Name,
-				Command: cmd,
-				Memory:  aws.Int64(int64(memory)),
-			},
+	memory := 0
+	if taskOverride.Memory != nil {
+		memory, err = strconv.Atoi(*taskOverride.Memory)
+		if err != nil {
+			return nil, err
 		}
+	}
+	if len(taskOverride.ContainerOverrides) == 0 {
+		taskOverride.ContainerOverrides = []*ecs.ContainerOverride{{}}
+	}
+	taskOverride.ContainerOverrides[0].Name = taskDefn.TaskDefinition.ContainerDefinitions[0].Name
+	taskOverride.ContainerOverrides[0].Command = cmd
+	if memory > 0 {
+		taskOverride.ContainerOverrides[0].Memory = aws.Int64(int64(memory))
 	}
 	runTaskArgs.Overrides = taskOverride
 	ecsTaskOutput, err := ecsSvc.RunTask(&runTaskArgs)
