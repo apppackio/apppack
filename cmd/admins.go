@@ -20,6 +20,7 @@ import (
 	"sort"
 
 	"github.com/apppackio/apppack/stacks"
+	"github.com/apppackio/apppack/stringslice"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/spf13/cobra"
@@ -91,7 +92,7 @@ var adminsAddCmd = &cobra.Command{
 		checkErr(err)
 		stack.Parameters.Administrators = append(stack.Parameters.Administrators, args...)
 		var dupes []string
-		stack.Parameters.Administrators, dupes = deduplicate(stack.Parameters.Administrators)
+		stack.Parameters.Administrators, dupes = stringslice.Deduplicate(stack.Parameters.Administrators)
 		ui.Spinner.Stop()
 		for _, d := range dupes {
 			printWarning(fmt.Sprintf("%s is already an administrator", d))
