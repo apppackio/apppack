@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/apppackio/apppack/version"
 	"os"
 	"strings"
 
@@ -55,6 +56,9 @@ var rootCmd = &cobra.Command{
 			logrus.SetLevel(logrus.DebugLevel)
 		} else {
 			logrus.SetLevel(logrus.ErrorLevel)
+		}
+		if !version.IsUpToDate(nil) { // ToDo: Only run after X minutes?
+			printWarning(fmt.Sprintf("Time to upgrade!\nRun \"apppack version upgrade\" to upgrade apppack to the latest version"))
 		}
 	},
 }

@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-
 	"github.com/apppackio/apppack/version"
 	"github.com/spf13/cobra"
 )
@@ -36,6 +35,25 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+// loginCmd represents the login command
+var upgradeCliCmd = &cobra.Command{
+	Use:                   "upgrade",
+	Short:                 "upgrade to apppack to the latest version",
+	DisableFlagsInUseLine: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		latest, err := version.GetLatestRelease()
+		if err != nil {
+			return
+		}
+		if version.IsUpToDate(&latest) {
+			printWarning(fmt.Sprintf("Already up to date. Version %s", latest.Name))
+			return
+		}
+		printSuccess(fmt.Sprintf("upgrading to %s", latest))
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	versionCmd.AddCommand(upgradeCliCmd)
 }
