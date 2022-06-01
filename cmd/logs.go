@@ -19,7 +19,9 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/TylerBrock/saw/blade"
@@ -34,6 +36,8 @@ import (
 
 var sawConfig sawconfig.Configuration
 var sawOutputConfig sawconfig.OutputConfiguration
+var logsStart string
+var logsEnd string
 
 // newBlade is a hack to get a Blade instance with our AWS session
 func newBlade(session *session.Session) *blade.Blade {
@@ -46,6 +50,39 @@ func newBlade(session *session.Session) *blade.Blade {
 	setField("config", &sawConfig)
 	setField("output", &sawOutputConfig)
 	return &b
+}
+
+// TimeValForSaw converts/validates an AppPack time flag to what Saw expects
+func TimeValForSaw(val string) (string, error) {
+	relativeTimeUnits := []string{"s", "m", "h"}
+	if val == "" || val == "now" {
+		return val, nil
+	}
+	// convert days to hours
+	if strings.HasSuffix(val, "d") {
+		val = strings.TrimSuffix(val, "d")
+		days, err := strconv.Atoi(val)
+		if err != nil {
+			return "", err
+		}
+		val = strconv.Itoa(days*24) + "h"
+	}
+	// add `-` to relative time like saw expects
+	for _, unit := range relativeTimeUnits {
+		if strings.HasSuffix(val, unit) {
+			val = strings.TrimSuffix(val, unit)
+			_, err := strconv.Atoi(val)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("-%s%s", val, unit), nil
+		}
+	}
+	_, err := time.Parse(time.RFC3339, val)
+	if err != nil {
+		return "", err
+	}
+	return val, nil
 }
 
 var followLogs = false
@@ -69,11 +106,10 @@ var logsCmd = &cobra.Command{
 		checkErr(err)
 		sawConfig.Group = a.Settings.LogGroup.Name
 		sawOutputConfig.Pretty = !sawOutputConfig.Raw
-		// convert to format saw expects
-		sawConfig.Start = fmt.Sprintf("-%s", sawConfig.Start)
-		if sawConfig.End != "" && sawConfig.End != "now" {
-			sawConfig.End = fmt.Sprintf("-%s", sawConfig.Start)
-		}
+		sawConfig.Start, err = TimeValForSaw(logsStart)
+		checkErr(err)
+		sawConfig.End, err = TimeValForSaw(logsEnd)
+		checkErr(err)
 		b := newBlade(a.Session)
 		if a.IsReviewApp() {
 			sawConfig.Prefix = fmt.Sprintf("pr%s-%s", *a.ReviewApp, sawConfig.Prefix)
@@ -130,20 +166,20 @@ func init() {
 	logsCmd.Flags().StringVar(&sawConfig.Prefix, "prefix", "", `log group prefix filter
 Use this to filter logs for specific services, e.g. "web", "worker"`)
 	logsCmd.Flags().StringVar(
-		&sawConfig.Start,
+		&logsStart,
 		"start",
 		"5m",
 		`start getting the logs from this point
 Takes an absolute timestamp in RFC3339 format, or a relative time (eg. 2h).
-Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`,
+Valid time units are "s", "m", "h", "d".`,
 	)
 	logsCmd.Flags().StringVar(
-		&sawConfig.End,
+		&logsEnd,
 		"stop",
 		"now",
 		`stop getting the logs at this point
 Takes an absolute timestamp in RFC3339 format, or a relative time (eg. 2h).
-Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`,
+Valid time units are "s", "m", "h", "d".`,
 	)
 	logsCmd.Flags().StringVar(&sawConfig.Filter, "filter", "", "event filter pattern")
 	logsCmd.Flags().BoolVar(&sawOutputConfig.Raw, "raw", false, "no timestamp, log group or colors")

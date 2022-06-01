@@ -172,20 +172,29 @@ func (a *ClusterStack) SetStack(stack *cloudformation.Stack) {
 func (a *ClusterStack) SetDeletionProtection(sess *session.Session, value bool) error {
 	elbSvc := elbv2.New(sess)
 	lbARN, err := bridge.GetStackOutput(a.Stack.Outputs, "LoadBalancerArn")
-	if err != nil {
+	if lbARN != nil {
+		logrus.WithFields(logrus.Fields{"value": value}).Debug("setting load balancer deletion protection")
+		_, err = elbSvc.ModifyLoadBalancerAttributes(&elbv2.ModifyLoadBalancerAttributesInput{
+			LoadBalancerArn: lbARN,
+			Attributes: []*elbv2.LoadBalancerAttribute{
+				{
+					Key:   aws.String("deletion_protection.enabled"),
+					Value: aws.String(strconv.FormatBool(value)),
+				},
+			},
+		})
 		return err
 	}
-	logrus.WithFields(logrus.Fields{"value": value}).Debug("setting load balancer deletion protection")
-	_, err = elbSvc.ModifyLoadBalancerAttributes(&elbv2.ModifyLoadBalancerAttributesInput{
-		LoadBalancerArn: lbARN,
-		Attributes: []*elbv2.LoadBalancerAttribute{
-			{
-				Key:   aws.String("deletion_protection.enabled"),
-				Value: aws.String(strconv.FormatBool(value)),
-			},
-		},
-	})
-	return err
+	// if we get an error trying to set deletion protection, return it
+	// just log errors trying to turn it off because the instance/cluster may not exist
+	// in the case of a stack failure
+	if err != nil {
+		logrus.WithFields(logrus.Fields{"error": err}).Debug("unable to lookup Cloudformation outputs to set Load Balancer deletion protection")
+		if value {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *ClusterStack) PostCreate(sess *session.Session) error {

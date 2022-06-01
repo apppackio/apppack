@@ -53,7 +53,7 @@ func updateAdministrators(sess *session.Session, stack *stacks.AccountStack, nam
 // accessCmd represents the access command
 var adminsCmd = &cobra.Command{
 	Use:                   "admins",
-	Short:                 "list the administrators for an accouunt",
+	Short:                 "list the administrators for an account",
 	Long:                  "*Requires admin permissions.*",
 	Args:                  cobra.NoArgs,
 	DisableFlagsInUseLine: true,

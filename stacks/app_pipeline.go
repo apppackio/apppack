@@ -26,37 +26,39 @@ import (
 )
 
 type AppStackParameters struct {
-	Type                     string
-	Name                     string
-	ClusterStackName         string   `flag:"cluster;fmtString:apppack-cluster-%s"`
-	RepositoryUrl            string   `flag:"repository"`
-	Branch                   string   `flag:"branch"`
-	Domains                  []string `flag:"domains"`
-	HealthCheckPath          string   `flag:"healthcheck-path"`
-	HealthcheckInterval      int
-	DeregistrationDelay      int
-	LoadBalancerRulePriority int
-	AppPackRoleExternalId    string
-	PrivateS3BucketEnabled   bool   `flag:"addon-private-s3"`
-	PublicS3BucketEnabled    bool   `flag:"addon-public-s3"`
-	SesDomain                string `flag:"addon-ses-domain"`
-	DatabaseStackName        string `flag:"addon-database-name;fmtString:apppack-database-%s"`
-	RedisStackName           string `flag:"addon-redis-name;fmtString:apppack-redis-%s"`
-	SQSQueueEnabled          bool   `flag:"addon-sqs"`
-	RepositoryType           string
-	Fargate                  bool     `flag:"ec2;negate"`
-	AllowedUsers             []string `flag:"users"`
-	BuildWebhook             bool     `flag:"disable-build-webhook;negate"`
-	CustomTaskPolicyArn      string
+	Type                               string
+	Name                               string
+	ClusterStackName                   string   `flag:"cluster;fmtString:apppack-cluster-%s"`
+	RepositoryUrl                      string   `flag:"repository"`
+	Branch                             string   `flag:"branch"`
+	Domains                            []string `flag:"domains"`
+	DefaultAutoscalingAverageCpuTarget int
+	HealthCheckPath                    string `flag:"healthcheck-path"`
+	HealthcheckInterval                int
+	DeregistrationDelay                int
+	LoadBalancerRulePriority           int
+	AppPackRoleExternalId              string
+	PrivateS3BucketEnabled             bool   `flag:"addon-private-s3"`
+	PublicS3BucketEnabled              bool   `flag:"addon-public-s3"`
+	SesDomain                          string `flag:"addon-ses-domain"`
+	DatabaseStackName                  string `flag:"addon-database-name;fmtString:apppack-database-%s"`
+	RedisStackName                     string `flag:"addon-redis-name;fmtString:apppack-redis-%s"`
+	SQSQueueEnabled                    bool   `flag:"addon-sqs"`
+	RepositoryType                     string
+	Fargate                            bool     `flag:"ec2;negate"`
+	AllowedUsers                       []string `flag:"users"`
+	BuildWebhook                       bool     `flag:"disable-build-webhook;negate"`
+	CustomTaskPolicyArn                string
 }
 
 var DefaultAppStackParameters = AppStackParameters{
-	Type:                "app",
-	HealthCheckPath:     "/",
-	HealthcheckInterval: 30,
-	DeregistrationDelay: 15,
-	Fargate:             true,
-	BuildWebhook:        true,
+	Type:                               "app",
+	HealthCheckPath:                    "/",
+	HealthcheckInterval:                30,
+	DefaultAutoscalingAverageCpuTarget: 50,
+	DeregistrationDelay:                15,
+	Fargate:                            true,
+	BuildWebhook:                       true,
 }
 
 var DefaultPipelineStackParameters = AppStackParameters{

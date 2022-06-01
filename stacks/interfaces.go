@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/bridge"
+	"github.com/apppackio/apppack/stringslice"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
@@ -140,6 +141,23 @@ func ExportParameters(parameters Parameters, sess *session.Session, name *string
 	return parameters.ToCloudFormationParameters()
 }
 
+// PruneUnsupportedParameters removes parameters that are not supported by the current stack version
+func PruneUnsupportedParameters(supportedParameters []*cloudformation.Parameter, desiredParameters []*cloudformation.Parameter) []*cloudformation.Parameter {
+	supportedParameterNames := []string{}
+	for _, param := range supportedParameters {
+		supportedParameterNames = append(supportedParameterNames, *param.ParameterKey)
+	}
+	prunedParameters := []*cloudformation.Parameter{}
+	for _, param := range desiredParameters {
+		if stringslice.Contains(*param.ParameterKey, supportedParameterNames) {
+			prunedParameters = append(prunedParameters, param)
+		} else {
+			logrus.WithFields(logrus.Fields{"name": *param.ParameterKey}).Debug("parameter not supported by stack")
+		}
+	}
+	return prunedParameters
+}
+
 func LoadStackFromCloudformation(sess *session.Session, stack Stack, name *string) error {
 	cfnStackName := stack.StackName(name)
 	cfnStack, err := bridge.GetStack(sess, *cfnStackName)
@@ -180,6 +198,7 @@ func ModifyStack(sess *session.Session, s Stack, name *string) error {
 	if err != nil {
 		return err
 	}
+	params = PruneUnsupportedParameters(s.GetStack().Parameters, params)
 	cfnStack, err := UpdateStackAndWait(sess, &cloudformation.UpdateStackInput{
 		StackName:           s.GetStack().StackName,
 		Parameters:          params,
@@ -201,6 +220,7 @@ func UpdateStack(sess *session.Session, s Stack, name, release *string) error {
 	if err != nil {
 		return err
 	}
+	params = PruneUnsupportedParameters(s.GetStack().Parameters, params)
 	cfnStack, err := UpdateStackAndWait(sess, &cloudformation.UpdateStackInput{
 		StackName:    s.GetStack().StackName,
 		Parameters:   params,
