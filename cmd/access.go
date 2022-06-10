@@ -22,6 +22,7 @@ import (
 
 	"github.com/apppackio/apppack/auth"
 	"github.com/apppackio/apppack/stacks"
+	"github.com/apppackio/apppack/stringslice"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -35,43 +36,18 @@ func validateEmail(email string) bool {
 	return pattern.MatchString(email)
 }
 
-// deduplicate removes duplicates from a slice of strings
-func deduplicate(slice []string) ([]string, []string) {
-	seen := make(map[string]bool)
-	var result []string
-	var dupes []string
-	for _, s := range slice {
-		if seen[s] {
-			dupes = append(dupes, s)
-			continue
-		}
-		seen[s] = true
-		result = append(result, s)
-	}
-	return result, dupes
-}
-
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
-
 // removeFromList removes items in a slice from a slice of strings
 // it returns both the new slice and a slice of items not found
 func removeFromSlice(slice, toRemove []string) ([]string, []string) {
 	var result []string
 	var notFound []string
 	for _, r := range toRemove {
-		if !stringInSlice(r, slice) {
+		if !stringslice.Contains(r, slice) {
 			notFound = append(notFound, r)
 		}
 	}
 	for _, s := range slice {
-		if !stringInSlice(s, toRemove) {
+		if !stringslice.Contains(s, toRemove) {
 			result = append(result, s)
 		}
 	}
@@ -168,7 +144,7 @@ var accessAddCmd = &cobra.Command{
 		checkErr(err)
 		stack.Parameters.AllowedUsers = append(stack.Parameters.AllowedUsers, args...)
 		var dupes []string
-		stack.Parameters.AllowedUsers, dupes = deduplicate(stack.Parameters.AllowedUsers)
+		stack.Parameters.AllowedUsers, dupes = stringslice.Deduplicate(stack.Parameters.AllowedUsers)
 		sort.Strings(stack.Parameters.AllowedUsers)
 		ui.Spinner.Stop()
 		for _, d := range dupes {
