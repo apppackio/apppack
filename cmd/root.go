@@ -58,7 +58,9 @@ var rootCmd = &cobra.Command{
 			logrus.SetLevel(logrus.ErrorLevel)
 		}
 		if !version.IsUpToDate(nil) { // ToDo: Only run after X minutes?
-			printWarning(fmt.Sprintf("Time to upgrade!\nRun \"apppack version upgrade\" to upgrade apppack to the latest version"))
+			if cmd.Parent().Use != "version" && cmd.Use != "upgrade" {
+				printWarning(fmt.Sprintf("Time to upgrade!\nRun \"apppack version upgrade\" to upgrade apppack to the latest version"))
+			}
 		}
 	},
 }
