@@ -59,7 +59,7 @@ var rootCmd = &cobra.Command{
 		}
 		if !version.IsUpToDate(nil) { // ToDo: Only run after X minutes?
 			if cmd.Parent().Use != "version" && cmd.Use != "upgrade" {
-				printWarning(fmt.Sprintf("Time to upgrade!\nRun \"apppack version upgrade\" to upgrade apppack to the latest version"))
+				printWarning("Time to upgrade!\nRun \"apppack version upgrade\" to upgrade apppack to the latest version")
 			}
 		}
 	},
