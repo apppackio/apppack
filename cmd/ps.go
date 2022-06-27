@@ -170,7 +170,11 @@ var psResizeCmd = &cobra.Command{
 		checkErr(a.ValidateECSTaskSize(*size))
 		err = a.ResizeProcess(processType, size.CPU, size.Memory)
 		checkErr(err)
-		printSuccess(fmt.Sprintf("resizing %s", processType))
+		if a.Pipeline {
+			printSuccess(fmt.Sprintf("set default size for %s processes on review apps", processType))
+		} else {
+			printSuccess(fmt.Sprintf("resizing %s", processType))
+		}
 	},
 }
 
