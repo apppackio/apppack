@@ -23,7 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/juju/ansiterm/tabwriter"
+	"github.com/juju/ansiterm"
+	"github.com/mattn/go-isatty"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -32,7 +33,6 @@ import (
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
-	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
@@ -110,6 +110,13 @@ var unsetCmd = &cobra.Command{
 	},
 }
 
+func printRow(w *ansiterm.TabWriter, name, value string) {
+	w.SetForeground(ansiterm.Green)
+	fmt.Fprintf(w, "%s:", name)
+	w.SetForeground(ansiterm.Default)
+	fmt.Fprintf(w, "\t%s\n", value)
+}
+
 // listCmd represents the list command
 var listCmd = &cobra.Command{
 	Use:                   "list",
@@ -117,9 +124,11 @@ var listCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		w := new(tabwriter.Writer)
 		// minwidth, tabwidth, padding, padchar, flags
-		w.Init(os.Stdout, 8, 8, 0, '\t', 0)
+		w := ansiterm.NewTabWriter(os.Stdout, 8, 8, 0, '\t', 0)
+		if isatty.IsTerminal(os.Stdout.Fd()) {
+			w.SetColorCapable(true)
+		}
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
@@ -130,10 +139,10 @@ var listCmd = &cobra.Command{
 		for _, value := range parameters {
 			parts := strings.Split(*value.Name, "/")
 			varname := parts[len(parts)-1]
-			fmt.Fprintf(w, "%s\t%s\t\n", aurora.Green(fmt.Sprintf("%s:", varname)), *value.Value)
+			printRow(w, varname, *value.Value)
 		}
 		ui.PrintHeaderln(fmt.Sprintf("%s Config Vars", AppName))
-		w.Flush()
+		checkErr(w.Flush())
 		if a.IsReviewApp() {
 			fmt.Println()
 			a.ReviewApp = nil
@@ -144,10 +153,10 @@ var listCmd = &cobra.Command{
 			for _, value := range parameters {
 				parts := strings.Split(*value.Name, "/")
 				varname := parts[len(parts)-1]
-				fmt.Fprintf(w, "%s\t%s\t\n", aurora.Green(fmt.Sprintf("%s:", varname)), *value.Value)
+				printRow(w, varname, *value.Value)
 			}
 			ui.PrintHeaderln(fmt.Sprintf("%s Config Vars (inherited)", a.Name))
-			w.Flush()
+			checkErr(w.Flush())
 		}
 	},
 }

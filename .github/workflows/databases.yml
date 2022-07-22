@@ -139,7 +139,7 @@ jobs:
                 --allocated-storage 10 \
                 --max-allocated-storage 20 \
                 aurora-mysql
-        timeout-minutes: 25
+        timeout-minutes: 35
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
