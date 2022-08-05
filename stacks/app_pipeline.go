@@ -37,6 +37,7 @@ type AppStackParameters struct {
 	HealthcheckInterval                int
 	DeregistrationDelay                int
 	LoadBalancerRulePriority           int
+	LogRetentionDays                   int
 	AppPackRoleExternalId              string
 	PrivateS3BucketEnabled             bool   `flag:"addon-private-s3"`
 	PublicS3BucketEnabled              bool   `flag:"addon-public-s3"`
@@ -55,6 +56,7 @@ var DefaultAppStackParameters = AppStackParameters{
 	Type:                               "app",
 	HealthCheckPath:                    "/",
 	HealthcheckInterval:                30,
+	LogRetentionDays:                   30,
 	DefaultAutoscalingAverageCpuTarget: 50,
 	DeregistrationDelay:                15,
 	Fargate:                            true,
