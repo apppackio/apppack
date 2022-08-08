@@ -873,7 +873,7 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 	} else {
 		parameterName = fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
 	}
-	if a.Pipeline && *maxProcessCount != *minProcessCount {
+	if a.Pipeline && maxProcessCount != nil && minProcessCount != nil && *maxProcessCount != *minProcessCount {
 		return fmt.Errorf("auto-scaling is not supported on pipelines")
 	}
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
