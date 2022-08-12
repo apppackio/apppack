@@ -136,12 +136,12 @@ var listCmd = &cobra.Command{
 		checkErr(err)
 		bridge.SortParameters(parameters)
 		ui.Spinner.Stop()
+		ui.PrintHeaderln(fmt.Sprintf("%s Config Vars", AppName))
 		for _, value := range parameters {
 			parts := strings.Split(*value.Name, "/")
 			varname := parts[len(parts)-1]
 			printRow(w, varname, *value.Value)
 		}
-		ui.PrintHeaderln(fmt.Sprintf("%s Config Vars", AppName))
 		checkErr(w.Flush())
 		if a.IsReviewApp() {
 			fmt.Println()
