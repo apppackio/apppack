@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/auth"
+	"github.com/apppackio/apppack/stringslice"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -283,14 +284,16 @@ func (a *App) ReviewAppSettings() (*Settings, error) {
 	return &i.Settings, nil
 }
 
+func (a *App) ServiceName(processType string) string {
+	if a.IsReviewApp() {
+		return fmt.Sprintf("%s-pr%s-%s", a.Name, *a.ReviewApp, processType)
+	}
+	return fmt.Sprintf("%s-%s", a.Name, processType)
+}
+
 // TaskDefinition gets the Task Definition for a specific task type
 func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, error) {
-	var family string
-	if a.IsReviewApp() {
-		family = fmt.Sprintf("%s-pr%s-%s", a.Name, *a.ReviewApp, name)
-	} else {
-		family = fmt.Sprintf("%s-%s", a.Name, name)
-	}
+	family := a.ServiceName(name)
 	ecsSvc := ecs.New(a.Session)
 	// verify task exists
 	task, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
@@ -890,6 +893,65 @@ func (a *App) ResizeProcess(processType string, cpu, memory int) error {
 
 func (a *App) ScaleProcess(processType string, minProcessCount, maxProcessCount int) error {
 	return a.SetScaleParameter(processType, &minProcessCount, &maxProcessCount, nil, nil)
+}
+
+func (a *App) ReplaceProcess(processType string) error {
+	err := a.LoadSettings()
+	if err != nil {
+		return err
+	}
+	ecsSvc := ecs.New(a.Session)
+	service := a.ServiceName(processType)
+	_, err = ecsSvc.UpdateService(&ecs.UpdateServiceInput{
+		Cluster:            &a.Settings.Cluster.ARN,
+		Service:            &service,
+		ForceNewDeployment: aws.Bool(true),
+	})
+	return err
+}
+
+func (a *App) StopProcesses(processType string) ([]*string, error) {
+	err := a.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	ecsSvc := ecs.New(a.Session)
+	taskArnList, err := ecsSvc.ListTasks(&ecs.ListTasksInput{
+		Cluster:     &a.Settings.Cluster.ARN,
+		ServiceName: aws.String(a.ServiceName(processType)),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(taskArnList.TaskArns) == 0 {
+		return nil, fmt.Errorf("no processes found for %s", processType)
+	}
+	tasks, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+		Cluster: &a.Settings.Cluster.ARN,
+		Tasks:   taskArnList.TaskArns,
+	})
+	if err != nil {
+		return nil, err
+	}
+	stoppedTasks := []*string{}
+	stoppingStatuses := []string{"DEACTIVATING", "STOPPING", "DEPROVISIONING", "STOPPED"}
+	for _, task := range tasks.Tasks {
+		if stringslice.Contains(*task.LastStatus, stoppingStatuses) {
+			continue
+		}
+		_, err = ecsSvc.StopTask(&ecs.StopTaskInput{
+			Cluster: task.ClusterArn,
+			Task:    task.TaskArn,
+		})
+		if err != nil {
+			return nil, err
+		}
+		stoppedTasks = append(stoppedTasks, task.TaskArn)
+	}
+	if len(stoppedTasks) == 0 {
+		return nil, fmt.Errorf("all processes already stopped or stopping for %s", processType)
+	}
+	return stoppedTasks, nil
 }
 
 // SetScaleParameter updates process count and cpu/ram with any non-nil values provided

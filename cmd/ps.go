@@ -23,6 +23,7 @@ import (
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/dustin/go-humanize"
 	"github.com/logrusorgru/aurora"
@@ -236,8 +237,50 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 	},
 }
 
+// psRestartCmd represents the restart command
+var psRestartCmd = &cobra.Command{
+	Use:                   "restart <service>",
+	Short:                 "restart the process(es) for a given service",
+	DisableFlagsInUseLine: true,
+	Example:               "apppack -a my-app ps restart web",
+	Long:                  "Performs a zero-downtime rolling replacement of all the processes for the service. This should not be necessary during normal operation (config changes and deployments do this automatically. If `-f/--force` is used, all current processes will be killed immediately, resulting in some downtime before the replacements startup.",
+	Args:                  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		processType := args[0]
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		checkErr(err)
+		if a.Pipeline {
+			checkErr(fmt.Errorf("cannot restart a pipeline -- choose a specific review app instead"))
+		}
+		if forceRestart {
+			tasks, err := a.StopProcesses(processType)
+			if err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					if aerr.Code() == ecs.ErrCodeAccessDeniedException {
+						printWarning(fmt.Sprintf("access denied: you may need to upgrade the app stack: `apppack upgrade app %s`", a.Name))
+					}
+				}
+				checkErr(err)
+			}
+			printSuccess(fmt.Sprintf("forcing restart of %d %s processes", len(tasks), processType))
+		} else {
+			err = a.ReplaceProcess(processType)
+			if err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					if aerr.Code() == ecs.ErrCodeAccessDeniedException {
+						printWarning(fmt.Sprintf("access denied: you may need to upgrade the app stack: `apppack upgrade app %s`", a.Name))
+					}
+				}
+				checkErr(err)
+			}
+			printSuccess(fmt.Sprintf("replacing %s processes", processType))
+		}
+	},
+}
+
 var scaleCPU float64
 var scaleMemory string
+var forceRestart bool
 
 func init() {
 	rootCmd.AddCommand(psCmd)
@@ -255,4 +298,7 @@ func init() {
 	psExecCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
 	psExecCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")
 	psExecCmd.Flags().StringVar(&shellMem, "memory", "1G", "memory (e.g. '2G', '512M') available for task")
+
+	psCmd.AddCommand(psRestartCmd)
+	psRestartCmd.Flags().BoolVar(&forceRestart, "force", false, "force restart of all processes")
 }
