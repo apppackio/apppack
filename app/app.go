@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/auth"
+	apppackaws "github.com/apppackio/apppack/aws"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -19,10 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/aws/aws-sdk-go/service/eventbridge"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
 )
@@ -58,6 +57,7 @@ type App struct {
 	ECSConfig             *ECSConfig
 	DeployStatus          *DeployStatus
 	PendingDeployStatuses []*DeployStatus
+	aws                   apppackaws.AWSInterface
 }
 
 // ReviewApp is a representation of a AppPack review app
@@ -962,114 +962,6 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 	return nil
 }
 
-type ScheduledTask struct {
-	Schedule string `json:"schedule"`
-	Command  string `json:"command"`
-}
-
-// ScheduledTasks lists scheduled tasks for the app
-func (a *App) ScheduledTasks() ([]*ScheduledTask, error) {
-	ssmSvc := ssm.New(a.Session)
-	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
-		Name: &parameterName,
-	})
-	var tasks []*ScheduledTask
-	if err != nil {
-		tasks = []*ScheduledTask{}
-	} else if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &tasks); err != nil {
-		return nil, err
-	}
-	return tasks, nil
-}
-
-// CreateScheduledTask adds a scheduled task for the app
-func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, error) {
-	if err := a.ValidateCronString(schedule); err != nil {
-		return nil, err
-	}
-	ssmSvc := ssm.New(a.Session)
-	tasks, err := a.ScheduledTasks()
-	if err != nil {
-		return nil, err
-	}
-	tasks = append(tasks, &ScheduledTask{
-		Schedule: strings.TrimSpace(schedule),
-		Command:  strings.TrimSpace(command),
-	})
-	// avoid exceeding AWS quota
-	tasksBySchedule := map[string][]string{}
-	for _, task := range tasks {
-		tasksBySchedule[task.Schedule] = append(tasksBySchedule[task.Schedule], task.Command)
-	}
-	for schedule, commands := range tasksBySchedule {
-		if len(commands) > 5 {
-			return nil, fmt.Errorf("AWS quota limits a single schedule to no more than 5 tasks (%s)", schedule)
-		}
-	}
-	tasksBytes, err := json.Marshal(tasks)
-	if err != nil {
-		return nil, err
-	}
-	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-		Name:      &parameterName,
-		Value:     aws.String(string(tasksBytes)),
-		Overwrite: aws.Bool(true),
-		Type:      aws.String("String"),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return tasks, nil
-}
-
-// DeleteScheduledTask deletes the scheduled task at the given index
-func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
-	ssmSvc := ssm.New(a.Session)
-	tasks, err := a.ScheduledTasks()
-	if err != nil {
-		return nil, err
-	}
-	if idx > len(tasks) || idx < 0 {
-		return nil, fmt.Errorf("invalid index for task to delete")
-	}
-	taskToDelete := tasks[idx]
-	tasks = append(tasks[:idx], tasks[idx+1:]...)
-	tasksBytes, err := json.Marshal(tasks)
-	if err != nil {
-		return nil, err
-	}
-	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-		Name:      &parameterName,
-		Value:     aws.String(string(tasksBytes)),
-		Overwrite: aws.Bool(true),
-		Type:      aws.String("String"),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return taskToDelete, nil
-}
-
-// ValidateCronString validates a cron schedule rule
-func (a *App) ValidateCronString(rule string) error {
-	eventSvc := eventbridge.New(a.Session)
-	ruleName := fmt.Sprintf("apppack-validate-%s", uuid.New().String())
-	_, err := eventSvc.PutRule(&eventbridge.PutRuleInput{
-		Name:               &ruleName,
-		ScheduleExpression: aws.String(fmt.Sprintf("cron(%s)", rule)),
-		State:              aws.String("DISABLED"),
-	})
-	if err == nil {
-		eventSvc.DeleteRule(&eventbridge.DeleteRuleInput{
-			Name: &ruleName,
-		})
-	}
-	return err
-}
-
 // Init will pull in app settings from DyanmoDB and provide helper
 func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	var reviewApp *string
@@ -1089,6 +981,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	if awsCredentials {
 		sess = session.Must(session.NewSession())
 		app.Session = sess
+		app.aws = apppackaws.New(sess)
 		err := app.LoadSettings()
 		if err != nil {
 			return nil, err
@@ -1102,6 +995,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 		}
 		app.Pipeline = appRole.Pipeline
 		app.Session = sess
+		app.aws = apppackaws.New(sess)
 	}
 	if !app.Pipeline && app.ReviewApp != nil {
 		return nil, fmt.Errorf("%s is a standard app and can't have review apps", name)
