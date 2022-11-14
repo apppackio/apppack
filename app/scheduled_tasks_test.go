@@ -115,3 +115,20 @@ func TestScheduledTasksDelete(t *testing.T) {
 		t.Errorf("expected command %s, got %s", command, task.Command)
 	}
 }
+
+func TestScheduledTasksDeleteEmpty(t *testing.T) {
+	a := &App{
+		Name: "test",
+		aws:  &MockAWS{},
+	}
+	parameterName := "/apppack/apps/test/scheduled-tasks"
+	a.aws.(*MockAWS).On(
+		"GetParameter",
+		&ssm.GetParameterInput{Name: &parameterName},
+	).Return(aws.String("[]"), nil)
+	_, err := a.DeleteScheduledTask(0)
+	if err == nil {
+		t.Error("expected error trying to delete from empty list")
+	}
+
+}

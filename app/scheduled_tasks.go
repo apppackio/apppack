@@ -75,7 +75,7 @@ func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
 	if err != nil {
 		return nil, err
 	}
-	if idx > len(tasks) || idx < 0 {
+	if idx >= len(tasks) || idx < 0 {
 		return nil, fmt.Errorf("invalid index for task to delete")
 	}
 	taskToDelete := tasks[idx]
