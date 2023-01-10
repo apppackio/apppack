@@ -79,6 +79,14 @@ type Settings struct {
 		ARN  string `json:"arn"`
 		Name string `json:"name"`
 	} `json:"cluster"`
+	LoadBalancer struct {
+		ARN    string `json:"arn"`
+		Suffix string `json:"suffix"`
+	} `json:"load_balancer"`
+	TargetGroup struct {
+		ARN    string `json:"arn"`
+		Suffix string `json:"suffix"`
+	} `json:"target_group"`
 	Domains []string `json:"domains"`
 	Shell   struct {
 		Command    string `json:"command"`
@@ -412,7 +420,20 @@ func (a *App) GetDeployStatus(buildARN string) (*DeployStatus, error) {
 	return &i.DeployStatus, nil
 }
 
-// LoadDeployStatus will set the app.DeployStatus value from DDB
+// GetServices will get a list of current services from the deploy status
+func (a *App) GetServices() ([]string, error) {
+	err := a.LoadDeployStatus()
+	if err != nil {
+		return nil, err
+	}
+	services := []string{}
+	for _, process := range a.DeployStatus.Processes {
+		services = append(services, process.Name)
+	}
+	return services, nil
+}
+
+// LoadDeployStatus will get the app.DeployStatus value from DDB
 func (a *App) LoadDeployStatus() error {
 	if a.DeployStatus != nil {
 		return nil
