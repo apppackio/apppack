@@ -16,3 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * Upgraded to Go 1.19 and updated dependencies
+
+### Fixed
+
+* Prevent using an invalid index when deleting scheduled tasks which led to panic
