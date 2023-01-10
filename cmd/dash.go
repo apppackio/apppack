@@ -228,6 +228,7 @@ func UpdateDashContent(c *container.Container, metric metrics.AppMetrics, ctx co
 var dashCmd = &cobra.Command{
 	Use:                   "dash",
 	Short:                 "app metrics dashboard",
+	Long:                  "[EXPERIMENTAL] interactive terminal-based dashboard for app metrics",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
