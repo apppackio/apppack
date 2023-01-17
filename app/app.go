@@ -920,6 +920,8 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 	var parameterName string
 	if a.IsReviewApp() {
 		parameterName = fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s/scaling", a.Name, *a.ReviewApp)
+	} else if a.Pipeline {
+		parameterName = fmt.Sprintf("/apppack/pipelines/%s/scaling", a.Name)
 	} else {
 		parameterName = fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
 	}
