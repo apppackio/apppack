@@ -47,7 +47,7 @@ func IsUpToDate(latest *Release) bool {
 		latest = &latestObj
 	}
 
-	new, err_1 := vers.NewVersion(latest.Name)
+	newVersion, err_1 := vers.NewVersion(latest.Name)
 	if err_1 != nil {
 		fmt.Println(aurora.Red(fmt.Sprintf("✖ Latest version name '%s' is invalid. Please report this issue to https://github.com/apppackio/apppack/issues/", latest.Name)))
 		return false
@@ -58,7 +58,7 @@ func IsUpToDate(latest *Release) bool {
 		return false
 	}
 
-	if current.LessThan(new) {
+	if current.LessThan(newVersion) {
 		return false
 	}
 	return true
