@@ -5,14 +5,31 @@ import (
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/elasticache"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
+
+var previousElasticacheGenerations = []string{
+	"cache.t3",
+	"cache.r5.",
+	"cache.m5.",
+}
+
+func isPreviousElasticacheGeneration(instanceClass *string) bool {
+	for _, p := range previousElasticacheGenerations {
+		if strings.HasPrefix(*instanceClass, p) {
+			return true
+		}
+	}
+	return false
+}
 
 type RedisStackParameters struct {
 	Name               string
@@ -33,6 +50,28 @@ func (p *RedisStackParameters) ToCloudFormationParameters() ([]*cloudformation.P
 var DefaultRedisStackParameters = RedisStackParameters{
 	InstanceClass: "cache.t4g.micro",
 	MultiAZ:       false,
+}
+
+func listElasticacheInstanceClasses(sess *session.Session) ([]string, error) {
+	elasticacheSvc := elasticache.New(sess)
+
+	out, err := elasticacheSvc.DescribeReservedCacheNodesOfferings(&elasticache.DescribeReservedCacheNodesOfferingsInput{
+		OfferingType:       aws.String("No Upfront"),
+		Duration:           aws.String("1"),
+		ProductDescription: aws.String("redis"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	var instanceClasses []string
+	for _, opt := range out.ReservedCacheNodesOfferings {
+		if !isPreviousElasticacheGeneration(opt.CacheNodeType) {
+			instanceClasses = append(instanceClasses, *opt.CacheNodeType)
+		}
+	}
+	instanceClasses = dedupe(instanceClasses)
+	bridge.SortInstanceClasses(instanceClasses)
+	return instanceClasses, nil
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
@@ -142,12 +181,31 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 				},
 			},
 		},
+	}...)
+	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
+		return err
+	}
+	questions = []*ui.QuestionExtra{}
+	ui.StartSpinner()
+	ui.Spinner.Suffix = " retrieving instance classes"
+	instanceClasses, err := listElasticacheInstanceClasses(sess)
+	if err != nil {
+		return err
+	}
+	ui.Spinner.Stop()
+	ui.Spinner.Suffix = ""
+	questions = append(questions, []*ui.QuestionExtra{
 		{
 			Verbose:  "What instance class should be used for this Redis instance?",
 			HelpText: "Enter the Redis instance class. For more info see https://aws.amazon.com/elasticache/pricing/.",
 			Question: &survey.Question{
-				Name:     "InstanceClass",
-				Prompt:   &survey.Input{Message: "InstanceClass", Default: a.Parameters.InstanceClass},
+				Name: "InstanceClass",
+				Prompt: &survey.Select{
+					Message:       "Instance Class",
+					Options:       instanceClasses,
+					FilterMessage: "",
+					Default:       a.Parameters.InstanceClass,
+				},
 				Validate: survey.Required,
 			},
 		},

@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-var previousGenerations = []string{
+var previousRDSGenerations = []string{
 	"db.t2.",
 	"db.t3",
 	"db.m3.",
@@ -37,8 +37,8 @@ func dedupe(s []string) []string {
 	return s
 }
 
-func isPreviousGeneration(instanceClass *string) bool {
-	for _, p := range previousGenerations {
+func isPreviousRDSGeneration(instanceClass *string) bool {
+	for _, p := range previousRDSGenerations {
 		if strings.HasPrefix(*instanceClass, p) {
 			return true
 		}
@@ -94,7 +94,7 @@ func listRDSInstanceClasses(sess *session.Session, engine, version *string) ([]s
 	}
 	var instanceClasses []string
 	for _, opt := range instanceClassResults {
-		if !isPreviousGeneration(opt.DBInstanceClass) {
+		if !isPreviousRDSGeneration(opt.DBInstanceClass) {
 			instanceClasses = append(instanceClasses, *opt.DBInstanceClass)
 		}
 	}
