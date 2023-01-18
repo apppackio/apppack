@@ -28,7 +28,7 @@ func GetLatestRelease() (Release, error) {
 	var release Release
 	err = json.NewDecoder(resp.Body).Decode(&release)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("{:?}", err))
+		fmt.Println(fmt.Sprintf("%v", err))
 		return release, err
 	}
 	return release, nil
