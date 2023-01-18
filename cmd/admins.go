@@ -27,7 +27,7 @@ import (
 )
 
 func accountStack(sess *session.Session) (*stacks.AccountStack, error) {
-	stack := &stacks.AccountStack{}
+	stack := &stacks.AccountStack{Parameters: &stacks.AccountStackParameters{}}
 	err := stacks.LoadStackFromCloudformation(sess, stack, new(string))
 	if err != nil {
 		return nil, err

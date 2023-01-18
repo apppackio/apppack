@@ -1,3 +1,4 @@
+---
 name: goreleaser
 
 on:
@@ -15,12 +16,12 @@ jobs:
           fetch-depth: 0
       -
         name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: 1.19
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+        uses: goreleaser/goreleaser-action@v3
         with:
           version: latest
           args: release --rm-dist
@@ -30,25 +31,25 @@ jobs:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       -
         name: Upload Windows binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: apppack_windows_amd64
-          path: dist/apppack_windows_amd64
+          path: dist/apppack_windows_amd64_v1
       -
         name: Upload Darwin binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: apppack_darwin_amd64
-          path: dist/apppack_darwin_amd64
+          path: dist/apppack_darwin_amd64_v1
       -
         name: Upload Darwin binary (ARM)
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: apppack_darwin_arm64
           path: dist/apppack_darwin_arm64
       -
         name: Upload Linux binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: apppack_linux_amd64
-          path: dist/apppack_linux_amd64
+          path: dist/apppack_linux_amd64_v1

@@ -19,7 +19,7 @@ jobs:
         name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.18
+          go-version: 1.19
       -
         name: Build
         run: go build
@@ -33,7 +33,7 @@ jobs:
               --stack-name $STACK_NAME \
               --template-url https://s3.amazonaws.com/apppack-cloudformations/latest/account.json \
               --capabilities CAPABILITY_IAM \
-              --parameters ParameterKey=Administrators,ParameterValue=pete@apppack.io
+              --parameters ParameterKey=Administrators,ParameterValue=user@apppack.io
             aws cloudformation wait stack-create-complete \
               --stack-name $STACK_NAME
         timeout-minutes: 10

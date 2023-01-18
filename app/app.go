@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/auth"
+	apppackaws "github.com/apppackio/apppack/aws"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -19,10 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/aws/aws-sdk-go/service/eventbridge"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
 )
@@ -58,6 +57,7 @@ type App struct {
 	ECSConfig             *ECSConfig
 	DeployStatus          *DeployStatus
 	PendingDeployStatuses []*DeployStatus
+	aws                   apppackaws.AWSInterface
 }
 
 // ReviewApp is a representation of a AppPack review app
@@ -79,6 +79,14 @@ type Settings struct {
 		ARN  string `json:"arn"`
 		Name string `json:"name"`
 	} `json:"cluster"`
+	LoadBalancer struct {
+		ARN    string `json:"arn"`
+		Suffix string `json:"suffix"`
+	} `json:"load_balancer"`
+	TargetGroup struct {
+		ARN    string `json:"arn"`
+		Suffix string `json:"suffix"`
+	} `json:"target_group"`
 	Domains []string `json:"domains"`
 	Shell   struct {
 		Command    string `json:"command"`
@@ -204,6 +212,35 @@ var FargateSupportedConfigurations = []ECSSizeConfiguration{
 	{CPU: 4 * 1024, Memory: 28 * 1024},
 	{CPU: 4 * 1024, Memory: 29 * 1024},
 	{CPU: 4 * 1024, Memory: 30 * 1024},
+	{CPU: 8 * 1024, Memory: 16 * 1024},
+	{CPU: 8 * 1024, Memory: 20 * 1024},
+	{CPU: 8 * 1024, Memory: 24 * 1024},
+	{CPU: 8 * 1024, Memory: 28 * 1024},
+	{CPU: 8 * 1024, Memory: 32 * 1024},
+	{CPU: 8 * 1024, Memory: 36 * 1024},
+	{CPU: 8 * 1024, Memory: 40 * 1024},
+	{CPU: 8 * 1024, Memory: 44 * 1024},
+	{CPU: 8 * 1024, Memory: 48 * 1024},
+	{CPU: 8 * 1024, Memory: 52 * 1024},
+	{CPU: 8 * 1024, Memory: 56 * 1024},
+	{CPU: 8 * 1024, Memory: 60 * 1024},
+	{CPU: 16 * 1024, Memory: 32 * 1024},
+	{CPU: 16 * 1024, Memory: 40 * 1024},
+	{CPU: 16 * 1024, Memory: 48 * 1024},
+	{CPU: 16 * 1024, Memory: 56 * 1024},
+	{CPU: 16 * 1024, Memory: 64 * 1024},
+	{CPU: 16 * 1024, Memory: 72 * 1024},
+	{CPU: 16 * 1024, Memory: 80 * 1024},
+	{CPU: 16 * 1024, Memory: 88 * 1024},
+	{CPU: 16 * 1024, Memory: 96 * 1024},
+	{CPU: 16 * 1024, Memory: 104 * 1024},
+	{CPU: 16 * 1024, Memory: 112 * 1024},
+	{CPU: 16 * 1024, Memory: 120 * 1024},
+	{CPU: 16 * 1024, Memory: 128 * 1024},
+	{CPU: 16 * 1024, Memory: 136 * 1024},
+	{CPU: 16 * 1024, Memory: 144 * 1024},
+	{CPU: 16 * 1024, Memory: 152 * 1024},
+	{CPU: 16 * 1024, Memory: 160 * 1024},
 }
 
 func (a *App) IsReviewApp() bool {
@@ -383,7 +420,20 @@ func (a *App) GetDeployStatus(buildARN string) (*DeployStatus, error) {
 	return &i.DeployStatus, nil
 }
 
-// LoadDeployStatus will set the app.DeployStatus value from DDB
+// GetServices will get a list of current services from the deploy status
+func (a *App) GetServices() ([]string, error) {
+	err := a.LoadDeployStatus()
+	if err != nil {
+		return nil, err
+	}
+	services := []string{}
+	for _, process := range a.DeployStatus.Processes {
+		services = append(services, process.Name)
+	}
+	return services, nil
+}
+
+// LoadDeployStatus will get the app.DeployStatus value from DDB
 func (a *App) LoadDeployStatus() error {
 	if a.DeployStatus != nil {
 		return nil
@@ -871,9 +921,12 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 	if a.IsReviewApp() {
 		parameterName = fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s/scaling", a.Name, *a.ReviewApp)
 	} else if a.Pipeline {
-		return fmt.Errorf("scaling/resizing is not supported directly on pipelines")
+		parameterName = fmt.Sprintf("/apppack/pipelines/%s/scaling", a.Name)
 	} else {
 		parameterName = fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
+	}
+	if a.Pipeline && maxProcessCount != nil && minProcessCount != nil && *maxProcessCount != *minProcessCount {
+		return fmt.Errorf("auto-scaling is not supported on pipelines")
 	}
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
 		Name: &parameterName,
@@ -932,114 +985,6 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 	return nil
 }
 
-type ScheduledTask struct {
-	Schedule string `json:"schedule"`
-	Command  string `json:"command"`
-}
-
-// ScheduledTasks lists scheduled tasks for the app
-func (a *App) ScheduledTasks() ([]*ScheduledTask, error) {
-	ssmSvc := ssm.New(a.Session)
-	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
-		Name: &parameterName,
-	})
-	var tasks []*ScheduledTask
-	if err != nil {
-		tasks = []*ScheduledTask{}
-	} else if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &tasks); err != nil {
-		return nil, err
-	}
-	return tasks, nil
-}
-
-// CreateScheduledTask adds a scheduled task for the app
-func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, error) {
-	if err := a.ValidateCronString(schedule); err != nil {
-		return nil, err
-	}
-	ssmSvc := ssm.New(a.Session)
-	tasks, err := a.ScheduledTasks()
-	if err != nil {
-		return nil, err
-	}
-	tasks = append(tasks, &ScheduledTask{
-		Schedule: strings.TrimSpace(schedule),
-		Command:  strings.TrimSpace(command),
-	})
-	// avoid exceeding AWS quota
-	tasksBySchedule := map[string][]string{}
-	for _, task := range tasks {
-		tasksBySchedule[task.Schedule] = append(tasksBySchedule[task.Schedule], task.Command)
-	}
-	for schedule, commands := range tasksBySchedule {
-		if len(commands) > 5 {
-			return nil, fmt.Errorf("AWS quota limits a single schedule to no more than 5 tasks (%s)", schedule)
-		}
-	}
-	tasksBytes, err := json.Marshal(tasks)
-	if err != nil {
-		return nil, err
-	}
-	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-		Name:      &parameterName,
-		Value:     aws.String(string(tasksBytes)),
-		Overwrite: aws.Bool(true),
-		Type:      aws.String("String"),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return tasks, nil
-}
-
-// DeleteScheduledTask deletes the scheduled task at the given index
-func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
-	ssmSvc := ssm.New(a.Session)
-	tasks, err := a.ScheduledTasks()
-	if err != nil {
-		return nil, err
-	}
-	if idx > len(tasks) || idx < 0 {
-		return nil, fmt.Errorf("invalid index for task to delete")
-	}
-	taskToDelete := tasks[idx]
-	tasks = append(tasks[:idx], tasks[idx+1:]...)
-	tasksBytes, err := json.Marshal(tasks)
-	if err != nil {
-		return nil, err
-	}
-	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
-		Name:      &parameterName,
-		Value:     aws.String(string(tasksBytes)),
-		Overwrite: aws.Bool(true),
-		Type:      aws.String("String"),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return taskToDelete, nil
-}
-
-// ValidateCronString validates a cron schedule rule
-func (a *App) ValidateCronString(rule string) error {
-	eventSvc := eventbridge.New(a.Session)
-	ruleName := fmt.Sprintf("apppack-validate-%s", uuid.New().String())
-	_, err := eventSvc.PutRule(&eventbridge.PutRuleInput{
-		Name:               &ruleName,
-		ScheduleExpression: aws.String(fmt.Sprintf("cron(%s)", rule)),
-		State:              aws.String("DISABLED"),
-	})
-	if err == nil {
-		eventSvc.DeleteRule(&eventbridge.DeleteRuleInput{
-			Name: &ruleName,
-		})
-	}
-	return err
-}
-
 // Init will pull in app settings from DyanmoDB and provide helper
 func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	var reviewApp *string
@@ -1059,6 +1004,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	if awsCredentials {
 		sess = session.Must(session.NewSession())
 		app.Session = sess
+		app.aws = apppackaws.New(sess)
 		err := app.LoadSettings()
 		if err != nil {
 			return nil, err
@@ -1072,6 +1018,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 		}
 		app.Pipeline = appRole.Pipeline
 		app.Session = sess
+		app.aws = apppackaws.New(sess)
 	}
 	if !app.Pipeline && app.ReviewApp != nil {
 		return nil, fmt.Errorf("%s is a standard app and can't have review apps", name)
