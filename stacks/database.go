@@ -234,7 +234,7 @@ func (a *DatabaseStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 }
 
 func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
-	questions := []*ui.QuestionExtra{}
+	var questions []*ui.QuestionExtra
 	var err error
 	var aurora bool
 	if a.Stack == nil {

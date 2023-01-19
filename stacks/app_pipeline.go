@@ -437,7 +437,7 @@ func (a *AppStack) CanChangeParameter(name string) (bool, error) {
 }
 
 func (a *AppStack) AskQuestions(sess *session.Session) error {
-	questions := []*ui.QuestionExtra{}
+	var questions []*ui.QuestionExtra
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(
