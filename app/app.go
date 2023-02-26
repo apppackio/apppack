@@ -292,7 +292,7 @@ func (a *App) ReviewAppSettings() (*Settings, error) {
 }
 
 // TaskDefinition gets the Task Definition for a specific task type
-func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, error) {
+func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, []*ecs.Tag, error) {
 	var family string
 	if a.IsReviewApp() {
 		family = fmt.Sprintf("%s-pr%s-%s", a.Name, *a.ReviewApp, name)
@@ -303,19 +303,30 @@ func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, error) {
 	// verify task exists
 	task, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: &family,
+		Include:        []*string{aws.String("TAGS")},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return task.TaskDefinition, nil
+	return task.TaskDefinition, task.Tags, nil
 }
 
-func (a *App) ShellTaskFamily() (*string, error) {
-	taskDefn, err := a.TaskDefinition("shell")
-	if err != nil {
-		return nil, err
+func buildSystemFromTaskTags(tags []*ecs.Tag) *string {
+	for _, tag := range tags {
+		if *tag.Key == "apppack:buildSystem" {
+			return tag.Value
+		}
 	}
-	return taskDefn.Family, nil
+	return aws.String("")
+}
+
+func (a *App) ShellTaskFamily() (*string, *string, error) {
+	taskDefn, tags, err := a.TaskDefinition("shell")
+	buildSystem := buildSystemFromTaskTags(tags)
+	if err != nil {
+		return nil, nil, err
+	}
+	return taskDefn.Family, buildSystem, nil
 }
 
 // URL is used to lookup the app url from settings
@@ -839,7 +850,7 @@ func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 }
 
 func (a *App) DBDumpLoadFamily() (*string, error) {
-	taskDefn, err := a.TaskDefinition("dbutils")
+	taskDefn, _, err := a.TaskDefinition("dbutils")
 	if err != nil {
 		return nil, err
 	}

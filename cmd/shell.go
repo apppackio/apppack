@@ -118,16 +118,17 @@ func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfig
 }
 
 func interactiveCmd(a *app.App, cmd string) {
-	taskFamily, err := a.ShellTaskFamily()
+	taskFamily, buildSystem, err := a.ShellTaskFamily()
 	checkErr(err)
 	size, err := humanToECSSizeConfiguration(shellCpu, shellMem)
 	checkErr(err)
 	checkErr(a.ValidateECSTaskSize(*size))
-	var exec string
-	if shellRoot {
-		exec = cmd
-	} else {
+	isBuildpack := *buildSystem == "buildpacks" || *buildSystem == ""
+	exec := cmd
+	if isBuildpack && !shellRoot{
 		exec = fmt.Sprintf("su --preserve-environment --pty --command '/cnb/lifecycle/launcher %s' heroku", cmd)
+	} else if !isBuildpack && shellRoot {
+		checkErr(fmt.Errorf("--root is only supported on the buildpack build system"))
 	}
 
 	if shellLive {
