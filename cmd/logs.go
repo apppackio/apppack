@@ -152,7 +152,11 @@ var logsOpenCmd = &cobra.Command{
 		destinationURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudwatch/home#logsV2:logs-insights$3FqueryDetail$3D~(editorString~'%s~source~(~'%s))", region, queryParam, logGroupParam)
 		signinURL, err := a.GetConsoleURL(destinationURL)
 		checkErr(err)
-		browser.OpenURL(*signinURL)
+		err = browser.OpenURL(*signinURL)
+		if err != nil {
+			fmt.Println("Open this URL in your browser to view logs:")
+			fmt.Println(*signinURL)
+		}
 	},
 }
 

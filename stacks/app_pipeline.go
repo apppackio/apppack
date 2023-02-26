@@ -742,7 +742,11 @@ func verifySourceCredentials(sess *session.Session, repositoryType string) error
 		url, err := auth.GetConsoleURL(sess, newProjectURL)
 		if err == nil && isatty.IsTerminal(os.Stdin.Fd()) {
 			fmt.Println("Opening the CodeBuild new project page now...")
-			browser.OpenURL(*url)
+			err = browser.OpenURL(*url)
+			if err != nil {
+				fmt.Println("Open this URL in your browser to view logs:")
+				fmt.Println(*url)
+			}
 		} else {
 			fmt.Printf("Visit the following URL to authenticate: %s", newProjectURL)
 		}

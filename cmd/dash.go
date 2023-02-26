@@ -200,7 +200,7 @@ func UpdateDashContent(c *container.Container, metric metrics.AppMetrics, ctx co
 	checkErr(err)
 	events, err := serviceEventsText(metric.GetApp(), metric.GetOptions(), metric.GetService(), ctx)
 	checkErr(err)
-	c.Update(
+	checkErr(c.Update(
 		contentContainerID,
 		container.SplitHorizontal(
 			container.Top(
@@ -221,7 +221,7 @@ func UpdateDashContent(c *container.Container, metric metrics.AppMetrics, ctx co
 			),
 			container.SplitPercent(70),
 		),
-	)
+	))
 }
 
 // dashCmd represents the dash command

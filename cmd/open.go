@@ -34,7 +34,11 @@ var openCmd = &cobra.Command{
 		u, err := a.URL(nil)
 		checkErr(err)
 		fmt.Printf("opening %s\n", aurora.Bold(*u))
-		browser.OpenURL(*u)
+		err = browser.OpenURL(*u)
+		if err != nil {
+			fmt.Println("Open this URL in your browser to view logs:")
+			fmt.Println(*u)
+		}
 	},
 }
 
