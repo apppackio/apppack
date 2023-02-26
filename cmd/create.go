@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/stacks"
@@ -26,6 +25,8 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var createChangeSet bool
@@ -42,7 +43,8 @@ func CreateStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.
 	}
 	checkErr(stack.UpdateFromFlags(flags))
 	ui.Spinner.Stop()
-	fmt.Print(aurora.Green(fmt.Sprintf("🏗  Creating %s `%s` in %s", strings.Title(stack.StackType()), name, *sess.Config.Region)).String())
+	caser := cases.Title(language.English)
+	fmt.Print(aurora.Green(fmt.Sprintf("🏗  Creating %s `%s` in %s", caser.String(stack.StackType()), name, *sess.Config.Region)).String())
 	if CurrentAccountRole != nil {
 		fmt.Print(aurora.Green(fmt.Sprintf(" on %s", CurrentAccountRole.GetAccountName())).String())
 	}

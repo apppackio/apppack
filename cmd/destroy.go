@@ -17,13 +17,14 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // DestroyStackCmd destroys the given stack after user confirmation
@@ -39,7 +40,8 @@ func DestroyStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 	}
 	stackName := stack.GetStack().StackName
 	ui.Spinner.Stop()
-	confirmAction(fmt.Sprintf("This will permanently destroy all resources in the `%s` %s stack.", name, strings.Title(stack.StackType())), *stackName)
+	caser := cases.Title(language.English)
+	confirmAction(fmt.Sprintf("This will permanently destroy all resources in the `%s` %s stack.", name, caser.String(stack.StackType())), *stackName)
 	ui.StartSpinner()
 	// retry deletion once on failure for transient errors
 	retry := true

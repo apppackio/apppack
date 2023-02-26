@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -228,7 +227,7 @@ var configImportCmd = &cobra.Command{
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
-		data, err := ioutil.ReadFile(args[0])
+		data, err := os.ReadFile(args[0])
 		if err != nil {
 			fmt.Print(err)
 		}

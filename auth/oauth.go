@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -54,7 +54,7 @@ func (o *OauthConfig) GetDeviceCode() (*DeviceCodeResp, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		text, _ := ioutil.ReadAll(resp.Body)
+		text, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("%s", text)
 	}
 	var data DeviceCodeResp
@@ -92,7 +92,7 @@ func (o *OauthConfig) TokenRequest(jsonData []byte) (*Tokens, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	contents, err := ioutil.ReadAll(resp.Body)
+	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func readCacheFile(name string) ([]byte, error) {
 		return nil, err
 	}
 	defer file.Close()
-	return ioutil.ReadAll(file)
+	return io.ReadAll(file)
 }
 
 func TokensFromCache() (*Tokens, error) {

@@ -3,7 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -64,7 +64,7 @@ func (t *Tokens) GetUserInfo() (*UserInfo, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	contents, err := ioutil.ReadAll(resp.Body)
+	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (t *Tokens) GetAppList() ([]*AppRole, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	contents, err := ioutil.ReadAll(resp.Body)
+	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (t *Tokens) GetAdminList() ([]*AdminRole, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	contents, err := ioutil.ReadAll(resp.Body)
+	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

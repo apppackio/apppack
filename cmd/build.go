@@ -33,6 +33,8 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const indentStr = "    "
@@ -159,7 +161,8 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 		lastUpdate = currentPhase.Phase.StartTime()
 		// phase changed since last iteration
 		if lastPhase == nil || lastPhase.Name != currentPhase.Name {
-			status = fmt.Sprintf("%s started", strings.Title(currentPhase.Name))
+			caser := cases.Title(language.English)
+			status = fmt.Sprintf("%s started", caser.String(currentPhase.Name))
 			ui.Spinner.Stop()
 			ui.Spinner.Suffix = ""
 			if lastPhase != nil && lastPhase.Name == "Test" {
@@ -396,7 +399,8 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 			}
 		} else if *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD" {
 			ui.StartSpinner()
-			ui.Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", strings.Title(strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " "))))
+			caser := cases.Title(language.English)
+			ui.Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", caser.String(strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " "))))
 		} else {
 			logrus.WithFields(logrus.Fields{"phase": *build.CurrentPhase}).Debug("watch build stopped")
 			if buildLogTailing {
@@ -469,7 +473,8 @@ func watchReleasePhase(a *app.App, buildStatus *app.BuildStatus) error {
 				stopTailing <- true
 				ui.StartSpinner()
 			}
-			ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
+			caser := cases.Title(language.English)
+			ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", caser.String(strings.ToLower(status)))
 		}
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
@@ -516,7 +521,8 @@ func watchPostdeployPhase(a *app.App, buildStatus *app.BuildStatus) error {
 				stopTailing <- true
 				ui.StartSpinner()
 			}
-			ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
+			caser := cases.Title(language.English)
+			ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", caser.String(strings.ToLower(status)))
 		}
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)

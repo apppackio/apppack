@@ -28,6 +28,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/logrusorgru/aurora"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/spf13/cobra"
 )
@@ -49,7 +51,8 @@ func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
 		if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 			return fmt.Errorf("task is not running -- last status: %s", status)
 		}
-		ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", strings.Title(strings.ToLower(status)))
+		caser := cases.Title(language.English)
+		ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", caser.String(strings.ToLower(status)))
 	}
 	ui.Spinner.Suffix = ""
 	return nil

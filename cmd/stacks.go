@@ -27,6 +27,8 @@ import (
 	"github.com/juju/ansiterm/tabwriter"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type stackHumanize struct {
@@ -90,7 +92,8 @@ var stacksCmd = &cobra.Command{
 				w.Flush()
 				currentGroup = humanStack.Type
 				fmt.Println()
-				ui.PrintHeaderln(strings.Title(fmt.Sprintf("%s Stacks", currentGroup)))
+				caser := cases.Title(language.English)
+				ui.PrintHeaderln(caser.String(fmt.Sprintf("%s Stacks", currentGroup)))
 				if humanStack.Cluster != "" {
 					fmt.Fprintf(w, "%s\t%s\t\n", aurora.Faint("Name"), aurora.Faint("Cluster"))
 				} else {
