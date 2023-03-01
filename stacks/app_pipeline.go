@@ -64,12 +64,14 @@ var DefaultAppStackParameters = AppStackParameters{
 }
 
 var DefaultPipelineStackParameters = AppStackParameters{
-	Type:                "pipeline",
-	HealthCheckPath:     DefaultAppStackParameters.HealthCheckPath,
-	HealthcheckInterval: DefaultAppStackParameters.HealthcheckInterval,
-	DeregistrationDelay: DefaultAppStackParameters.DeregistrationDelay,
-	Fargate:             DefaultAppStackParameters.Fargate,
-	BuildWebhook:        DefaultAppStackParameters.BuildWebhook,
+	Type:                               "pipeline",
+	HealthCheckPath:                    DefaultAppStackParameters.HealthCheckPath,
+	HealthcheckInterval:                DefaultAppStackParameters.HealthcheckInterval,
+	LogRetentionDays:                   DefaultAppStackParameters.LogRetentionDays,
+	DefaultAutoscalingAverageCpuTarget: DefaultAppStackParameters.DefaultAutoscalingAverageCpuTarget,
+	DeregistrationDelay:                DefaultAppStackParameters.DeregistrationDelay,
+	Fargate:                            DefaultAppStackParameters.Fargate,
+	BuildWebhook:                       DefaultAppStackParameters.BuildWebhook,
 }
 
 func (p *AppStackParameters) Import(parameters []*cloudformation.Parameter) error {
