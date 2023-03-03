@@ -89,6 +89,7 @@ type CustomDomainStackParameters struct {
 	HostedZone       string
 	ClusterStackName string
 	PrimaryDomain    string
+	CertificateName  string
 	AltDomain1       string
 	AltDomain2       string
 	AltDomain3       string
@@ -141,6 +142,8 @@ func (p *CustomDomainStackParameters) SetInternalFields(sess *session.Session, n
 	}
 	p.HostedZone = strings.Split(*zone.Id, "/")[2]
 	ui.Spinner.Stop()
+	// `*` is not allowed in certificate names
+	p.CertificateName = strings.Replace(*name, "*", "wildcard", -1)
 	return nil
 }
 
@@ -182,10 +185,9 @@ func (*CustomDomainStack) AskQuestions(_ *session.Session) error {
 }
 
 func (*CustomDomainStack) StackName(name *string) *string {
-	stackName := fmt.Sprintf(
-		customDomainStackNameTmpl,
-		strings.ReplaceAll(strings.TrimSuffix(*name, "."), ".", "-"),
-	)
+	slug := strings.ReplaceAll(strings.TrimSuffix(*name, "."), ".", "-")
+	slug = strings.ReplaceAll(slug, "*", "wildcard")
+	stackName := fmt.Sprintf(customDomainStackNameTmpl, slug)
 	return &stackName
 }
 
@@ -193,9 +195,9 @@ func (*CustomDomainStack) StackType() string {
 	return "custom domain"
 }
 
-func (*CustomDomainStack) Tags(name *string) []*cloudformation.Tag {
+func (a *CustomDomainStack) Tags(name *string) []*cloudformation.Tag {
 	return []*cloudformation.Tag{
-		{Key: aws.String("apppack:customDomain"), Value: name},
+		{Key: aws.String("apppack:customDomain"), Value: &a.Parameters.CertificateName},
 		// TODO
 		// {Key: aws.String("apppack:appName"), Value: appName},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
