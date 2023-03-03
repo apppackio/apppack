@@ -38,8 +38,7 @@ var ShellBackgroundCommand = []string{
 		"sleep " + fmt.Sprintf("%d", waitForConnect),
 		// As long as a user has a shell open, this task will keep running
 		"while true",
-		"do EXECCMD=\"$(pgrep -f ssm-session-worker\\ ecs-execute-command | wc -l)\"",
-		"test \"$EXECCMD\" -eq 0 && exit",
+		"do test -z \"$(pgrep -f ssm-session-worker\\ ecs-execute-command)\" && exit",
 		// Timeout if exceeds max lifetime
 		"test \"$STOP\" -lt \"$(date +%s)\" && exit 1",
 		"sleep 30",
