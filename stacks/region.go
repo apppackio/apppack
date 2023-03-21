@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
@@ -45,9 +46,17 @@ func (p *RegionStackParameters) ToCloudFormationParameters() ([]*cloudformation.
 // SetInternalFields updates fields that aren't exposed to the user
 func (p *RegionStackParameters) SetInternalFields(sess *session.Session, name *string) error {
 	ui.StartSpinner()
+	parameterName := "/apppack/account/dockerhub-access-token"
 	ssmSvc := ssm.New(sess)
+	// Verify that DockerhubAccessToken exists if it's not set
+	if p.DockerhubAccessToken == "" {
+		logrus.WithFields(logrus.Fields{"parameter": parameterName}).Debug("getting parameter from SSM")
+		_, err := ssmSvc.GetParameter(&ssm.GetParameterInput{Name: &parameterName})
+		ui.Spinner.Stop()
+		return err
+	}
 	_, err := ssmSvc.PutParameter(&ssm.PutParameterInput{
-		Name:  aws.String("/apppack/account/dockerhub-access-token"),
+		Name:  &parameterName,
 		Value: &p.DockerhubAccessToken,
 		Type:  aws.String("SecureString"),
 		Tags: []*ssm.Tag{

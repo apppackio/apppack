@@ -203,7 +203,7 @@ func ModifyStack(sess *session.Session, s Stack, name *string) error {
 		StackName:           s.GetStack().StackName,
 		Parameters:          params,
 		UsePreviousTemplate: aws.Bool(true),
-		Capabilities:        s.GetStack().Capabilities,
+		Capabilities:        s.Capabilities(),
 	})
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func UpdateStack(sess *session.Session, s Stack, name, release *string) error {
 	cfnStack, err := UpdateStackAndWait(sess, &cloudformation.UpdateStackInput{
 		StackName:    s.GetStack().StackName,
 		Parameters:   params,
-		Capabilities: s.GetStack().Capabilities,
+		Capabilities: s.Capabilities(),
 		TemplateURL:  s.TemplateURL(release),
 	})
 	if err != nil {
@@ -273,7 +273,7 @@ func ModifyStackChangeset(sess *session.Session, s Stack, name *string) (string,
 		StackName:           s.GetStack().StackName,
 		UsePreviousTemplate: aws.Bool(true),
 		Parameters:          params,
-		Capabilities:        s.GetStack().Capabilities,
+		Capabilities:        s.Capabilities(),
 	}
 	out, err := CreateChangeSetAndWait(sess, input)
 	if err != nil {
@@ -296,7 +296,7 @@ func UpdateStackChangeset(sess *session.Session, s Stack, name, release *string)
 		StackName:     s.GetStack().StackName,
 		TemplateURL:   s.TemplateURL(release),
 		Parameters:    params,
-		Capabilities:  s.GetStack().Capabilities,
+		Capabilities:  s.Capabilities(),
 	}
 	out, err := CreateChangeSetAndWait(sess, input)
 	if err != nil {
