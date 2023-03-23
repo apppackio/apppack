@@ -30,8 +30,6 @@ var maxLifetime = 12 * 60 * 60
 var waitForConnect = 60
 
 var ShellBackgroundCommand = []string{
-	"/bin/sh",
-	"-c",
 	strings.Join([]string{
 		"STOP=$(($(date +%s)+" + fmt.Sprintf("%d", maxLifetime) + "))",
 		// Give user time to connect

@@ -58,10 +58,10 @@ func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
 	return nil
 }
 
-func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskOverride *ecs.TaskOverride) {
+func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskCommandPrefix []string, taskOverride *ecs.TaskOverride) {
 	task, err := a.StartTask(
 		taskFamily,
-		app.ShellBackgroundCommand,
+		append(taskCommandPrefix, app.ShellBackgroundCommand...),
 		taskOverride,
 		false,
 	)
@@ -128,7 +128,7 @@ func interactiveCmd(a *app.App, cmd string) {
 	checkErr(a.ValidateECSTaskSize(*size))
 	isBuildpack := *buildSystem == "buildpacks" || *buildSystem == ""
 	exec := cmd
-	if isBuildpack && !shellRoot{
+	if isBuildpack && !shellRoot {
 		exec = fmt.Sprintf("su --preserve-environment --pty --command '/cnb/lifecycle/launcher %s' heroku", cmd)
 	} else if !isBuildpack && shellRoot {
 		checkErr(fmt.Errorf("--root is only supported on the buildpack build system"))
@@ -170,7 +170,12 @@ func interactiveCmd(a *app.App, cmd string) {
 		err = a.ConnectToEcsSession(ecsSession)
 		checkErr(err)
 	}
-	StartInteractiveShell(a, taskFamily, &exec, &ecs.TaskOverride{
+	var taskCommandPrefix []string
+	if !isBuildpack {
+		// buildpacks already wrap commands in `bash -c`
+		taskCommandPrefix = []string{"/bin/sh", "-c"}
+	}
+	StartInteractiveShell(a, taskFamily, &exec, taskCommandPrefix, &ecs.TaskOverride{
 		Cpu:    aws.String(fmt.Sprintf("%d", size.CPU)),
 		Memory: aws.String(fmt.Sprintf("%d", size.Memory)),
 	})
