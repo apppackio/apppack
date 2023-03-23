@@ -79,7 +79,7 @@ var dbShellCmd = &cobra.Command{
 		checkErr(err)
 		family, exec, err := a.DBShellTaskInfo()
 		checkErr(err)
-		StartInteractiveShell(a, family, aws.String(fmt.Sprintf("entrypoint.sh %s", *exec)), &ecs.TaskOverride{})
+		StartInteractiveShell(a, family, aws.String(fmt.Sprintf("entrypoint.sh %s", *exec)), []string{"/bin/sh", "-c"}, &ecs.TaskOverride{})
 	},
 }
 
