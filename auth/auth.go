@@ -3,9 +3,8 @@ package auth
 import (
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
 
+	"github.com/apppackio/apppack/state"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -22,17 +21,10 @@ const (
 	clientID      = "x15zAd2hgdbugNWSZz2mP2k5jcZfNFk3"
 	audience      = "https://paaws.lloop.us"
 	grantType     = "urn:ietf:params:oauth:grant-type:device_code"
-	cachePrefix   = "io.apppack"
 )
 
 func Logout() error {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(dir, cachePrefix)
-	logrus.WithFields(logrus.Fields{"path": path}).Debug("emptying user cache")
-	return os.RemoveAll(path)
+	return state.ClearCache()
 }
 
 func AppAWSSession(appName string, sessionDuration int) (*session.Session, *AppRole, error) {
