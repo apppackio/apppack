@@ -70,10 +70,10 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 		return nil, err
 	}
 
-	inProgress := []string{}
-	created := []string{}
-	deleted := []string{}
-	failed := []string{}
+	var inProgress []string
+	var created []string
+	var deleted []string
+	var failed []string
 	// sort oldest to newest so we can catch the first error in the stack
 	sort.Slice(stackresources.StackResources, func(i, j int) bool {
 		return stackresources.StackResources[i].Timestamp.Before(*stackresources.StackResources[j].Timestamp)

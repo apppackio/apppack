@@ -50,7 +50,7 @@ const redrawInterval = 250 * time.Millisecond
 const buttonWidth = 20
 const contentContainerID = "content"
 
-func BuildLineChart(appMetrics metrics.AppMetrics, ctx context.Context) (*linechart.LineChart, *text.Text, error) {
+func BuildLineChart(ctx context.Context, appMetrics metrics.AppMetrics) (*linechart.LineChart, *text.Text, error) {
 	lc, err := linechart.New(
 		append(appMetrics.LineChartOptions(),
 			linechart.AxesCellOpts(cell.FgColor(cell.ColorGray)),
@@ -108,7 +108,7 @@ func periodic(ctx context.Context, interval time.Duration, fn func() error) {
 	}
 }
 
-func serviceEventsText(a *app.App, options *metrics.MetricOptions, service string, ctx context.Context) (*text.Text, error) {
+func serviceEventsText(ctx context.Context, a *app.App, options *metrics.MetricOptions, service string) (*text.Text, error) {
 	textWidget, err := text.New(
 		text.WrapAtWords(),
 		text.RollContent(),
@@ -195,10 +195,10 @@ func populateLineChart(appMetrics metrics.AppMetrics, lc *linechart.LineChart) (
 	return legend, nil
 }
 
-func UpdateDashContent(c *container.Container, metric metrics.AppMetrics, ctx context.Context) {
-	lines, legend, err := BuildLineChart(metric, ctx)
+func UpdateDashContent(ctx context.Context, c *container.Container, metric metrics.AppMetrics) {
+	lines, legend, err := BuildLineChart(ctx, metric)
 	checkErr(err)
-	events, err := serviceEventsText(metric.GetApp(), metric.GetOptions(), metric.GetService(), ctx)
+	events, err := serviceEventsText(ctx, metric.GetApp(), metric.GetOptions(), metric.GetService())
 	checkErr(err)
 	checkErr(c.Update(
 		contentContainerID,
@@ -275,7 +275,7 @@ var dashCmd = &cobra.Command{
 		services, err := a.GetServices()
 		checkErr(err)
 
-		appMetrics := []metrics.AppMetrics{}
+		var appMetrics []metrics.AppMetrics
 		for _, svc := range services {
 			appMetrics = append(appMetrics, &metrics.ServiceUtilizationMetrics{App: a, Options: &options, Service: svc})
 		}
@@ -288,7 +288,7 @@ var dashCmd = &cobra.Command{
 			&metrics.ResponseTimeMetrics{App: a, Options: &options, Stat: "p99"},
 		)
 		currentMetric := appMetrics[0]
-		graphButtons := []widgetapi.Widget{}
+		var graphButtons []widgetapi.Widget
 		for i := range appMetrics {
 			shortcut := i + 1
 			idx := i // create new int in scope for closure below
@@ -304,7 +304,7 @@ var dashCmd = &cobra.Command{
 				func() error {
 					widgetCancel()
 					currentMetric = appMetrics[idx]
-					UpdateDashContent(rootContainer, appMetrics[idx], widgetCtx)
+					UpdateDashContent(widgetCtx, rootContainer, appMetrics[idx])
 					return nil
 				},
 				opts...,
@@ -343,7 +343,7 @@ var dashCmd = &cobra.Command{
 			),
 		)
 		checkErr(err)
-		timeframeButtons := []widgetapi.Widget{}
+		var timeframeButtons []widgetapi.Widget
 
 		for _, tf := range timeframes {
 			thisTimeframe := tf.Clone()
@@ -359,7 +359,7 @@ var dashCmd = &cobra.Command{
 				func() error {
 					widgetCancel()
 					options.Timeframe = *thisTimeframe
-					UpdateDashContent(rootContainer, currentMetric, widgetCtx)
+					UpdateDashContent(widgetCtx, rootContainer, currentMetric)
 					return nil
 				},
 				opts...,
@@ -397,7 +397,7 @@ var dashCmd = &cobra.Command{
 				cancel()
 			}
 		}
-		UpdateDashContent(rootContainer, currentMetric, widgetCtx)
+		UpdateDashContent(widgetCtx, rootContainer, currentMetric)
 		checkErr(termdash.Run(
 			ctx,
 			t,

@@ -78,7 +78,7 @@ func CloudformationParametersToStruct(s Parameters, parameters []*cloudformation
 }
 
 func StructToCloudformationParameters(s Parameters) ([]*cloudformation.Parameter, error) {
-	params := []*cloudformation.Parameter{}
+	var params []*cloudformation.Parameter
 	ref := reflect.ValueOf(s).Elem()
 	if ref.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("expected struct, got %s", ref.Kind())
@@ -143,11 +143,11 @@ func ExportParameters(parameters Parameters, sess *session.Session, name *string
 
 // PruneUnsupportedParameters removes parameters that are not supported by the current stack version
 func PruneUnsupportedParameters(supportedParameters []*cloudformation.Parameter, desiredParameters []*cloudformation.Parameter) []*cloudformation.Parameter {
-	supportedParameterNames := []string{}
+	var supportedParameterNames []string
 	for _, param := range supportedParameters {
 		supportedParameterNames = append(supportedParameterNames, *param.ParameterKey)
 	}
-	prunedParameters := []*cloudformation.Parameter{}
+	var prunedParameters []*cloudformation.Parameter
 	for _, param := range desiredParameters {
 		if stringslice.Contains(*param.ParameterKey, supportedParameterNames) {
 			prunedParameters = append(prunedParameters, param)

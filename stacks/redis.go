@@ -151,7 +151,7 @@ func (a *RedisStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 }
 
 func (a *RedisStack) AskQuestions(sess *session.Session) error {
-	questions := []*ui.QuestionExtra{}
+	var questions []*ui.QuestionExtra
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(
@@ -185,7 +185,8 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 		return err
 	}
-	questions = []*ui.QuestionExtra{}
+	// Clear the questions slice so we can reuse it
+	questions = questions[:0]
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " retrieving instance classes"
 	instanceClasses, err := listElasticacheInstanceClasses(sess)

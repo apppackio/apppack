@@ -137,7 +137,7 @@ func interactiveCmd(a *app.App, cmd string) {
 	if shellLive {
 		tasks, err := a.DescribeTasks()
 		checkErr(err)
-		taskList := []string{}
+		var taskList []string
 		for _, t := range tasks {
 			tag, err := getTag(t.Tags, "apppack:processType")
 			if err != nil {

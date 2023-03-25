@@ -31,12 +31,12 @@ func appList(sess *session.Session) ([]string, error) {
 	type clusterItem struct {
 		SecondaryID string `json:"secondary_id"`
 	}
-	clusterItems := []clusterItem{}
+	var clusterItems []clusterItem
 	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &clusterItems)
 	if err != nil {
 		return nil, err
 	}
-	appNames := []string{}
+	var appNames []string
 	for _, item := range clusterItems {
 		if strings.Contains(item.SecondaryID, "#APP#") {
 			appNames = append(appNames, strings.Split(item.SecondaryID, "#")[2])
@@ -143,7 +143,7 @@ func (p *CustomDomainStackParameters) SetInternalFields(sess *session.Session, n
 	p.HostedZone = strings.Split(*zone.Id, "/")[2]
 	ui.Spinner.Stop()
 	// `*` is not allowed in certificate names
-	p.CertificateName = strings.Replace(*name, "*", "wildcard", -1)
+	p.CertificateName = strings.ReplaceAll(*name, "*", "wildcard")
 	return nil
 }
 
@@ -195,7 +195,7 @@ func (*CustomDomainStack) StackType() string {
 	return "custom domain"
 }
 
-func (a *CustomDomainStack) Tags(name *string) []*cloudformation.Tag {
+func (a *CustomDomainStack) Tags(*string) []*cloudformation.Tag {
 	return []*cloudformation.Tag{
 		{Key: aws.String("apppack:customDomain"), Value: &a.Parameters.CertificateName},
 		// TODO

@@ -76,12 +76,12 @@ func ListStacks(sess *session.Session, cluster *string, addon string) ([]string,
 	if err != nil {
 		return nil, err
 	}
-	i := []stackItem{}
+	var i []stackItem
 	err = dynamodbattribute.UnmarshalListOfMaps(*items, &i)
 	if err != nil {
 		return nil, err
 	}
-	stacks := []string{}
+	var stacks []string
 	var stack Stack
 	for idx := range i {
 		stack = i[idx].Stack
@@ -110,12 +110,12 @@ func ListClusters(sess *session.Session) ([]string, error) {
 	if result.Items == nil {
 		return nil, fmt.Errorf("could not find any AppPack clusters")
 	}
-	i := []stackItem{}
+	var i []stackItem
 	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &i)
 	if err != nil {
 		return nil, err
 	}
-	clusters := []string{}
+	var clusters []string
 	for idx := range i {
 		clusters = append(clusters, i[idx].Stack.Name)
 	}

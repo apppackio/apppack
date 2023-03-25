@@ -33,18 +33,18 @@ func splitSubnet(cidrStr string) ([]string, []string, error) {
 		return nil, nil, fmt.Errorf("valid subnet mask range is %d-%d", minSubnetMask, maxSubnetMask)
 	}
 	subnetMask := net.CIDRMask(mask+4, 32)
-	subnets := []*net.IPNet{}
+	var subnets []*net.IPNet
 	subnets = append(subnets, &net.IPNet{IP: clusterCIDR.IP, Mask: subnetMask})
 	prefix, _ := subnetMask.Size()
 	for i := 0; i < 8; i++ {
 		nextCIDR, _ := cidr.NextSubnet(subnets[i], prefix)
 		subnets = append(subnets, nextCIDR)
 	}
-	publicSubnets := []string{}
+	var publicSubnets []string
 	for i := 0; i < 3; i++ {
 		publicSubnets = append(publicSubnets, subnets[i].String())
 	}
-	privateSubnets := []string{}
+	var privateSubnets []string
 	for i := 6; i < 9; i++ {
 		privateSubnets = append(privateSubnets, subnets[i].String())
 	}
@@ -58,11 +58,11 @@ func checkHostedZone(sess *session.Session, zone *route53.HostedZone) error {
 	if err != nil {
 		return err
 	}
-	actualServers := []string{}
+	var actualServers []string
 	for _, r := range results {
 		actualServers = append(actualServers, strings.TrimSuffix(r.Host, "."))
 	}
-	expectedServers := []string{}
+	var expectedServers []string
 	resp, err := r53svc.GetHostedZone(&route53.GetHostedZoneInput{Id: zone.Id})
 	if err != nil {
 		return err
@@ -214,7 +214,7 @@ func (a *ClusterStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 }
 
 func (a *ClusterStack) AskQuestions(_ *session.Session) error {
-	questions := []*ui.QuestionExtra{}
+	var questions []*ui.QuestionExtra
 	var err error
 	if a.Stack == nil {
 		questions = append(questions, []*ui.QuestionExtra{
