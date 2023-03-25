@@ -27,6 +27,7 @@ func HostedZoneForDomain(sess *session.Session, dnsName string) (*route53.Hosted
 		if err != nil {
 			return nil, err
 		}
+
 		for _, zone := range resp.HostedZones {
 			if IsHostedZoneForDomain(dnsName, zone) && !*zone.Config.PrivateZone {
 				return zone, nil

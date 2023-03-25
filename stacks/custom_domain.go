@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -13,6 +14,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/spf13/pflag"
+)
+
+var (
+	ErrAltDomainNotInSameHostedZone = errors.New("alternate domain must be in the same hosted zone as the primary domain")
+	ErrAppNotFound                  = errors.New("app not found for domain")
 )
 
 // appList gets a list of app names from DynamoDB
@@ -66,7 +72,7 @@ func appForDomain(sess *session.Session, domain string) (*string, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no app found for domain %s", domain)
+	return nil, ErrAppNotFound
 }
 
 func clusterStackForApp(sess *session.Session, appName string) (*string, error) {
@@ -137,10 +143,11 @@ func (p *CustomDomainStackParameters) SetInternalFields(sess *session.Session, n
 			return err
 		}
 		if altZone.Id != zone.Id {
-			return fmt.Errorf("alternate domain %s must be in the same hosted zone as the primary domain %s", *altDomain, *name)
+			return ErrAltDomainNotInSameHostedZone
 		}
 	}
 	p.HostedZone = strings.Split(*zone.Id, "/")[2]
+
 	ui.Spinner.Stop()
 	// `*` is not allowed in certificate names
 	p.CertificateName = strings.ReplaceAll(*name, "*", "wildcard")

@@ -33,6 +33,7 @@ func (b *BooleanOptionProxy) WriteAnswer(_ string, value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unable to convert value to OptionAnswer")
 	}
+
 	if ans.Value == "yes" {
 		*b.Value = true
 	} else {
@@ -60,6 +61,7 @@ func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 	for _, q := range questions {
 		fmt.Println()
 		fmt.Println(aurora.Bold(aurora.White(q.Verbose)))
+
 		if q.HelpText != "" {
 			fmt.Println(q.HelpText)
 		}
@@ -79,6 +81,7 @@ func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 				}
 			}
 		}
+
 		var underline int
 		if p, ok := q.Question.Prompt.(*survey.Input); ok {
 			underline = len(p.Message)

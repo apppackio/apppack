@@ -96,7 +96,7 @@ func (*ServiceUtilizationMetrics) LineChartOptions() []linechart.Option {
 	}
 }
 
-func (s *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
+func (m *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
 	return []*cloudwatch.MetricDataQuery{
 		{
 			Id: aws.String("cpu"),
@@ -107,15 +107,15 @@ func (s *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricData
 					Dimensions: []*cloudwatch.Dimension{
 						{
 							Name:  aws.String("ClusterName"),
-							Value: aws.String(s.App.Settings.Cluster.Name),
+							Value: aws.String(m.App.Settings.Cluster.Name),
 						},
 						{
 							Name:  aws.String("ServiceName"),
-							Value: aws.String(fmt.Sprintf("%s-%s", s.App.Name, s.Service)),
+							Value: aws.String(fmt.Sprintf("%s-%s", m.App.Name, m.Service)),
 						},
 					},
 				},
-				Period: aws.Int64(s.Options.Timeframe.Period()),
+				Period: aws.Int64(m.Options.Timeframe.Period()),
 				Stat:   aws.String("Maximum"),
 			},
 		},
@@ -128,15 +128,15 @@ func (s *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricData
 					Dimensions: []*cloudwatch.Dimension{
 						{
 							Name:  aws.String("ClusterName"),
-							Value: aws.String(s.App.Settings.Cluster.Name),
+							Value: aws.String(m.App.Settings.Cluster.Name),
 						},
 						{
 							Name:  aws.String("ServiceName"),
-							Value: aws.String(fmt.Sprintf("%s-%s", s.App.Name, s.Service)),
+							Value: aws.String(fmt.Sprintf("%s-%s", m.App.Name, m.Service)),
 						},
 					},
 				},
-				Period: aws.Int64(s.Options.Timeframe.Period()),
+				Period: aws.Int64(m.Options.Timeframe.Period()),
 				Stat:   aws.String("Maximum"),
 			},
 		},
@@ -173,10 +173,10 @@ func (*ResponseTimeMetrics) LineChartOptions() []linechart.Option {
 	return []linechart.Option{}
 }
 
-func (s *ResponseTimeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
+func (m *ResponseTimeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
 	return []*cloudwatch.MetricDataQuery{
 		{
-			Id: aws.String(strings.ToLower(s.Stat)),
+			Id: aws.String(strings.ToLower(m.Stat)),
 			MetricStat: &cloudwatch.MetricStat{
 				Metric: &cloudwatch.Metric{
 					Namespace:  aws.String("AWS/ApplicationELB"),
@@ -184,16 +184,16 @@ func (s *ResponseTimeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery 
 					Dimensions: []*cloudwatch.Dimension{
 						{
 							Name:  aws.String("TargetGroup"),
-							Value: aws.String(s.App.Settings.TargetGroup.Suffix),
+							Value: aws.String(m.App.Settings.TargetGroup.Suffix),
 						},
 						{
 							Name:  aws.String("LoadBalancer"),
-							Value: aws.String(s.App.Settings.LoadBalancer.Suffix),
+							Value: aws.String(m.App.Settings.LoadBalancer.Suffix),
 						},
 					},
 				},
-				Period: aws.Int64(s.Options.Timeframe.Period()),
-				Stat:   &s.Stat,
+				Period: aws.Int64(m.Options.Timeframe.Period()),
+				Stat:   &m.Stat,
 			},
 		},
 	}
@@ -235,26 +235,26 @@ func (*StatusCodeMetrics) LineChartOptions() []linechart.Option {
 	return []linechart.Option{}
 }
 
-func (s *StatusCodeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
+func (m *StatusCodeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
 	metricDataQueries := []*cloudwatch.MetricDataQuery{
 		{
-			Id: aws.String(fmt.Sprintf("mm%s", s.Code)),
+			Id: aws.String(fmt.Sprintf("mm%s", m.Code)),
 			MetricStat: &cloudwatch.MetricStat{
 				Metric: &cloudwatch.Metric{
 					Namespace:  aws.String("AWS/ApplicationELB"),
-					MetricName: aws.String(fmt.Sprintf("HTTPCode_Target_%s_Count", strings.ToUpper(s.Code))),
+					MetricName: aws.String(fmt.Sprintf("HTTPCode_Target_%s_Count", strings.ToUpper(m.Code))),
 					Dimensions: []*cloudwatch.Dimension{
 						{
 							Name:  aws.String("TargetGroup"),
-							Value: aws.String(s.App.Settings.TargetGroup.Suffix),
+							Value: aws.String(m.App.Settings.TargetGroup.Suffix),
 						},
 						{
 							Name:  aws.String("LoadBalancer"),
-							Value: aws.String(s.App.Settings.LoadBalancer.Suffix),
+							Value: aws.String(m.App.Settings.LoadBalancer.Suffix),
 						},
 					},
 				},
-				Period: aws.Int64(s.Options.Timeframe.Period()),
+				Period: aws.Int64(m.Options.Timeframe.Period()),
 				Stat:   aws.String("Sum"),
 			},
 		},

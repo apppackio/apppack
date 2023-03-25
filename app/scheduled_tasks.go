@@ -17,7 +17,7 @@ type ScheduledTask struct {
 // ScheduledTasks lists scheduled tasks for the app
 func (a *App) ScheduledTasks() ([]*ScheduledTask, error) {
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	value, err := a.aws.GetParameter(&ssm.GetParameterInput{
+	value, err := a.AWS.GetParameter(&ssm.GetParameterInput{
 		Name: &parameterName,
 	})
 	var tasks []*ScheduledTask
@@ -31,13 +31,14 @@ func (a *App) ScheduledTasks() ([]*ScheduledTask, error) {
 
 // CreateScheduledTask adds a scheduled task for the app
 func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, error) {
-	if err := a.aws.ValidateEventbridgeCron(schedule); err != nil {
+	if err := a.AWS.ValidateEventbridgeCron(schedule); err != nil {
 		return nil, err
 	}
 	tasks, err := a.ScheduledTasks()
 	if err != nil {
 		return nil, err
 	}
+
 	tasks = append(tasks, &ScheduledTask{
 		Schedule: strings.TrimSpace(schedule),
 		Command:  strings.TrimSpace(command),
@@ -57,7 +58,7 @@ func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, e
 		return nil, err
 	}
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	err = a.aws.PutParameter(&ssm.PutParameterInput{
+	err = a.AWS.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Value:     aws.String(string(tasksBytes)),
 		Overwrite: aws.Bool(true),
@@ -85,7 +86,7 @@ func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
 		return nil, err
 	}
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
-	err = a.aws.PutParameter(&ssm.PutParameterInput{
+	err = a.AWS.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Value:     aws.String(string(tasksBytes)),
 		Overwrite: aws.Bool(true),

@@ -15,6 +15,7 @@ import (
 
 func ddbItem(sess *session.Session, primaryID, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
 	ddbSvc := dynamodb.New(sess)
+
 	logrus.WithFields(logrus.Fields{"primaryID": primaryID, "secondaryID": secondaryID}).Debug("DynamoDB GetItem")
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("apppack"),
@@ -50,6 +51,7 @@ func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error)
 			}
 			parameters = append(parameters, parameter)
 		}
+
 		return !lastPage
 	})
 	if err != nil {

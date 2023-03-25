@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -56,7 +57,7 @@ type App struct {
 	ECSConfig             *ECSConfig
 	DeployStatus          *DeployStatus
 	PendingDeployStatuses []*DeployStatus
-	aws                   apppackaws.AWSInterface
+	AWS                   apppackaws.AWSInterface
 }
 
 // ReviewApp is a representation of a AppPack review app
@@ -160,86 +161,93 @@ type ECSSizeConfiguration struct {
 	Memory int
 }
 
+var (
+	QuarterCPU = 256
+	HalfCPU    = 512
+	FullCPU    = 1024
+	OneGB      = 1024
+)
+
 var FargateSupportedConfigurations = []ECSSizeConfiguration{
-	{CPU: 256, Memory: 512},
-	{CPU: 256, Memory: 1024},
-	{CPU: 256, Memory: 2 * 1024},
-	{CPU: 512, Memory: 1024},
-	{CPU: 512, Memory: 2 * 1024},
-	{CPU: 512, Memory: 3 * 1024},
-	{CPU: 512, Memory: 4 * 1024},
-	{CPU: 1024, Memory: 2 * 1024},
-	{CPU: 1024, Memory: 3 * 1024},
-	{CPU: 1024, Memory: 4 * 1024},
-	{CPU: 1024, Memory: 5 * 1024},
-	{CPU: 1024, Memory: 6 * 1024},
-	{CPU: 1024, Memory: 7 * 1024},
-	{CPU: 1024, Memory: 8 * 1024},
-	{CPU: 2 * 1024, Memory: 4 * 1024},
-	{CPU: 2 * 1024, Memory: 5 * 1024},
-	{CPU: 2 * 1024, Memory: 6 * 1024},
-	{CPU: 2 * 1024, Memory: 7 * 1024},
-	{CPU: 2 * 1024, Memory: 8 * 1024},
-	{CPU: 2 * 1024, Memory: 9 * 1024},
-	{CPU: 2 * 1024, Memory: 10 * 1024},
-	{CPU: 2 * 1024, Memory: 11 * 1024},
-	{CPU: 2 * 1024, Memory: 12 * 1024},
-	{CPU: 2 * 1024, Memory: 13 * 1024},
-	{CPU: 2 * 1024, Memory: 14 * 1024},
-	{CPU: 2 * 1024, Memory: 15 * 1024},
-	{CPU: 2 * 1024, Memory: 16 * 1024},
-	{CPU: 4 * 1024, Memory: 8 * 1024},
-	{CPU: 4 * 1024, Memory: 9 * 1024},
-	{CPU: 4 * 1024, Memory: 10 * 1024},
-	{CPU: 4 * 1024, Memory: 11 * 1024},
-	{CPU: 4 * 1024, Memory: 12 * 1024},
-	{CPU: 4 * 1024, Memory: 13 * 1024},
-	{CPU: 4 * 1024, Memory: 14 * 1024},
-	{CPU: 4 * 1024, Memory: 15 * 1024},
-	{CPU: 4 * 1024, Memory: 16 * 1024},
-	{CPU: 4 * 1024, Memory: 17 * 1024},
-	{CPU: 4 * 1024, Memory: 18 * 1024},
-	{CPU: 4 * 1024, Memory: 19 * 1024},
-	{CPU: 4 * 1024, Memory: 20 * 1024},
-	{CPU: 4 * 1024, Memory: 21 * 1024},
-	{CPU: 4 * 1024, Memory: 22 * 1024},
-	{CPU: 4 * 1024, Memory: 23 * 1024},
-	{CPU: 4 * 1024, Memory: 24 * 1024},
-	{CPU: 4 * 1024, Memory: 25 * 1024},
-	{CPU: 4 * 1024, Memory: 26 * 1024},
-	{CPU: 4 * 1024, Memory: 27 * 1024},
-	{CPU: 4 * 1024, Memory: 28 * 1024},
-	{CPU: 4 * 1024, Memory: 29 * 1024},
-	{CPU: 4 * 1024, Memory: 30 * 1024},
-	{CPU: 8 * 1024, Memory: 16 * 1024},
-	{CPU: 8 * 1024, Memory: 20 * 1024},
-	{CPU: 8 * 1024, Memory: 24 * 1024},
-	{CPU: 8 * 1024, Memory: 28 * 1024},
-	{CPU: 8 * 1024, Memory: 32 * 1024},
-	{CPU: 8 * 1024, Memory: 36 * 1024},
-	{CPU: 8 * 1024, Memory: 40 * 1024},
-	{CPU: 8 * 1024, Memory: 44 * 1024},
-	{CPU: 8 * 1024, Memory: 48 * 1024},
-	{CPU: 8 * 1024, Memory: 52 * 1024},
-	{CPU: 8 * 1024, Memory: 56 * 1024},
-	{CPU: 8 * 1024, Memory: 60 * 1024},
-	{CPU: 16 * 1024, Memory: 32 * 1024},
-	{CPU: 16 * 1024, Memory: 40 * 1024},
-	{CPU: 16 * 1024, Memory: 48 * 1024},
-	{CPU: 16 * 1024, Memory: 56 * 1024},
-	{CPU: 16 * 1024, Memory: 64 * 1024},
-	{CPU: 16 * 1024, Memory: 72 * 1024},
-	{CPU: 16 * 1024, Memory: 80 * 1024},
-	{CPU: 16 * 1024, Memory: 88 * 1024},
-	{CPU: 16 * 1024, Memory: 96 * 1024},
-	{CPU: 16 * 1024, Memory: 104 * 1024},
-	{CPU: 16 * 1024, Memory: 112 * 1024},
-	{CPU: 16 * 1024, Memory: 120 * 1024},
-	{CPU: 16 * 1024, Memory: 128 * 1024},
-	{CPU: 16 * 1024, Memory: 136 * 1024},
-	{CPU: 16 * 1024, Memory: 144 * 1024},
-	{CPU: 16 * 1024, Memory: 152 * 1024},
-	{CPU: 16 * 1024, Memory: 160 * 1024},
+	{CPU: QuarterCPU, Memory: OneGB / 2},
+	{CPU: QuarterCPU, Memory: OneGB},
+	{CPU: QuarterCPU, Memory: 2 * OneGB},
+	{CPU: HalfCPU, Memory: OneGB},
+	{CPU: HalfCPU, Memory: 2 * OneGB},
+	{CPU: HalfCPU, Memory: 3 * OneGB},
+	{CPU: HalfCPU, Memory: 4 * OneGB},
+	{CPU: FullCPU, Memory: 2 * OneGB},
+	{CPU: FullCPU, Memory: 3 * OneGB},
+	{CPU: FullCPU, Memory: 4 * OneGB},
+	{CPU: FullCPU, Memory: 5 * OneGB},
+	{CPU: FullCPU, Memory: 6 * OneGB},
+	{CPU: FullCPU, Memory: 7 * OneGB},
+	{CPU: FullCPU, Memory: 8 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 4 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 5 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 6 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 7 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 8 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 9 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 10 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 11 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 12 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 13 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 14 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 15 * OneGB},
+	{CPU: 2 * FullCPU, Memory: 16 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 8 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 9 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 10 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 11 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 12 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 13 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 14 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 15 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 16 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 17 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 18 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 19 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 20 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 21 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 22 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 23 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 24 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 25 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 26 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 27 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 28 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 29 * OneGB},
+	{CPU: 4 * FullCPU, Memory: 30 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 16 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 20 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 24 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 28 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 32 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 36 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 40 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 44 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 48 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 52 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 56 * OneGB},
+	{CPU: 8 * FullCPU, Memory: 60 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 32 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 40 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 48 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 56 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 64 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 72 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 80 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 88 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 96 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 104 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 112 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 120 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 128 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 136 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 144 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 152 * OneGB},
+	{CPU: 16 * FullCPU, Memory: 160 * OneGB},
 }
 
 func (a *App) IsReviewApp() bool {
@@ -261,6 +269,7 @@ func (a *App) ValidateECSTaskSize(size ECSSizeConfiguration) error {
 	}
 	if fargate {
 		logrus.Debug("fargate task detected")
+
 		for _, supported := range FargateSupportedConfigurations {
 			if supported.CPU == size.CPU && supported.Memory == size.Memory {
 				return nil
@@ -333,19 +342,21 @@ func (a *App) ShellTaskFamily() (*string, *string, error) {
 func (a *App) URL(reviewApp *string) (*string, error) {
 	var settings *Settings
 	var err error
-	if reviewApp != nil {
+
+	switch {
+	case reviewApp != nil:
 		a.ReviewApp = reviewApp
 		settings, err = a.ReviewAppSettings()
 		if err != nil {
 			return nil, err
 		}
 		a.ReviewApp = nil
-	} else if a.IsReviewApp() {
+	case a.IsReviewApp():
 		settings, err = a.ReviewAppSettings()
 		if err != nil {
 			return nil, err
 		}
-	} else {
+	default:
 		err := a.LoadSettings()
 		if err != nil {
 			return nil, err
@@ -371,6 +382,7 @@ func (a *App) GetReviewApps() ([]*ReviewApp, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		reviewApps = append(reviewApps, &r)
 	}
 	return reviewApps, nil
@@ -583,9 +595,10 @@ func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, e
 	for retries > 0 {
 		time.Sleep(2 * time.Second)
 		out, err := ecsSvc.ExecuteCommand(&execCmdInput)
+		var aerr awserr.Error
 		if err == nil {
 			return out.Session, nil
-		} else if aerr, ok := err.(awserr.Error); ok {
+		} else if errors.As(err, &aerr) {
 			if aerr.Code() != ecs.ErrCodeInvalidParameterException {
 				return nil, err
 			}
@@ -757,6 +770,7 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 			}
 			taskARNs = append(taskARNs, taskARN)
 		}
+
 		return !lastPage
 	})
 	if err != nil {
@@ -799,6 +813,7 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 
 func (a *App) GetECSEvents(service string) ([]*ecs.ServiceEvent, error) {
 	ecsSvc := ecs.New(a.Session)
+
 	if err := a.LoadSettings(); err != nil {
 		return nil, err
 	}
@@ -898,6 +913,7 @@ func (a *App) DBShellTaskInfo() (*string, *string, error) {
 	}
 
 	var family string
+
 	if a.IsReviewApp() {
 		exec = fmt.Sprintf("%s %s-pr%s", exec, a.Name, *a.ReviewApp)
 		family = fmt.Sprintf("%s-pr%s-dbshell", a.Name, *a.ReviewApp)
@@ -997,6 +1013,7 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 // Init will pull in app settings from DyanmoDB and provide helper
 func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	var reviewApp *string
+
 	if strings.Contains(name, ":") {
 		parts := strings.Split(name, ":")
 		name = parts[0]
@@ -1013,7 +1030,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	if awsCredentials {
 		sess = session.Must(session.NewSession())
 		app.Session = sess
-		app.aws = apppackaws.New(sess)
+		app.AWS = apppackaws.New(sess)
 		err := app.LoadSettings()
 		if err != nil {
 			return nil, err
@@ -1027,7 +1044,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 		}
 		app.Pipeline = appRole.Pipeline
 		app.Session = sess
-		app.aws = apppackaws.New(sess)
+		app.AWS = apppackaws.New(sess)
 	}
 	if !app.Pipeline && app.ReviewApp != nil {
 		return nil, fmt.Errorf("%s is a standard app and can't have review apps", name)

@@ -167,11 +167,14 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 	if a.Parameters.InstanceClass == "" {
 		a.Parameters.InstanceClass = DefaultRedisStackParameters.InstanceClass
 	}
+
 	questions = append(questions, []*ui.QuestionExtra{
 		{
-			Verbose:  "Should this Redis instance be setup in multiple availability zones?",
-			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, but double the cost at AWS. For more info see https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html.",
-			WriteTo:  &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
+			Verbose: "Should this Redis instance be setup in multiple availability zones?",
+			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, " +
+				"but double the cost at AWS. For more info see " +
+				"https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html.",
+			WriteTo: &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
 			Question: &survey.Question{
 				Prompt: &survey.Select{
 					Message:       "Multi AZ",
@@ -187,6 +190,7 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 	}
 	// Clear the questions slice so we can reuse it
 	questions = questions[:0]
+
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " retrieving instance classes"
 	instanceClasses, err := listElasticacheInstanceClasses(sess)
@@ -195,6 +199,7 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 	}
 	ui.Spinner.Stop()
 	ui.Spinner.Suffix = ""
+
 	questions = append(questions, []*ui.QuestionExtra{
 		{
 			Verbose:  "What instance class should be used for this Redis instance?",
@@ -216,6 +221,7 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 
 func (*RedisStack) StackName(name *string) *string {
 	stackName := fmt.Sprintf(redisStackNameTmpl, *name)
+
 	return &stackName
 }
 

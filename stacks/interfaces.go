@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -16,6 +17,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
+
+var ErrStackCreationFailed = errors.New("stack creation failed")
 
 type Parameters interface {
 	Import([]*cloudformation.Parameter) error
@@ -44,9 +47,11 @@ func CloudformationParametersToStruct(s Parameters, parameters []*cloudformation
 		field, ok := ref.FieldByName(*param.ParameterKey)
 		if !ok {
 			logrus.WithFields(logrus.Fields{"name": *param.ParameterKey}).Debug("unable to match Parameter")
+
 			continue
 		}
 		val := reflect.ValueOf(s).Elem().FieldByName(*param.ParameterKey)
+
 		switch field.Type.Kind() {
 		case reflect.String:
 			val.SetString(*param.ParameterValue)
@@ -55,7 +60,7 @@ func CloudformationParametersToStruct(s Parameters, parameters []*cloudformation
 			if field.Tag.Get("cfnbool") == "yesno" {
 				trueVal = "yes"
 			} else {
-				trueVal = "enabled"
+				trueVal = Enabled
 			}
 			if *param.ParameterValue == trueVal {
 				val.SetBool(true)
@@ -87,6 +92,7 @@ func StructToCloudformationParameters(s Parameters) ([]*cloudformation.Parameter
 	for i, field := range fields {
 		f := reflect.ValueOf(s).Elem().Field(i)
 		var param *cloudformation.Parameter
+
 		switch field.Type.Kind() {
 		case reflect.String:
 			param = &cloudformation.Parameter{
@@ -101,7 +107,7 @@ func StructToCloudformationParameters(s Parameters) ([]*cloudformation.Parameter
 				trueVal = "yes"
 				falseVal = "no"
 			} else {
-				trueVal = "enabled"
+				trueVal = Enabled
 				falseVal = "disabled"
 			}
 			if f.Bool() {
@@ -128,6 +134,7 @@ func StructToCloudformationParameters(s Parameters) ([]*cloudformation.Parameter
 		default:
 			return nil, fmt.Errorf("unable to convert field %s to parameter", field.Name)
 		}
+
 		params = append(params, param)
 	}
 	return params, nil
@@ -185,7 +192,7 @@ func CreateStack(sess *session.Session, s Stack, name, release *string) error {
 		return err
 	}
 	if *cfnStack.StackStatus != "CREATE_COMPLETE" {
-		return fmt.Errorf("stack creation failed: %s", *cfnStack.StackStatus)
+		return ErrStackCreationFailed
 	}
 	s.SetStack(cfnStack)
 	s.PostCreate(sess)
@@ -256,7 +263,12 @@ func CreateStackChangeset(sess *session.Session, s Stack, name, release *string)
 	if err != nil {
 		return "", err
 	}
-	url := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/changesets/changes?stackId=%s&changeSetId=%s", *sess.Config.Region, url.QueryEscape(*out.StackId), url.QueryEscape(*out.ChangeSetId))
+	url := fmt.Sprintf(
+		"https://%s.console.aws.amazon.com/cloudformation/home#/stacks/changesets/changes?stackId=%s&changeSetId=%s",
+		*sess.Config.Region,
+		url.QueryEscape(*out.StackId),
+		url.QueryEscape(*out.ChangeSetId),
+	)
 	return url, nil
 }
 
@@ -265,10 +277,10 @@ func ModifyStackChangeset(sess *session.Session, s Stack, name *string) (string,
 	if err != nil {
 		return "", err
 	}
-	type_ := "UPDATE"
-	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(type_), int32(time.Now().Unix()))
+	method := "UPDATE"
+	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(method), int32(time.Now().Unix()))
 	input := &cloudformation.CreateChangeSetInput{
-		ChangeSetType:       &type_,
+		ChangeSetType:       &method,
 		ChangeSetName:       &changeSetName,
 		StackName:           s.GetStack().StackName,
 		UsePreviousTemplate: aws.Bool(true),
@@ -279,7 +291,12 @@ func ModifyStackChangeset(sess *session.Session, s Stack, name *string) (string,
 	if err != nil {
 		return "", err
 	}
-	url := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/changesets/changes?stackId=%s&changeSetId=%s", *sess.Config.Region, url.QueryEscape(*out.StackId), url.QueryEscape(*out.ChangeSetId))
+	url := fmt.Sprintf(
+		"https://%s.console.aws.amazon.com/cloudformation/home#/stacks/changesets/changes?stackId=%s&changeSetId=%s",
+		*sess.Config.Region,
+		url.QueryEscape(*out.StackId),
+		url.QueryEscape(*out.ChangeSetId),
+	)
 	return url, nil
 }
 
@@ -288,10 +305,10 @@ func UpdateStackChangeset(sess *session.Session, s Stack, name, release *string)
 	if err != nil {
 		return "", err
 	}
-	type_ := "UPDATE"
-	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(type_), int32(time.Now().Unix()))
+	method := "UPDATE"
+	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(method), int32(time.Now().Unix()))
 	input := &cloudformation.CreateChangeSetInput{
-		ChangeSetType: &type_,
+		ChangeSetType: &method,
 		ChangeSetName: &changeSetName,
 		StackName:     s.GetStack().StackName,
 		TemplateURL:   s.TemplateURL(release),
@@ -302,6 +319,11 @@ func UpdateStackChangeset(sess *session.Session, s Stack, name, release *string)
 	if err != nil {
 		return "", err
 	}
-	url := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/changesets/changes?stackId=%s&changeSetId=%s", *sess.Config.Region, url.QueryEscape(*out.StackId), url.QueryEscape(*out.ChangeSetId))
+	url := fmt.Sprintf(
+		"https://%s.console.aws.amazon.com/cloudformation/home#/stacks/changesets/changes?stackId=%s&changeSetId=%s",
+		*sess.Config.Region,
+		url.QueryEscape(*out.StackId),
+		url.QueryEscape(*out.ChangeSetId),
+	)
 	return url, nil
 }

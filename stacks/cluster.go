@@ -36,14 +36,17 @@ func splitSubnet(cidrStr string) ([]string, []string, error) {
 	var subnets []*net.IPNet
 	subnets = append(subnets, &net.IPNet{IP: clusterCIDR.IP, Mask: subnetMask})
 	prefix, _ := subnetMask.Size()
+
 	for i := 0; i < 8; i++ {
 		nextCIDR, _ := cidr.NextSubnet(subnets[i], prefix)
 		subnets = append(subnets, nextCIDR)
 	}
+
 	var publicSubnets []string
 	for i := 0; i < 3; i++ {
 		publicSubnets = append(publicSubnets, subnets[i].String())
 	}
+
 	var privateSubnets []string
 	for i := 6; i < 9; i++ {
 		privateSubnets = append(privateSubnets, subnets[i].String())
@@ -147,6 +150,7 @@ func (p *ClusterStackParameters) SetInternalFields(sess *session.Session, _ *str
 		fmt.Sprintf("%sb", *sess.Config.Region),
 		fmt.Sprintf("%sc", *sess.Config.Region),
 	}
+
 	ui.Spinner.Stop()
 	return nil
 }
@@ -237,6 +241,7 @@ func (a *ClusterStack) AskQuestions(_ *session.Session) error {
 
 func (*ClusterStack) StackName(name *string) *string {
 	stackName := fmt.Sprintf(clusterStackNameTmpl, *name)
+
 	return &stackName
 }
 

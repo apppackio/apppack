@@ -16,6 +16,7 @@ import (
 
 func splitReviewAppName(name *string) (string, string) {
 	parts := strings.Split(*name, ":")
+
 	return parts[0], parts[1]
 }
 
@@ -72,7 +73,7 @@ func (p *ReviewAppStackParameters) SetParametersFromPipeline(stack *cloudformati
 	if err != nil {
 		return err
 	}
-	p.SQSQueueEnabled = *sqs == "enabled"
+	p.SQSQueueEnabled = *sqs == Enabled
 
 	customTaskPolicyArn, err := bridge.GetStackOutput(stack.Outputs, "CustomTaskPolicyArn")
 	if err != nil {

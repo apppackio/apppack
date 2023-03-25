@@ -19,4 +19,6 @@ const (
 	regionStackNameTmpl         = "apppack-region-%s"
 	reviewAppFormationURL       = "https://s3.amazonaws.com/apppack-cloudformations/latest/review-app.json"
 	reviewAppStackNameTmpl      = "apppack-reviewapp-%s"
+	Enabled                     = "enabled"
+	DeleteComplete              = "DELETE_COMPLETE"
 )

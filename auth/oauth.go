@@ -52,8 +52,10 @@ func (o *OauthConfig) GetDeviceCode() (*DeviceCodeResp, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		text, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("%s", text)
 	}
 	var data DeviceCodeResp
@@ -95,7 +97,7 @@ func (o *OauthConfig) TokenRequest(jsonData []byte) (*Tokens, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New(string(contents))
 	}
 	var tokens Tokens
@@ -179,7 +181,7 @@ func GetTokens() (*Tokens, error) {
 	}
 	tokens, err = Oauth.RefreshTokens(tokens)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s", TokenRefreshErr, err)
+		return nil, fmt.Errorf("%s: %w", TokenRefreshErr, err)
 	}
 	if err = tokens.WriteToCache(); err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/eventbridge"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // ValidateEventbridgeCron validates a cron schedule rule
@@ -18,9 +19,12 @@ func (a *AWS) ValidateEventbridgeCron(rule string) error {
 		State:              aws.String("DISABLED"),
 	})
 	if err == nil {
-		eventSvc.DeleteRule(&eventbridge.DeleteRuleInput{
+		_, err2 := eventSvc.DeleteRule(&eventbridge.DeleteRuleInput{
 			Name: &ruleName,
 		})
+		if err2 != nil {
+			logrus.WithError(err2).Debug("failed to delete temporary validation rule")
+		}
 	}
 	return err
 }

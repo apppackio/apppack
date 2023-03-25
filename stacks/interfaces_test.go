@@ -31,8 +31,8 @@ func TestStructToCloudformationParameters(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error converting struct to Cloudformation parameters: %s", err)
 	}
-	if *sqsQueueEnabled != "enabled" {
-		t.Errorf("Name parameter did not match: %s != %s", *sqsQueueEnabled, "enabled")
+	if *sqsQueueEnabled != stacks.Enabled {
+		t.Errorf("Name parameter did not match: %s != %s", *sqsQueueEnabled, stacks.Enabled)
 	}
 	loadBalancerRulePriority, err := bridge.GetStackParameter(cfnParams, "LoadBalancerRulePriority")
 	if err != nil {
@@ -53,7 +53,7 @@ func TestStructToCloudformationParameters(t *testing.T) {
 func TestCloudformationParametersToStruct(t *testing.T) {
 	cfnParams := []*cloudformation.Parameter{
 		{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test")},
-		{ParameterKey: aws.String("SQSQueueEnabled"), ParameterValue: aws.String("enabled")},
+		{ParameterKey: aws.String("SQSQueueEnabled"), ParameterValue: aws.String(stacks.Enabled)},
 		{ParameterKey: aws.String("LoadBalancerRulePriority"), ParameterValue: aws.String("20")},
 		{ParameterKey: aws.String("AllowedUsers"), ParameterValue: aws.String("test1,test2")},
 	}

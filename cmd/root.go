@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -87,8 +87,10 @@ func Execute() {
 	// start update check process in the background
 	ctx := context.Background()
 	updateCtx, updateCancel := context.WithCancel(ctx)
+
 	defer updateCancel()
 	updateMessageChan := make(chan *version.ReleaseInfo)
+
 	go func() {
 		rel, err := checkForUpdate(updateCtx, version.Version)
 		if err != nil {
@@ -162,6 +164,7 @@ func confirmAction(message, text string) {
 	printWarning(fmt.Sprintf("%s\n   Are you sure you want to continue?", message))
 	fmt.Printf("\nType %s to confirm.\n%s ", aurora.White(text), aurora.White(">"))
 	var confirm string
+
 	fmt.Scanln(&confirm)
 	if confirm != text {
 		checkErr(fmt.Errorf("aborting due to user input"))

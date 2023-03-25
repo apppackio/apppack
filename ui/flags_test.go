@@ -17,10 +17,13 @@ func TestFlagsToStruct(t *testing.T) {
 	s := TestStruct{}
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	fs.StringSlice("strsl", []string{}, "")
-	fs.Parse([]string{
+	err := fs.Parse([]string{
 		fmt.Sprintf("--strsl=%s", strings.Join(data, ",")),
 	})
-	err := ui.FlagsToStruct(&s, fs)
+	if err != nil {
+		t.Errorf("Error parsing flags: %s", err)
+	}
+	err = ui.FlagsToStruct(&s, fs)
 	if err != nil {
 		t.Errorf("Error converting struct to flags: %s", err)
 	}

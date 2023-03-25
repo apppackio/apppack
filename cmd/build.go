@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -37,7 +37,10 @@ import (
 	"golang.org/x/text/language"
 )
 
-const indentStr = "    "
+const (
+	indentStr = "    "
+	Started   = "started"
+)
 
 func indent(text, indent string) string {
 	if text == "" {
@@ -78,6 +81,7 @@ func printBuild(buildStatus *app.BuildStatus) {
 		fmt.Printf("%s %s", icon[p.Phase.State], p.Name)
 		if (currentPhase != nil && p.Name == currentPhase.Name) || (finalPhase != nil && p.Name == finalPhase.Name) {
 			fmt.Println()
+
 			break
 		}
 		fmt.Print(aurora.Faint("  |  ").String())
@@ -120,11 +124,13 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 	var failedPhase *app.BuildPhase
 	var lastUpdate time.Time
 	var status string
+
 	ui.StartSpinner()
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
 	if err != nil {
 		return err
 	}
+
 	for {
 		// catch up with any already completed phases
 		if lastPhase == nil {
@@ -146,6 +152,7 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 			if err != nil {
 				logrus.Debug("waiting for the next phase to start")
 				time.Sleep(5 * time.Second)
+
 				continue
 			}
 			if finalPhase.Phase.State == "failed" {
@@ -155,6 +162,7 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 				break
 			}
 			time.Sleep(5 * time.Second)
+
 			continue
 		}
 		logrus.WithFields(logrus.Fields{"phase": currentPhase.Name}).Debug("current phase")
@@ -172,6 +180,7 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 			fmt.Printf("\n⚡️ %s\t%s\n", aurora.Yellow(status), aurora.Faint(currentPhase.Phase.StartTime().Local().Format(timeFmt)))
 			ui.StartSpinner()
 			lastPhase = currentPhase
+
 			switch currentPhase.Name {
 			case "Build":
 				err = watchBuildPhase(a, buildStatus)
@@ -334,6 +343,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 	logrus.WithFields(logFields).Debug("starting log tail")
 	stopSignalReceived := false
 	countdown := 60
+
 	for {
 		select {
 		case <-stopTailing:
@@ -380,7 +390,8 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 	codebuildSvc := codebuild.New(a.Session)
 	buildLogTailing := false
 	stopTailing := make(chan bool)
-	for buildStatus.Build.State == "started" {
+
+	for buildStatus.Build.State == Started {
 		buildID := strings.Split(buildStatus.Build.Arns[0], "/")[1]
 		builds, err := codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
 			Ids: []*string{&buildID},
@@ -407,7 +418,6 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 				stopTailing <- true
 			}
 			return nil
-
 		}
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
@@ -429,7 +439,8 @@ func watchTestPhase(a *app.App, buildStatus *app.BuildStatus) error {
 		return S3Log(a.Session, buildStatus.Test.Logs)
 	}
 	go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("test"), stopTailing)
-	for buildStatus.Test.State == "started" {
+
+	for buildStatus.Test.State == Started {
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
 		if err != nil {
@@ -455,7 +466,7 @@ func watchReleasePhase(a *app.App, buildStatus *app.BuildStatus) error {
 	if strings.HasPrefix(buildStatus.Release.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Release.Logs)
 	}
-	for buildStatus.Release.State == "started" {
+	for buildStatus.Release.State == Started {
 		if len(buildStatus.Release.Arns) > 0 {
 			out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
 				Cluster: &a.Settings.Cluster.ARN,
@@ -503,7 +514,7 @@ func watchPostdeployPhase(a *app.App, buildStatus *app.BuildStatus) error {
 	if strings.HasPrefix(buildStatus.Postdeploy.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Postdeploy.Logs)
 	}
-	for buildStatus.Postdeploy.State == "started" {
+	for buildStatus.Postdeploy.State == Started {
 		if len(buildStatus.Postdeploy.Arns) > 0 {
 			out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
 				Cluster: &a.Settings.Cluster.ARN,
@@ -545,7 +556,8 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 	}
 	seenEventIDs := map[string]bool{}
 	var serviceStatus *ecs.DescribeServicesOutput
-	for buildStatus.Deploy.State == "started" {
+
+	for buildStatus.Deploy.State == Started {
 		logrus.WithFields(logrus.Fields{
 			"services": serviceARNs,
 		}).Debug("polling service status")
@@ -569,6 +581,7 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 						"ecs":     event.CreatedAt.Unix(),
 					}).Debug("skipping event before deploy")
 					seenEventIDs[*event.Id] = true
+
 					continue
 				}
 				seenEventIDs[*event.Id] = true
@@ -678,9 +691,9 @@ var buildListCmd = &cobra.Command{
 		builds, err := a.RecentBuilds(15)
 		checkErr(err)
 		ui.Spinner.Stop()
-		for _, build := range builds {
-			printBuild(&build)
-			printCommitLog(a.Session, &build)
+		for i := range builds {
+			printBuild(&builds[i])
+			printCommitLog(a.Session, &builds[i])
 		}
 	},
 }

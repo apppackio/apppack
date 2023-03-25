@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -124,9 +124,10 @@ var accessCmd = &cobra.Command{
 
 // accessAddCmd represents the access command
 var accessAddCmd = &cobra.Command{
-	Use:                   "add <email>...",
-	Short:                 "add access for users to the app",
-	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to add access for the user.",
+	Use:   "add <email>...",
+	Short: "add access for users to the app",
+	Long: `*Requires admin permissions.*
+Updates the application Cloudformation stack to add access for the user.`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
 	Example:               "apppack -a my-app access add user1@example.com user2@example.com",
@@ -155,9 +156,10 @@ var accessAddCmd = &cobra.Command{
 
 // accessRemoveCmd represents the access command
 var accessRemoveCmd = &cobra.Command{
-	Use:                   "remove <email>...",
-	Short:                 "remove access for users to the app",
-	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to remove access for the user.",
+	Use:   "remove <email>...",
+	Short: "remove access for users to the app",
+	Long: `*Requires admin permissions.*
+Updates the application Cloudformation stack to remove access for the user.`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
 	Example:               "apppack -a my-app access remove user1@example.com user2@example.com",
@@ -188,10 +190,25 @@ func init() {
 
 	accessCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	accessCmd.MarkPersistentFlagRequired("app-name")
-	accessCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
-	accessCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
-	accessCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to use (defaults to the region of the account)")
-
+	accessCmd.PersistentFlags().StringVarP(
+		&AccountIDorAlias,
+		"account",
+		"c",
+		"",
+		"AWS account ID or alias (not needed if you are only the administrator of one account)",
+	)
+	accessCmd.PersistentFlags().BoolVar(
+		&UseAWSCredentials,
+		"aws-credentials",
+		false,
+		"use AWS credentials instead of AppPack.io federation",
+	)
+	accessCmd.PersistentFlags().StringVar(
+		&region,
+		"region",
+		"",
+		"AWS region to use (defaults to the region of the account)",
+	)
 	accessCmd.AddCommand(accessAddCmd)
 	accessAddCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region of app")
 	accessCmd.AddCommand(accessRemoveCmd)

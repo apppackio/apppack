@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -97,6 +97,7 @@ func periodic(ctx context.Context, interval time.Duration, fn func() error) {
 	if err := fn(); err != nil {
 		logrus.WithFields(logrus.Fields{"error": err}).Error("error executing periodic function")
 	}
+
 	for {
 		select {
 		case <-ticker.C:
@@ -148,7 +149,7 @@ func serviceEventsText(ctx context.Context, a *app.App, options *metrics.MetricO
 	return textWidget, nil
 }
 
-func labelsFromTimestamps(timestamps []*time.Time, UTC bool) map[int]string {
+func labelsFromTimestamps(timestamps []*time.Time, utc bool) map[int]string {
 	labels := map[int]string{}
 	format := "15:04"
 	if len(timestamps) == 0 {
@@ -160,7 +161,7 @@ func labelsFromTimestamps(timestamps []*time.Time, UTC bool) map[int]string {
 		format = "2T15:04"
 	}
 	for i, t := range timestamps {
-		if UTC {
+		if utc {
 			labels[i] = t.UTC().Format(format)
 		} else {
 			labels[i] = t.Local().Format(format)
@@ -317,7 +318,7 @@ var dashCmd = &cobra.Command{
 		builder := grid.New()
 		for _, w := range graphButtons {
 			builder.Add(
-				grid.RowHeightPerc(int(100/len(graphButtons)),
+				grid.RowHeightPerc(100/len(graphButtons),
 					grid.Widget(
 						w,
 						container.AlignVertical(align.VerticalTop),
@@ -371,7 +372,7 @@ var dashCmd = &cobra.Command{
 		builder = grid.New()
 		for _, w := range timeframeButtons {
 			builder.Add(
-				grid.RowHeightPerc(int(100/len(timeframeButtons)),
+				grid.RowHeightPerc(100/len(timeframeButtons),
 					grid.Widget(
 						w,
 						container.AlignVertical(align.VerticalTop),

@@ -47,9 +47,11 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 	fields := reflect.VisibleFields(ref.Type())
 	// get a list of all flags present in the command
 	var flagsUsed []string
+
 	flags.Visit(func(flag *pflag.Flag) {
 		flagsUsed = append(flagsUsed, flag.Name)
 	})
+
 	for i, field := range fields {
 		// get the flag tag for the field
 		tag := parseTag(field.Tag.Get("flag"))
@@ -65,6 +67,7 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 			if tag.Transform == "fmtString" {
 				val = fmt.Sprintf(tag.TransformArg, val)
 			}
+
 			ref.Field(i).SetString(val)
 		case reflect.Bool:
 			val, err := flags.GetBool(tag.Name)
@@ -74,6 +77,7 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 			if tag.Transform == "negate" {
 				val = !val
 			}
+
 			ref.Field(i).SetBool(val)
 		case reflect.Int:
 			val, err := flags.GetInt(tag.Name)
@@ -89,6 +93,7 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 			if err != nil {
 				return err
 			}
+
 			ref.Field(i).Set(reflect.ValueOf(val))
 		default:
 			return fmt.Errorf("unsupported type %s", field.Type.Kind())

@@ -84,6 +84,7 @@ func (a *AccountStack) AskQuestions(_ *session.Session) error {
 
 func (*AccountStack) StackName(_ *string) *string {
 	stackName := accountStackName
+
 	return &stackName
 }
 

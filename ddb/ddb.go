@@ -81,8 +81,11 @@ func ListStacks(sess *session.Session, cluster *string, addon string) ([]string,
 	if err != nil {
 		return nil, err
 	}
-	var stacks []string
-	var stack Stack
+	var (
+		stacks []string
+		stack  Stack
+	)
+
 	for idx := range i {
 		stack = i[idx].Stack
 		if len(stack.DatabaseEngine) > 0 {
@@ -116,6 +119,7 @@ func ListClusters(sess *session.Session) ([]string, error) {
 		return nil, err
 	}
 	var clusters []string
+
 	for idx := range i {
 		clusters = append(clusters, i[idx].Stack.Name)
 	}

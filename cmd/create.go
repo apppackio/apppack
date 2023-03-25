@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/apppackio/apppack/bridge"
@@ -30,10 +31,11 @@ import (
 )
 
 var (
-	createChangeSet bool
-	nonInteractive  bool
-	region          string
-	release         string
+	createChangeSet   bool
+	nonInteractive    bool
+	region            string
+	release           string
+	ErrRegionNotSetup = errors.New("region isn't setup -- either change the --region or use --create-region to setup this region")
 )
 
 func CreateStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.FlagSet, name string) {
@@ -143,9 +145,10 @@ var pipelineCmd = &cobra.Command{
 
 // createClusterCmd represents the create cluster command
 var createClusterCmd = &cobra.Command{
-	Use:                   "cluster [<name>]",
-	Short:                 "setup resources for an AppPack Cluster",
-	Long:                  "*Requires admin permissions.*\nCreates an AppPack Cluster. If a `<name>` is not provided, the default name, `apppack` will be used.",
+	Use:   "cluster [<name>]",
+	Short: "setup resources for an AppPack Cluster",
+	Long: `*Requires admin permissions.*
+	Creates an AppPack Cluster. ` + "If a `<name>` is not provided, the default name, `apppack` will be used.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -175,7 +178,7 @@ var createClusterCmd = &cobra.Command{
 					checkErr(fmt.Errorf("aborting due to user input"))
 				}
 			} else if !createRegion {
-				checkErr(fmt.Errorf("%s region isn't setup -- either change the --region or use --create-region to setup this region", *sess.Config.Region))
+				checkErr(ErrRegionNotSetup)
 			}
 			fmt.Printf("running %s...\n", aurora.White("apppack create region"))
 			createRegionCmd.Run(cmd, []string{})
@@ -225,9 +228,10 @@ The domain(s) provided must all be a part of the same parent domain and a Route5
 
 // createRedisCmd represents the create redis command
 var createRedisCmd = &cobra.Command{
-	Use:                   "redis [<name>]",
-	Short:                 "setup resources for an AppPack Redis instance",
-	Long:                  "*Requires admin permissions.*\nCreates an AppPack Redis instance. If a `<name>` is not provided, the default name, `apppack` will be used.",
+	Use:   "redis [<name>]",
+	Short: "setup resources for an AppPack Redis instance",
+	Long: `*Requires admin permissions.*
+Creates an AppPack Redis instance. ` + "If a `<name>` is not provided, the default name, `apppack` will be used.",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {

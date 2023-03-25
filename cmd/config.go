@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,20 +18,19 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/juju/ansiterm"
-	"github.com/mattn/go-isatty"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/ssm"
-
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/juju/ansiterm"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -239,9 +238,11 @@ var configImportCmd = &cobra.Command{
 		for key, val := range config {
 			err = a.SetConfig(key, val, importConfigOverride)
 			if err != nil {
-				if aerr, ok := err.(awserr.Error); ok {
-					if ok && aerr.Code() == "ParameterAlreadyExists" && !importConfigOverride {
+				var aerr awserr.Error
+				if errors.As(err, &aerr) {
+					if aerr.Code() == "ParameterAlreadyExists" && !importConfigOverride {
 						skipped++
+
 						continue
 					}
 				}
@@ -263,15 +264,28 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	configCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
 	configCmd.MarkPersistentFlagRequired("app-name")
-	configCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
+	configCmd.PersistentFlags().BoolVar(
+		&UseAWSCredentials,
+		"aws-credentials",
+		false,
+		"use AWS credentials instead of AppPack.io federation",
+	)
 
 	configCmd.AddCommand(getCmd)
 	configCmd.AddCommand(setCmd)
 	configCmd.AddCommand(unsetCmd)
 	configCmd.AddCommand(listCmd)
 	configCmd.AddCommand(configExportCmd)
-	configExportCmd.Flags().BoolVar(&includeManagedVars, "all", false, "include AppPack managed variables (e.g. DATABASE_URL)")
+	configExportCmd.Flags().BoolVar(&includeManagedVars,
+		"all",
+		false,
+		"include AppPack managed variables (e.g. DATABASE_URL)",
+	)
 
 	configCmd.AddCommand(configImportCmd)
-	configImportCmd.Flags().BoolVar(&importConfigOverride, "overwrite", false, "overwrite variables if they already exist")
+	configImportCmd.Flags().BoolVar(&importConfigOverride,
+		"overwrite",
+		false,
+		"overwrite variables if they already exist",
+	)
 }

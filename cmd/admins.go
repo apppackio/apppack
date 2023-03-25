@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -102,9 +102,10 @@ var adminsAddCmd = &cobra.Command{
 
 // adminsRemoveCmd represents the admins remove command
 var adminsRemoveCmd = &cobra.Command{
-	Use:                   "remove <email>",
-	Short:                 "remove an administrator from the account",
-	Long:                  "*Requires admin permissions.*\nUpdates the application Cloudformation stack to remove an administrators.",
+	Use:   "remove <email>",
+	Short: "remove an administrator from the account",
+	Long: `*Requires admin permissions.*
+Updates the application Cloudformation stack to remove an administrators.`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -131,8 +132,19 @@ var adminsRemoveCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(adminsCmd)
 
-	adminsCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
-	adminsCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
+	adminsCmd.PersistentFlags().StringVarP(
+		&AccountIDorAlias,
+		"account",
+		"c",
+		"",
+		"AWS account ID or alias (not needed if you are only the administrator of one account)",
+	)
+	adminsCmd.PersistentFlags().BoolVar(
+		&UseAWSCredentials,
+		"aws-credentials",
+		false,
+		"use AWS credentials instead of AppPack.io federation",
+	)
 
 	adminsCmd.AddCommand(adminsAddCmd)
 	adminsCmd.AddCommand(adminsRemoveCmd)

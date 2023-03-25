@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -94,6 +94,7 @@ func (e *environ) Unset(key string) {
 		if strings.HasPrefix((*e)[i], key+"=") {
 			(*e)[i] = (*e)[len(*e)-1]
 			*e = (*e)[:len(*e)-1]
+
 			break
 		}
 	}
@@ -106,8 +107,6 @@ func (e *environ) Set(key, val string) {
 }
 
 func execCmd(command string, args, env []string) error {
-	// log.Printf("Starting child process: %s %s", command, strings.Join(args, " "))
-
 	cmd := osexec.Command(command, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -130,7 +129,7 @@ func execCmd(command string, args, env []string) error {
 
 	if err := cmd.Wait(); err != nil {
 		cmd.Process.Signal(os.Kill)
-		return fmt.Errorf("failed to wait for command termination: %v", err)
+		return fmt.Errorf("failed to wait for command termination: %w", err)
 	}
 
 	waitStatus := cmd.ProcessState.Sys().(syscall.WaitStatus)
@@ -143,8 +142,6 @@ func supportsExecSyscall() bool {
 }
 
 func execSyscall(command string, args, env []string) error {
-	// log.Printf("Exec command %s %s", command, strings.Join(args, " "))
-
 	argv0, err := osexec.LookPath(command)
 	if err != nil {
 		return fmt.Errorf("couldn't find the executable '%s': %w", command, err)

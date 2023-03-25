@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,15 +28,15 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/logrusorgru/aurora"
+	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-
-	"github.com/spf13/cobra"
 )
 
 // WaitForTaskRunning waits for a task to be running or complete
 func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
 	ecsSvc := ecs.New(a.Session)
+
 	status := ""
 	for status != "RUNNING" {
 		time.Sleep(2 * time.Second)
@@ -81,7 +81,7 @@ func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskCommand
 }
 
 var (
-	shellCpu  float64
+	shellCPU  float64
 	shellMem  string
 	shellRoot bool
 	shellLive bool
@@ -104,7 +104,6 @@ func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfig
 			return nil, err
 		}
 		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInGB * 1024}, nil
-
 	} else if strings.HasSuffix(memory, "M") {
 		memoryInMB, err = strconv.Atoi(memory[:len(memory)-1])
 		if err != nil {
@@ -125,7 +124,7 @@ func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfig
 func interactiveCmd(a *app.App, cmd string) {
 	taskFamily, buildSystem, err := a.ShellTaskFamily()
 	checkErr(err)
-	size, err := humanToECSSizeConfiguration(shellCpu, shellMem)
+	size, err := humanToECSSizeConfiguration(shellCPU, shellMem)
 	checkErr(err)
 	checkErr(a.ValidateECSTaskSize(*size))
 	isBuildpack := *buildSystem == "buildpacks" || *buildSystem == ""
@@ -205,7 +204,7 @@ func init() {
 	shellCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	shellCmd.PersistentFlags().BoolVarP(&shellRoot, "root", "r", false, "open shell as root user")
 	shellCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
-	shellCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")
+	shellCmd.Flags().Float64Var(&shellCPU, "cpu", 0.5, "CPU cores available for task")
 	shellCmd.Flags().StringVar(&shellMem, "memory", "1G", "memory (e.g. '2G', '512M') available for task")
 	shellCmd.MarkPersistentFlagRequired("app-name")
 }

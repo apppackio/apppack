@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -49,7 +49,7 @@ func printTask(t *ecs.Task, count *int) {
 
 	cpu, err := strconv.ParseFloat(*t.Cpu, 32)
 	checkErr(err)
-	cpu = cpu / 1024.0
+	cpu /= 1024.0
 	buildNumber, err := getTag(t.Tags, "apppack:buildNumber")
 	checkErr(err)
 	var startText string
@@ -109,6 +109,7 @@ var psCmd = &cobra.Command{
 			tasks := grouped[proc]
 			if status == nil {
 				extraProcs = append(extraProcs, tasks...)
+
 				continue
 			}
 
@@ -130,7 +131,7 @@ var psCmd = &cobra.Command{
 				name := fmt.Sprintf("%s.%d", proc, i)
 				cpu, err := strconv.ParseFloat(*t.Cpu, 32)
 				checkErr(err)
-				cpu = cpu / 1024.0
+				cpu /= 1024.0
 				buildNumber, err := getTag(t.Tags, "apppack:buildNumber")
 				checkErr(err)
 				var startText string
@@ -255,6 +256,6 @@ func init() {
 	psCmd.AddCommand(psExecCmd)
 	psExecCmd.PersistentFlags().BoolVarP(&shellRoot, "root", "r", false, "open shell as root user")
 	psExecCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
-	psExecCmd.Flags().Float64Var(&shellCpu, "cpu", 0.5, "CPU cores available for task")
+	psExecCmd.Flags().Float64Var(&shellCPU, "cpu", 0.5, "CPU cores available for task")
 	psExecCmd.Flags().StringVar(&shellMem, "memory", "1G", "memory (e.g. '2G', '512M') available for task")
 }

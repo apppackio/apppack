@@ -1,0 +1,51 @@
+go = "1.19"
+sort-results = true
+
+[linters]
+enable-all = true
+
+disable = [
+    # deprecated linters
+    "ifshort",
+    "deadcode",
+    "maligned",
+    "exhaustivestruct",
+    "interfacer",
+    "varcheck",
+    "golint",
+    "nosnakecase",
+    "scopelint",
+    "structcheck",
+
+    # don't have control over serialized key names
+    "tagliatelle",
+    # It's a CLI. We use globals
+    "gochecknoglobals",
+    # Cobra uses inits
+    "gochecknoinits",
+    # too verbose
+    "exhaustruct",
+    # don't care
+    "godot",
+
+    # assess later
+    "wrapcheck",
+    "varnamelen",
+    "gomnd",
+    "lll",
+    "cyclop",
+    "prealloc",
+]
+
+
+[issues]
+exclude = [
+    "Error return value of `\\w+\\.MarkPersistentFlagRequired` is not checked",
+    "Error return value of `\\(\\*github\\.com/spf13/pflag\\.FlagSet\\)\\.Mark(Hidden|Deprecated)` is not checked",
+    "use of `fmt\\.Print(|f|ln)` forbidden by pattern"
+]
+
+[run]
+skip-dirs = [
+    "version"
+]

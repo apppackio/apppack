@@ -26,7 +26,7 @@ type Tokens struct {
 
 func (t *Tokens) GetUserInfo() (*UserInfo, error) {
 	logrus.WithFields(logrus.Fields{"url": userInfoURL}).Debug("fetching user info")
-	req, err := http.NewRequest("GET", userInfoURL, nil)
+	req, err := http.NewRequest(http.MethodGet, userInfoURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (t *Tokens) GetUserInfo() (*UserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		if err != nil {
 			return nil, fmt.Errorf("unable to retrieve user info. Status code %d", resp.StatusCode)
 		}
@@ -86,7 +86,7 @@ func (t *Tokens) IsExpired() (*bool, error) {
 
 func (t *Tokens) GetAppList() ([]*AppRole, error) {
 	logrus.WithFields(logrus.Fields{"url": appListURL}).Debug("fetching app list")
-	req, err := http.NewRequest("GET", appListURL, nil)
+	req, err := http.NewRequest(http.MethodGet, appListURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (t *Tokens) GetAppList() ([]*AppRole, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unable to retrieve app list. Status code %d", resp.StatusCode)
 	}
 	var appList []*AppRole
@@ -116,6 +116,7 @@ func (t *Tokens) GetAppRole(name string) (*AppRole, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	for _, appRole := range appList {
 		if appRole.AppName == name {
 			return appRole, nil
@@ -126,7 +127,7 @@ func (t *Tokens) GetAppRole(name string) (*AppRole, error) {
 
 func (t *Tokens) GetAdminList() ([]*AdminRole, error) {
 	logrus.WithFields(logrus.Fields{"url": adminListURL}).Debug("fetching admin list")
-	req, err := http.NewRequest("GET", adminListURL, nil)
+	req, err := http.NewRequest(http.MethodGet, adminListURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +141,7 @@ func (t *Tokens) GetAdminList() ([]*AdminRole, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unable to retrieve account list. Status code %d", resp.StatusCode)
 	}
 	var adminList []*AdminRole
@@ -164,6 +165,7 @@ func (t *Tokens) GetAdminRole(idOrAlias string) (*AdminRole, error) {
 		return nil, fmt.Errorf("no account ID or alias specified")
 	}
 	var found *AdminRole
+
 	for _, a := range adminRoles {
 		if a.AccountID == idOrAlias || a.AccountAlias == idOrAlias {
 			if found != nil {

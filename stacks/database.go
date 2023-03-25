@@ -92,6 +92,7 @@ func listRDSInstanceClasses(sess *session.Session, engine, version *string) ([]s
 
 			instanceClassResults = append(instanceClassResults, instanceOption)
 		}
+
 		return !lastPage
 	})
 	if err != nil {
@@ -184,9 +185,11 @@ func (a *DatabaseStack) SetDeletionProtection(sess *session.Session, value bool)
 			DeletionProtection:   &value,
 			ApplyImmediately:     aws.Bool(true),
 		}
+
 		logrus.WithFields(logrus.Fields{"identifier": DBID, "value": value}).Debug("setting RDS deletion protection")
 		if *DBType == "instance" {
 			_, err := rdsSvc.ModifyDBInstance(&input)
+
 			return err
 		}
 		if *DBType == "cluster" {
@@ -203,13 +206,17 @@ func (a *DatabaseStack) SetDeletionProtection(sess *session.Session, value bool)
 	// just log errors trying to turn it off because the instance/cluster may not exist
 	// in the case of a stack failure
 	if err1 != nil {
-		logrus.WithFields(logrus.Fields{"error": err1}).Debug("unable to lookup Cloudformation outputs to set RDS deletion protection")
+		logrus.WithFields(
+			logrus.Fields{"error": err1},
+		).Debug("unable to lookup Cloudformation outputs to set RDS deletion protection")
 		if value {
 			return err1
 		}
 	}
 	if err2 != nil {
-		logrus.WithFields(logrus.Fields{"error": err2}).Debug("unable to lookup Cloudformation outputs to set RDS deletion protection")
+		logrus.WithFields(
+			logrus.Fields{"error": err2},
+		).Debug("unable to lookup Cloudformation outputs to set RDS deletion protection")
 		if value {
 			return err2
 		}
@@ -252,6 +259,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 		if err != nil {
 			return err
 		}
+
 		questions = append(questions, []*ui.QuestionExtra{
 			{
 				Verbose:  "What engine should this Database use?",
@@ -324,9 +332,11 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 			},
 		},
 		{
-			Verbose:  "Should this Database be setup in multiple availability zones?",
-			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, but double the cost at AWS. In the case of Aurora databases, enabling multiple availability zones will give you access to a read-replica. For more info see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html.",
-			WriteTo:  &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
+			Verbose: "Should this Database be setup in multiple availability zones?",
+			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, " +
+				"but double the cost at AWS. In the case of Aurora databases, enabling multiple availability zones will give you access to a read-replica." +
+				"For more info see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html.",
+			WriteTo: &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
 			Question: &survey.Question{
 				Prompt: &survey.Select{
 					Message:       "Multi AZ",
@@ -343,6 +353,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 
 func (*DatabaseStack) StackName(name *string) *string {
 	stackName := fmt.Sprintf(databaseStackNameTmpl, *name)
+
 	return &stackName
 }
 

@@ -31,9 +31,11 @@ func (p *RegionStackParameters) ToCloudFormationParameters() ([]*cloudformation.
 	// pop DockerhubAccessToken from the list of parameters
 	// it is stored in SSM instead of getting directly passed to CloudFormation
 	accessTokenIndex := -1
+
 	for i, param := range cfnParams {
 		if *param.ParameterKey == "DockerhubAccessToken" {
 			accessTokenIndex = i
+
 			break
 		}
 	}
@@ -111,8 +113,10 @@ func (a *RegionStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 func (a *RegionStack) AskQuestions(_ *session.Session) error {
 	questions := []*ui.QuestionExtra{
 		{
-			Verbose:  "What is your Docker Hub username?",
-			HelpText: "App images will be created using base images from Docker Hub. To avoid hitting rate limits during the build process, a free Docker Hub account is required. See https://docs.docker.com/docker-hub/download-rate-limit/ for more info.",
+			Verbose: "What is your Docker Hub username?",
+			HelpText: "App images will be created using base images from Docker Hub. " +
+				"To avoid hitting rate limits during the build process, a free Docker Hub account is required. " +
+				"See https://docs.docker.com/docker-hub/download-rate-limit/ for more info.",
 			Question: &survey.Question{
 				Name:     "DockerhubUsername",
 				Prompt:   &survey.Input{Message: "Docker Hub Username", Default: a.Parameters.DockerhubUsername},
@@ -134,6 +138,7 @@ func (a *RegionStack) AskQuestions(_ *session.Session) error {
 
 func (*RegionStack) StackName(name *string) *string {
 	stackName := fmt.Sprintf(regionStackNameTmpl, *name)
+
 	return &stackName
 }
 

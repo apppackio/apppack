@@ -1,9 +1,10 @@
-package app
+package app_test
 
 import (
 	"fmt"
 	"testing"
 
+	"github.com/apppackio/apppack/app"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/stretchr/testify/mock"
@@ -23,20 +24,22 @@ func (m *MockAWS) GetParameter(input *ssm.GetParameterInput) (*string, error) {
 
 func (m *MockAWS) PutParameter(input *ssm.PutParameterInput) error {
 	args := m.Called(input)
+
 	return args.Error(0)
 }
 
 func (m *MockAWS) ValidateEventbridgeCron(rule string) error {
 	args := m.Called(rule)
+
 	return args.Error(0)
 }
 
 func TestScheduledTasksNoParameter(t *testing.T) {
-	a := &App{
+	a := &app.App{
 		Name: "test",
-		aws:  &MockAWS{},
+		AWS:  &MockAWS{},
 	}
-	a.aws.(*MockAWS).On(
+	a.AWS.(*MockAWS).On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: aws.String("/apppack/apps/test/scheduled-tasks")},
 	).Return(nil, fmt.Errorf("parameter not found"))
@@ -50,22 +53,22 @@ func TestScheduledTasksNoParameter(t *testing.T) {
 }
 
 func TestScheduledTasksCreate(t *testing.T) {
-	a := &App{
+	a := &app.App{
 		Name: "test",
-		aws:  &MockAWS{},
+		AWS:  &MockAWS{},
 	}
 	parameterName := "/apppack/apps/test/scheduled-tasks"
-	a.aws.(*MockAWS).On(
+	a.AWS.(*MockAWS).On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
 	).Return(nil, fmt.Errorf("parameter not found"))
 	schedule := "0/10 * * * ? *"
-	a.aws.(*MockAWS).On(
+	a.AWS.(*MockAWS).On(
 		"ValidateEventbridgeCron",
 		schedule,
 	).Return(nil)
 	command := "echo hello"
-	a.aws.(*MockAWS).On(
+	a.AWS.(*MockAWS).On(
 		"PutParameter",
 		&ssm.PutParameterInput{
 			Name:      &parameterName,
@@ -87,18 +90,18 @@ func TestScheduledTasksCreate(t *testing.T) {
 }
 
 func TestScheduledTasksDelete(t *testing.T) {
-	a := &App{
+	a := &app.App{
 		Name: "test",
-		aws:  &MockAWS{},
+		AWS:  &MockAWS{},
 	}
 	parameterName := "/apppack/apps/test/scheduled-tasks"
 	schedule := "0/10 * * * ? *"
 	command := "echo hello"
-	a.aws.(*MockAWS).On(
+	a.AWS.(*MockAWS).On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
 	).Return(aws.String(fmt.Sprintf("[{\"schedule\":\"%s\",\"command\":\"%s\"}]", schedule, command)), nil)
-	a.aws.(*MockAWS).On(
+	a.AWS.(*MockAWS).On(
 		"PutParameter",
 		&ssm.PutParameterInput{
 			Name:      &parameterName,
@@ -117,12 +120,12 @@ func TestScheduledTasksDelete(t *testing.T) {
 }
 
 func TestScheduledTasksDeleteEmpty(t *testing.T) {
-	a := &App{
+	a := &app.App{
 		Name: "test",
-		aws:  &MockAWS{},
+		AWS:  &MockAWS{},
 	}
 	parameterName := "/apppack/apps/test/scheduled-tasks"
-	a.aws.(*MockAWS).On(
+	a.AWS.(*MockAWS).On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
 	).Return(aws.String("[]"), nil)

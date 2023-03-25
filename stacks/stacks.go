@@ -78,6 +78,7 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 	sort.Slice(stackresources.StackResources, func(i, j int) bool {
 		return stackresources.StackResources[i].Timestamp.Before(*stackresources.StackResources[j].Timestamp)
 	})
+
 	for _, resource := range stackresources.StackResources {
 		// CREATE_IN_PROGRESS | CREATE_FAILED | CREATE_COMPLETE | DELETE_IN_PROGRESS | DELETE_FAILED | DELETE_COMPLETE | DELETE_SKIPPED | UPDATE_IN_PROGRESS | UPDATE_FAILED | UPDATE_COMPLETE | IMPORT_FAILED | IMPORT_COMPLETE | IMPORT_IN_PROGRESS | IMPORT_ROLLBACK_IN_PROGRESS | IMPORT_ROLLBACK_FAILED | IMPORT_ROLLBACK_COMPLETE
 		if strings.HasSuffix(*resource.ResourceStatus, "_FAILED") {
@@ -94,7 +95,7 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 			inProgress = append(inProgress, *resource.ResourceStatus)
 		} else if *resource.ResourceStatus == "CREATE_COMPLETE" {
 			created = append(created, *resource.ResourceStatus)
-		} else if *resource.ResourceStatus == "DELETE_COMPLETE" {
+		} else if *resource.ResourceStatus == DeleteComplete {
 			deleted = append(deleted, *resource.ResourceStatus)
 		}
 	}
@@ -113,6 +114,7 @@ func retryStackCreation(sess *session.Session, stackID *string, input *cloudform
 	ui.PrintWarning("stack creation failed")
 	fmt.Println("retrying operation... deleting and recreating stack")
 	sentry.CaptureException(fmt.Errorf("Stack creation failed: %s", *input.StackName))
+
 	defer sentry.Flush(time.Second * 5)
 	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{StackName: stackID})
 	if err != nil {
@@ -122,11 +124,14 @@ func retryStackCreation(sess *session.Session, stackID *string, input *cloudform
 	if err != nil {
 		return nil, err
 	}
-	if *stack.StackStatus != "DELETE_COMPLETE" {
+	if *stack.StackStatus != DeleteComplete {
 		err = fmt.Errorf("Stack destruction failed: %s", *stack.StackName)
 		sentry.CaptureException(err)
 		fmt.Printf("%s", aurora.Bold(aurora.White(
-			fmt.Sprintf("Unable to destroy stack. Check Cloudformation console for more details:\n%s", CloudformationStackURL(sess.Config.Region, stackID)),
+			fmt.Sprintf(
+				"Unable to destroy stack. Check Cloudformation console for more details:\n%s",
+				CloudformationStackURL(sess.Config.Region, stackID),
+			),
 		)))
 		return nil, err
 	}
@@ -194,7 +199,7 @@ func DeleteStackAndWait(sess *session.Session, stack Stack) (*cloudformation.Sta
 		return nil, err
 	}
 	cfnStack, err := waitForCloudformationStack(cfnSvc, *stack.GetStack().StackId)
-	if err == nil && *cfnStack.StackStatus == "DELETE_COMPLETE" {
+	if err == nil && *cfnStack.StackStatus == DeleteComplete {
 		if err := stack.PostDelete(sess, nil); err != nil {
 			logrus.WithFields(logrus.Fields{"err": err}).Warning("post-delete failed")
 			return nil, err

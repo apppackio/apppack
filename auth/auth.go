@@ -41,6 +41,7 @@ func AppAWSSession(appName string, sessionDuration int) (*session.Session, *AppR
 		return nil, nil, err
 	}
 	logrus.WithFields(logrus.Fields{"access key": *creds.AccessKeyId}).Debug("creating AWS session")
+
 	return session.Must(
 		session.NewSessionWithOptions(
 			session.Options{
@@ -73,6 +74,7 @@ func AdminAWSSession(idOrAlias string, sessionDuration int, region string) (*ses
 	if region == "" {
 		region = adminRole.Region
 	}
+
 	return session.Must(
 		session.NewSessionWithOptions(
 			session.Options{
@@ -93,6 +95,7 @@ func AppList() ([]*AppRole, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return tokens.GetAppList()
 }
 

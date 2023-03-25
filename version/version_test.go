@@ -1,4 +1,4 @@
-package version
+package version_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/apppackio/apppack/version"
 	"github.com/cli/cli/v2/pkg/httpmock"
 )
 
@@ -87,7 +88,7 @@ func TestCheckForUpdate(t *testing.T) {
 				}`, s.LatestVersion, s.LatestURL)),
 			)
 
-			rel, err := CheckForUpdate(context.TODO(), httpClient, tempFilePath(), "OWNER/REPO", s.CurrentVersion)
+			rel, err := version.CheckForUpdate(context.TODO(), httpClient, tempFilePath(), "OWNER/REPO", s.CurrentVersion)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -104,6 +105,7 @@ func TestCheckForUpdate(t *testing.T) {
 				if rel != nil {
 					t.Fatal("expected no new release")
 				}
+
 				return
 			}
 			if rel == nil {

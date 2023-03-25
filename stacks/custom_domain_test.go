@@ -1,22 +1,26 @@
-package stacks
+package stacks_test
 
 import (
 	"testing"
 
+	"github.com/apppackio/apppack/stacks"
 	"github.com/aws/aws-sdk-go/aws"
 )
 
 func TestCustomDomainStackName(t *testing.T) {
-	stack := CustomDomainStack{}
-	actual := stack.StackName(aws.String("example.com"))
-	expected := "apppack-customdomain-example-com"
-	if *actual != expected {
-		t.Errorf("Expected %s, got %s", expected, *actual)
+	scenarios := []struct {
+		input    string
+		expected string
+	}{
+		{"example.com", "apppack-customdomain-example-com"},
+		{"*.example.com", "apppack-customdomain-wildcard-example-com"},
 	}
 
-	actual = stack.StackName(aws.String("*.example.com"))
-	expected = "apppack-customdomain-wildcard-example-com"
-	if *actual != expected {
-		t.Errorf("Expected %s, got %s", expected, *actual)
+	stack := stacks.CustomDomainStack{}
+	for _, s := range scenarios {
+		actual := stack.StackName(aws.String(s.input))
+		if *actual != s.expected {
+			t.Errorf("Expected %s, got %s", s.expected, *actual)
+		}
 	}
 }

@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,9 +15,11 @@ func StackExists(sess *session.Session, stackName string) (*bool, error) {
 	stack, err := GetStack(sess, stackName)
 	var exists bool
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
+		var aerr awserr.Error
+		if errors.As(err, &aerr) {
 			if aerr.Code() == "ValidationError" {
 				exists = false
+
 				return &exists, nil
 			}
 		}
@@ -59,6 +62,7 @@ func ApppackStacks(sess *session.Session) ([]*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
 	var stacks []*cloudformation.Stack
 	var token *string
+
 	for {
 		resp, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 			NextToken: token,
@@ -66,6 +70,7 @@ func ApppackStacks(sess *session.Session) ([]*cloudformation.Stack, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		for _, stack := range resp.Stacks {
 			if strings.HasPrefix(*stack.StackName, "apppack-") {
 				stacks = append(stacks, stack)

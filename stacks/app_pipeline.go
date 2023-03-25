@@ -106,10 +106,12 @@ func (p *AppStackParameters) SetInternalFields(_ *session.Session, name *string)
 func (p *AppStackParameters) SetRepositoryType() error {
 	if strings.Contains(p.RepositoryUrl, "github.com") {
 		p.RepositoryType = "GITHUB"
+
 		return nil
 	}
 	if strings.Contains(p.RepositoryUrl, "bitbucket.org") {
 		p.RepositoryType = "BITBUCKET"
+
 		return nil
 	}
 	return fmt.Errorf("unknown repository source")
@@ -169,9 +171,12 @@ func (a *AppStack) AskForDatabase(sess *session.Session) error {
 	enable := a.Parameters.DatabaseStackName != ""
 	var helpText string
 	if a.Pipeline {
-		helpText = "Review apps will create databases on a database instance in the cluster. See https://docs.apppack.io/how-to/using-databases/ for more info."
+		helpText = "Review apps will create databases on a database instance in the cluster. " +
+			"See https://docs.apppack.io/how-to/using-databases/ for more info."
 	} else {
-		helpText = "Create a database for the app on a database instance in the cluster. Answering yes will create a user and database and provide the credentials to the app as a config variable. See https://docs.apppack.io/how-to/using-databases/ for more info."
+		helpText = "Create a database for the app on a database instance in the cluster. " +
+			"Answering yes will create a user and database and provide the credentials to the app as a config variable. " +
+			"See https://docs.apppack.io/how-to/using-databases/ for more info."
 	}
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
@@ -179,7 +184,12 @@ func (a *AppStack) AskForDatabase(sess *session.Session) error {
 			HelpText: helpText,
 			WriteTo:  &ui.BooleanOptionProxy{Value: &enable},
 			Question: &survey.Question{
-				Prompt: &survey.Select{Message: "Database", Options: []string{"yes", "no"}, FilterMessage: "", Default: ui.BooleanAsYesNo(enable)},
+				Prompt: &survey.Select{
+					Message:       "Database",
+					Options:       []string{"yes", "no"},
+					FilterMessage: "",
+					Default:       ui.BooleanAsYesNo(enable),
+				},
 			},
 		},
 	}, a.Parameters)
@@ -227,11 +237,13 @@ func (a *AppStack) AskForDatabaseStack(sess *session.Session) error {
 	}
 	// set the current database as default
 	defaultDatabaseIdx := 0
+
 	if a.Parameters.DatabaseStackName != "" {
 		for i, db := range databases {
 			name := strings.Split(db, " ")[0]
 			if fmt.Sprintf(databaseStackNameTmpl, name) == a.Parameters.DatabaseStackName {
 				defaultDatabaseIdx = i
+
 				break
 			}
 		}
@@ -280,10 +292,13 @@ func (a *AppStack) AskForRedis(sess *session.Session) error {
 	var helpText string
 	if a.Pipeline {
 		verbose = "Should review apps on this pipeline have access to a Redis database?"
-		helpText = "Create a Redis user for the review apps on this pipeline on a Redis instance in the cluster.  See https://docs.apppack.io/how-to/using-redis/ for more info."
+		helpText = "Create a Redis user for the review apps on this pipeline on a Redis instance in the cluster. " +
+			"See https://docs.apppack.io/how-to/using-redis/ for more info."
 	} else {
 		verbose = "Should this app have access to a Redis database?"
-		helpText = "Create a Redis user for the app on a Redis instance in the cluster. Answering yes will create a user and provide the credentials to the app as a config variable. See https://docs.apppack.io/how-to/using-redis/ for more info."
+		helpText = "Create a Redis user for the app on a Redis instance in the cluster. " +
+			"Answering yes will create a user and provide the credentials to the app as a config variable. " +
+			"See https://docs.apppack.io/how-to/using-redis/ for more info."
 	}
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
@@ -329,10 +344,12 @@ func (a *AppStack) AskForRedisStack(sess *session.Session) error {
 	}
 	// set the current database as default
 	defaultRedisIdx := 0
+
 	if a.Parameters.RedisStackName != "" {
 		for i, r := range redises {
 			if fmt.Sprintf(databaseStackNameTmpl, r) == a.Parameters.RedisStackName {
 				defaultRedisIdx = i
+
 				break
 			}
 		}
@@ -624,17 +641,17 @@ func (a *AppStack) WarnIfDataLoss() error {
 		ui.PrintWarning("The current Redis database will no longer be accessible to the application.")
 	}
 	if privateS3BucketDestroy || publicS3BucketDestroy || databaseDestroy || redisDestroy {
-		var continue_ string
+		var verify string
 		err := survey.AskOne(&survey.Select{
 			Message:       "Are you sure you want to continue?",
 			Options:       []string{"yes", "no"},
 			FilterMessage: "",
 			Default:       "no",
-		}, &continue_, nil)
+		}, &verify, nil)
 		if err != nil {
 			return err
 		}
-		if continue_ != "yes" {
+		if verify != "yes" {
 			return fmt.Errorf("aborted due to user input")
 		}
 	}
@@ -646,7 +663,7 @@ func (a *AppStack) PublicS3BucketToBeDestroyed() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return *val == "enabled" && !a.Parameters.PublicS3BucketEnabled, nil
+	return *val == Enabled && !a.Parameters.PublicS3BucketEnabled, nil
 }
 
 func (a *AppStack) PrivateS3BucketToBeDestroyed() (bool, error) {
@@ -654,7 +671,7 @@ func (a *AppStack) PrivateS3BucketToBeDestroyed() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return *val == "enabled" && !a.Parameters.PrivateS3BucketEnabled, nil
+	return *val == Enabled && !a.Parameters.PrivateS3BucketEnabled, nil
 }
 
 func (a *AppStack) DatabaseToBeDestroyed() (bool, error) {

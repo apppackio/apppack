@@ -6,21 +6,28 @@ func Contains(a string, list []string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 // deduplicate removes duplicates from a slice of strings
 func Deduplicate(slice []string) ([]string, []string) {
 	seen := make(map[string]bool)
-	var result []string
-	var dupes []string
+	var (
+		result []string
+		dupes  []string
+	)
+
 	for _, s := range slice {
 		if seen[s] {
 			dupes = append(dupes, s)
+
 			continue
 		}
 		seen[s] = true
+
 		result = append(result, s)
 	}
+
 	return result, dupes
 }
