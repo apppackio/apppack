@@ -26,8 +26,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var maxLifetime = 12 * 60 * 60
-var waitForConnect = 60
+var (
+	maxLifetime    = 12 * 60 * 60
+	waitForConnect = 60
+)
 
 var ShellBackgroundCommand = []string{
 	strings.Join([]string{
@@ -855,7 +857,6 @@ func (a *App) DBDumpLoadFamily() (*string, error) {
 }
 
 func (a *App) DBDump() (*ecs.Task, *s3.GetObjectInput, error) {
-
 	getObjectInput, err := a.DBDumpLocation("dumps/")
 	if err != nil {
 		return nil, nil, err

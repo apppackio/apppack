@@ -73,6 +73,7 @@ func (m *ServiceUtilizationMetrics) GetService() string { return m.Service }
 func (m *ServiceUtilizationMetrics) Title() string {
 	return fmt.Sprintf("%s utilization (%%)", m.Service)
 }
+
 func (m *ServiceUtilizationMetrics) ShortName() string {
 	return fmt.Sprintf("%s util", m.Service)
 }

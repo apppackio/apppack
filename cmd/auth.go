@@ -145,7 +145,6 @@ var appsCmd = &cobra.Command{
 				}
 			}
 		}
-
 	},
 }
 

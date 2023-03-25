@@ -130,5 +130,4 @@ func TestScheduledTasksDeleteEmpty(t *testing.T) {
 	if err == nil {
 		t.Error("expected error trying to delete from empty list")
 	}
-
 }

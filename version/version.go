@@ -16,10 +16,12 @@ import (
 	"github.com/hashicorp/go-version"
 )
 
-var BuildDate = time.Now().String()
-var Version = "<version>"
-var Commit = "<commit>"
-var Environment = "development"
+var (
+	BuildDate   = time.Now().String()
+	Version     = "<version>"
+	Commit      = "<commit>"
+	Environment = "development"
+)
 
 // This code is largely cherry-picked from https://github.com/cli/cli/blob/82927b0cc2a831adda22b0a7bf43938bd15e1126/internal/update/update.go
 // It is licensed under the MIT license https://github.com/cli/cli/blob/82927b0cc2a831adda22b0a7bf43938bd15e1126/LICENSE
@@ -107,12 +109,12 @@ func setStateEntry(stateFilePath string, t time.Time, r ReleaseInfo) error {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Dir(stateFilePath), 0755)
+	err = os.MkdirAll(filepath.Dir(stateFilePath), 0o755)
 	if err != nil {
 		return err
 	}
 
-	err = os.WriteFile(stateFilePath, content, 0600)
+	err = os.WriteFile(stateFilePath, content, 0o600)
 	return err
 }
 

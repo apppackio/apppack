@@ -80,10 +80,12 @@ func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskCommand
 	checkErr(err)
 }
 
-var shellCpu float64
-var shellMem string
-var shellRoot bool
-var shellLive bool
+var (
+	shellCpu  float64
+	shellMem  string
+	shellRoot bool
+	shellLive bool
+)
 
 func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfiguration, error) {
 	var memoryInMB int

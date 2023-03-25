@@ -44,10 +44,12 @@ const (
 var AppName string
 
 // AccountIDorAlias is the `--account` flag
-var AccountIDorAlias string
-var UseAWSCredentials = false
-var SessionDurationSeconds = 900
-var MaxSessionDurationSeconds = 3600
+var (
+	AccountIDorAlias          string
+	UseAWSCredentials         = false
+	SessionDurationSeconds    = 900
+	MaxSessionDurationSeconds = 3600
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{

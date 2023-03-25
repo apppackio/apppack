@@ -236,8 +236,10 @@ Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.c
 	},
 }
 
-var scaleCPU float64
-var scaleMemory string
+var (
+	scaleCPU    float64
+	scaleMemory string
+)
 
 func init() {
 	rootCmd.AddCommand(psCmd)

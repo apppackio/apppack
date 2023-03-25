@@ -99,7 +99,7 @@ var dbDumpCmd = &cobra.Command{
 		if dbOutputFile != "" {
 			dir, _ := filepath.Split(dbOutputFile)
 			if dir != "" {
-				checkErr(os.MkdirAll(dir, 0750))
+				checkErr(os.MkdirAll(dir, 0o750))
 			}
 		}
 		task, getObjectInput, err := app.DBDump()

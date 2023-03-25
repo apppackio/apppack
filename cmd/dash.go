@@ -46,9 +46,11 @@ type LegendItem struct {
 	Color cell.Color
 }
 
-const redrawInterval = 250 * time.Millisecond
-const buttonWidth = 20
-const contentContainerID = "content"
+const (
+	redrawInterval     = 250 * time.Millisecond
+	buttonWidth        = 20
+	contentContainerID = "content"
+)
 
 func BuildLineChart(ctx context.Context, appMetrics metrics.AppMetrics) (*linechart.LineChart, *text.Text, error) {
 	lc, err := linechart.New(
@@ -83,7 +85,6 @@ func BuildLineChart(ctx context.Context, appMetrics metrics.AppMetrics) (*linech
 			}
 		}
 		return nil
-
 	})
 	return lc, legendText, nil
 }
@@ -405,7 +406,6 @@ var dashCmd = &cobra.Command{
 			termdash.KeyboardSubscriber(quitter),
 			termdash.RedrawInterval(redrawInterval),
 		))
-
 	},
 }
 

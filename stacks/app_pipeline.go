@@ -490,7 +490,8 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 				Question: &survey.Question{
 					Prompt: &survey.Multiline{
 						Message: "Custom Domain(s)",
-						Default: strings.Join(a.Parameters.Domains, "\n")},
+						Default: strings.Join(a.Parameters.Domains, "\n"),
+					},
 				},
 			},
 		}...)
@@ -553,7 +554,8 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 					Message:       "SQS Queue",
 					Options:       []string{"yes", "no"},
 					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(a.Parameters.SQSQueueEnabled)},
+					Default:       ui.BooleanAsYesNo(a.Parameters.SQSQueueEnabled),
+				},
 			},
 		},
 	}...)

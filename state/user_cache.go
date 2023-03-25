@@ -15,7 +15,7 @@ func WriteToCache(name string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	err = os.Mkdir(path, os.FileMode(0700))
+	err = os.Mkdir(path, os.FileMode(0o700))
 	if err != nil {
 		if !os.IsExist(err) {
 			return err
@@ -28,7 +28,7 @@ func WriteToCache(name string, data []byte) error {
 		return err
 	}
 	defer file.Close()
-	err = file.Chmod(os.FileMode(0600))
+	err = file.Chmod(os.FileMode(0o600))
 	if err != nil {
 		return err
 	}

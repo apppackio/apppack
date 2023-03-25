@@ -80,7 +80,6 @@ var adminsAddCmd = &cobra.Command{
 	Example:               "apppack admins add user1@example.com user2@example.com",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, email := range args {
-
 			if !validateEmail(email) {
 				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
 			}

@@ -58,7 +58,6 @@ func stackName(stack *cloudformation.Stack) (*stackHumanize, error) {
 		humanStack.Cluster = strings.Join(stackParts[2:], "-")
 	}
 	return &humanStack, nil
-
 }
 
 // stacksCmd represents the stacks command
@@ -116,5 +115,4 @@ func init() {
 	rootCmd.AddCommand(stacksCmd)
 	stacksCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
 	stacksCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
-
 }

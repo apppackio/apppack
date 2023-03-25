@@ -256,7 +256,6 @@ var configImportCmd = &cobra.Command{
 		}
 		ui.Spinner.Stop()
 		printSuccess(msg)
-
 	},
 }
 

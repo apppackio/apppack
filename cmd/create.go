@@ -29,10 +29,12 @@ import (
 	"golang.org/x/text/language"
 )
 
-var createChangeSet bool
-var nonInteractive bool
-var region string
-var release string
+var (
+	createChangeSet bool
+	nonInteractive  bool
+	region          string
+	release         string
+)
 
 func CreateStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.FlagSet, name string) {
 	stackName := stack.StackName(&name)
@@ -303,7 +305,6 @@ var createRegionCmd = &cobra.Command{
 }
 
 func init() {
-
 	rootCmd.AddCommand(createCmd)
 	createCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
 	createCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")

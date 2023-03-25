@@ -50,7 +50,7 @@ var docgenCmd = &cobra.Command{
 	Short:  "generate command documentation as markdown",
 	Hidden: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		checkErr(os.MkdirAll(directory, os.FileMode(0750)))
+		checkErr(os.MkdirAll(directory, os.FileMode(0o750)))
 		identity := func(s string) string { return s }
 		checkErr(doc.GenMarkdownTreeCustom(rootCmd, directory, filePrepender, identity))
 	},

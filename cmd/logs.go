@@ -34,10 +34,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var sawConfig sawconfig.Configuration
-var sawOutputConfig sawconfig.OutputConfiguration
-var logsStart string
-var logsEnd string
+var (
+	sawConfig       sawconfig.Configuration
+	sawOutputConfig sawconfig.OutputConfiguration
+	logsStart       string
+	logsEnd         string
+)
 
 // newBlade is a hack to get a Blade instance with our AWS session
 func newBlade(session *session.Session) *blade.Blade {
