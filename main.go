@@ -18,6 +18,10 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/apppackio/apppack/cmd"
@@ -29,6 +33,15 @@ import (
 var SentryDSN string
 
 func main() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		fmt.Fprintln(os.Stderr, "\n\nKeyboard interrupt detected, exiting...")
+		showCursor()
+		os.Exit(130)
+	}()
+
 	if SentryDSN != "" {
 		err := sentry.Init(sentry.ClientOptions{
 			Dsn:           SentryDSN,
@@ -52,4 +65,11 @@ func main() {
 		}()
 	}
 	cmd.Execute()
+}
+
+// showCursor sends the terminal a command to show the cursor on
+func showCursor() {
+	if runtime.GOOS != "windows" {
+		fmt.Print("\033[?25h")
+	}
 }
