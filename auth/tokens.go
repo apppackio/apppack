@@ -5,43 +5,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/apppackio/apppack/state"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/square/go-jose.v2/jwt"
 )
-
-func writeToUserCache(name string, data []byte) error {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(dir, cachePrefix)
-	err = os.Mkdir(path, os.FileMode(0700))
-	if err != nil {
-		if !os.IsExist(err) {
-			return err
-		}
-	}
-	filename := filepath.Join(path, name)
-	logrus.WithFields(logrus.Fields{"filename": filename}).Debug("writing to user cache")
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	err = file.Chmod(os.FileMode(0600))
-	if err != nil {
-		return err
-	}
-	_, err = file.Write(data)
-	return err
-}
 
 type Tokens struct {
 	AccessToken  string `json:"access_token"`
@@ -89,7 +61,7 @@ func (t *Tokens) WriteToCache() error {
 	if err != nil {
 		return err
 	}
-	return writeToUserCache("tokens", data)
+	return state.WriteToCache("tokens", data)
 }
 
 func (t *Tokens) IsExpired() (*bool, error) {
@@ -245,5 +217,5 @@ func (u *UserInfo) WriteToCache() error {
 	if err != nil {
 		return err
 	}
-	return writeToUserCache("user", data)
+	return state.WriteToCache("user", data)
 }

@@ -16,12 +16,19 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/apppackio/apppack/auth"
+	"github.com/apppackio/apppack/state"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/version"
+	"github.com/cli/safeexec"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -59,12 +66,45 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// This code is partly cherry-picked from https://github.com/cli/cli/blob/82927b0cc2a831adda22b0a7bf43938bd15e1126/main.go
+// It is licensed under the MIT license https://github.com/cli/cli/blob/82927b0cc2a831adda22b0a7bf43938bd15e1126/LICENSE
+var repo = "apppackio/apppack"
+
+func checkForUpdate(ctx context.Context, currentVersion string) (*version.ReleaseInfo, error) {
+	userCacheDir, err := state.CacheDir()
+	if err != nil {
+		return nil, err
+	}
+	stateFilePath := filepath.Join(userCacheDir, "version.json")
+	return version.CheckForUpdate(ctx, http.DefaultClient, stateFilePath, repo, currentVersion)
+}
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	// start update check process in the background
+	ctx := context.Background()
+	updateCtx, updateCancel := context.WithCancel(ctx)
+	defer updateCancel()
+	updateMessageChan := make(chan *version.ReleaseInfo)
+	go func() {
+		rel, err := checkForUpdate(updateCtx, version.Version)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{"error": err}).Debug("checking for update failed")
+		}
+		updateMessageChan <- rel
+	}()
+
+	// run command
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
+	}
+
+	updateCancel() // if the update checker hasn't completed by now, abort it
+	newRelease := <-updateMessageChan
+	if newRelease != nil {
+		printUpdateMessage(newRelease)
 	}
 }
 
@@ -101,6 +141,21 @@ func printWarning(text string) {
 	fmt.Println(aurora.Yellow(fmt.Sprintf("⚠  %s", text)))
 }
 
+func printUpdateMessage(newRelease *version.ReleaseInfo) {
+	appPath, err := exec.LookPath(os.Args[0])
+	checkErr(err)
+	isHomebrew := isUnderHomebrew(appPath)
+	fmt.Fprintf(os.Stderr, "\n\n%s %s → %s\n",
+		aurora.Yellow("A new release of apppack is available:"),
+		aurora.Cyan(strings.TrimPrefix(version.Version, "v")),
+		aurora.Cyan(strings.TrimPrefix(newRelease.Version, "v")),
+	)
+	if isHomebrew {
+		fmt.Fprintf(os.Stderr, "To upgrade, run: %s\n", "brew upgrade apppack")
+	}
+	fmt.Fprintf(os.Stderr, "%s\n\n", aurora.Yellow(newRelease.URL))
+}
+
 func confirmAction(message, text string) {
 	printWarning(fmt.Sprintf("%s\n   Are you sure you want to continue?", message))
 	fmt.Printf("\nType %s to confirm.\n%s ", aurora.White(text), aurora.White(">"))
@@ -109,4 +164,19 @@ func confirmAction(message, text string) {
 	if confirm != text {
 		checkErr(fmt.Errorf("aborting due to user input"))
 	}
+}
+
+// Check whether the apppack binary was found under the Homebrew prefix
+func isUnderHomebrew(apppackBinary string) bool {
+	brewExe, err := safeexec.LookPath("brew")
+	if err != nil {
+		return false
+	}
+	brewPrefixBytes, err := exec.Command(brewExe, "--prefix").Output()
+	if err != nil {
+		return false
+	}
+
+	brewBinPrefix := filepath.Join(strings.TrimSpace(string(brewPrefixBytes)), "bin") + string(filepath.Separator)
+	return strings.HasPrefix(apppackBinary, brewBinPrefix)
 }

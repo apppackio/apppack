@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/apppackio/apppack/state"
 	"github.com/sirupsen/logrus"
 )
 
@@ -132,23 +131,8 @@ func (o *OauthConfig) PollForToken(code *DeviceCodeResp) (*Tokens, error) {
 	}
 }
 
-func readCacheFile(name string) ([]byte, error) {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return nil, err
-	}
-	filename := filepath.Join(dir, cachePrefix, name)
-	logrus.WithFields(logrus.Fields{"filename": filename}).Debug("reading from user cache")
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	return io.ReadAll(file)
-}
-
 func TokensFromCache() (*Tokens, error) {
-	contents, err := readCacheFile("tokens")
+	contents, err := state.ReadFromCache("tokens")
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +144,7 @@ func TokensFromCache() (*Tokens, error) {
 }
 
 func UserInfoFromCache() (*UserInfo, error) {
-	contents, err := readCacheFile("user")
+	contents, err := state.ReadFromCache("user")
 	if err != nil {
 		return nil, err
 	}

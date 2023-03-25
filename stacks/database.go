@@ -20,8 +20,13 @@ var previousRDSGenerations = []string{
 	"db.t3",
 	"db.m3.",
 	"db.m4.",
+	"db.m5.",
+	"db.m5d.",
 	"db.r3.",
 	"db.r4.",
+	"db.r5.",
+	"db.r5b.",
+	"db.r5d.",
 }
 
 func dedupe(s []string) []string {
@@ -94,7 +99,7 @@ func listRDSInstanceClasses(sess *session.Session, engine, version *string) ([]s
 	}
 	var instanceClasses []string
 	for _, opt := range instanceClassResults {
-		if !isPreviousRDSGeneration(opt.DBInstanceClass) {
+		if !isPreviousRDSGeneration(opt.DBInstanceClass) && *opt.DBInstanceClass != "db.serverless" {
 			instanceClasses = append(instanceClasses, *opt.DBInstanceClass)
 		}
 	}
