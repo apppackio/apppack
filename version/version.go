@@ -42,10 +42,10 @@ type StateEntry struct {
 
 // CheckForUpdate checks whether this software has had a newer release on GitHub
 func CheckForUpdate(ctx context.Context, client *http.Client, stateFilePath, repo, currentVersion string) (*ReleaseInfo, error) {
-	// stateEntry, _ := getStateEntry(stateFilePath)
-	// if stateEntry != nil && time.Since(stateEntry.CheckedForUpdateAt).Hours() < 24 {
-	// 	return nil, nil
-	// }
+	stateEntry, _ := getStateEntry(stateFilePath)
+	if stateEntry != nil && time.Since(stateEntry.CheckedForUpdateAt).Hours() < 24 {
+		return nil, nil
+	}
 
 	releaseInfo, err := getLatestReleaseInfo(ctx, client, repo)
 	if err != nil {
