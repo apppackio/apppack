@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.176
 	github.com/briandowns/spinner v1.20.0
 	github.com/dustin/go-humanize v1.0.0
-	github.com/getsentry/sentry-go v0.16.0
+	github.com/getsentry/sentry-go v0.19.0
 	github.com/google/uuid v1.3.0
 	github.com/jkueh/go-aws-console-url v0.0.1
 	github.com/juju/ansiterm v1.0.0

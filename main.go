@@ -21,15 +21,23 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/cmd"
+	"github.com/apppackio/apppack/version"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 )
 
-var SentryDSN = ""
+var SentryDSN string
 
 func main() {
 	if SentryDSN != "" {
-		err := sentry.Init(sentry.ClientOptions{Dsn: SentryDSN})
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn:           SentryDSN,
+			SampleRate:    0,
+			EnableTracing: false,
+			Release:       version.Version,
+			Environment:   version.Environment,
+			ServerName:    "apppack",
+		})
 		if err != nil {
 			log.Fatalf("sentry.Init: %s", err)
 		}
