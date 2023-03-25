@@ -57,7 +57,7 @@ func GetStack(sess *session.Session, name string) (*cloudformation.Stack, error)
 
 func ApppackStacks(sess *session.Session) ([]*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
-	stacks := []*cloudformation.Stack{}
+	var stacks []*cloudformation.Stack
 	var token *string
 	for {
 		resp, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{

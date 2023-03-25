@@ -434,7 +434,7 @@ func (a *App) GetServices() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	services := []string{}
+	var services []string
 	for _, process := range a.DeployStatus.Processes {
 		services = append(services, process.Name)
 	}
@@ -497,7 +497,7 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 		runTaskArgs = a.ECSConfig.RunTaskArgs
 	}
 
-	cmd := []*string{}
+	var cmd []*string
 	for i := range command {
 		cmd = append(cmd, &command[i])
 	}
@@ -667,7 +667,7 @@ func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 	if ddbResp.Items == nil {
 		return nil, fmt.Errorf("could not find any builds")
 	}
-	i := []BuildStatus{}
+	var i []BuildStatus
 	err = dynamodbattribute.UnmarshalListOfMaps(ddbResp.Items, &i)
 	if err != nil {
 		return nil, err
@@ -744,7 +744,7 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 		return nil, err
 	}
 	ecsSvc := ecs.New(a.Session)
-	taskARNs := []*string{}
+	var taskARNs []*string
 	input := ecs.ListTasksInput{
 		Cluster: &a.Settings.Cluster.ARN,
 	}
@@ -768,7 +768,7 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	appTasks := []*ecs.Task{}
+	var appTasks []*ecs.Task
 	for _, task := range describeTasksOutput.Tasks {
 		isApp := false
 		isReviewApp := false

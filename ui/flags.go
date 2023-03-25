@@ -46,7 +46,7 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 	ref := reflect.ValueOf(s).Elem()
 	fields := reflect.VisibleFields(ref.Type())
 	// get a list of all flags present in the command
-	flagsUsed := []string{}
+	var flagsUsed []string
 	flags.Visit(func(flag *pflag.Flag) {
 		flagsUsed = append(flagsUsed, flag.Name)
 	})

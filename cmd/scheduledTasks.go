@@ -115,7 +115,7 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 		} else {
 			tasks, err := a.ScheduledTasks()
 			checkErr(err)
-			taskList := []string{}
+			var taskList []string
 			for _, t := range tasks {
 				taskList = append(taskList, fmt.Sprintf("%s %s", t.Schedule, t.Command))
 			}

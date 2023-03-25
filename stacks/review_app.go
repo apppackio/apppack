@@ -94,8 +94,8 @@ func (p *ReviewAppStackParameters) SetInternalFields(sess *session.Session, name
 	if err := p.SetParametersFromPipeline(pipelineStack); err != nil {
 		return err
 	}
-	rand.Seed(time.Now().UnixNano())
-	p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200  // skipcq: GSC-G404
+	rand.Seed(time.Now().UnixNano())                        // skipcq: GO-S1033
+	p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // skipcq: GSC-G404
 	p.Name = pr
 	ui.Spinner.Stop()
 	return nil
@@ -152,7 +152,7 @@ func (*ReviewAppStack) Tags(name *string) []*cloudformation.Tag {
 	return []*cloudformation.Tag{
 		{Key: aws.String("apppack:appName"), Value: &pipeline},
 		{Key: aws.String("apppack:reviewApp"), Value: aws.String(fmt.Sprintf("pr%s", pr))},
-		//{Key: aws.String("apppack:cluster"), Value: aws.String("...")},
+		// {Key: aws.String("apppack:cluster"), Value: aws.String("...")},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}
 }

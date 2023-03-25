@@ -77,7 +77,7 @@ func (m *ServiceUtilizationMetrics) ShortName() string {
 	return fmt.Sprintf("%s util", m.Service)
 }
 
-func (m *ServiceUtilizationMetrics) MetricColor(name *string) cell.Color {
+func (*ServiceUtilizationMetrics) MetricColor(name *string) cell.Color {
 	switch *name {
 	case "cpu":
 		return cell.ColorGreen
@@ -88,7 +88,7 @@ func (m *ServiceUtilizationMetrics) MetricColor(name *string) cell.Color {
 	}
 }
 
-func (s *ServiceUtilizationMetrics) LineChartOptions() []linechart.Option {
+func (*ServiceUtilizationMetrics) LineChartOptions() []linechart.Option {
 	return []linechart.Option{
 		linechart.YAxisCustomScale(0, 100),
 		linechart.YAxisFormattedValues(linechart.ValueFormatterRound),
@@ -152,9 +152,9 @@ func (m *ResponseTimeMetrics) GetApp() *app.App { return m.App }
 
 func (m *ResponseTimeMetrics) GetOptions() *MetricOptions { return m.Options }
 
-func (m *ResponseTimeMetrics) GetService() string { return "web" }
+func (*ResponseTimeMetrics) GetService() string { return "web" }
 
-func (m *ResponseTimeMetrics) Title() string { return "response time (seconds)" }
+func (*ResponseTimeMetrics) Title() string { return "response time (seconds)" }
 
 func (m *ResponseTimeMetrics) ShortName() string {
 	name := "resp time"
@@ -164,11 +164,11 @@ func (m *ResponseTimeMetrics) ShortName() string {
 	return fmt.Sprintf("%s (%s)", name, m.Stat)
 }
 
-func (m *ResponseTimeMetrics) MetricColor(name *string) cell.Color {
+func (*ResponseTimeMetrics) MetricColor(*string) cell.Color {
 	return cell.ColorBlue
 }
 
-func (s *ResponseTimeMetrics) LineChartOptions() []linechart.Option {
+func (*ResponseTimeMetrics) LineChartOptions() []linechart.Option {
 	return []linechart.Option{}
 }
 
@@ -209,13 +209,13 @@ func (m *StatusCodeMetrics) GetApp() *app.App { return m.App }
 
 func (m *StatusCodeMetrics) GetOptions() *MetricOptions { return m.Options }
 
-func (m *StatusCodeMetrics) GetService() string { return "web" }
+func (*StatusCodeMetrics) GetService() string { return "web" }
 
 func (m *StatusCodeMetrics) Title() string { return fmt.Sprintf("%s responses (count)", m.Code) }
 
 func (m *StatusCodeMetrics) ShortName() string { return fmt.Sprintf("%s responses", m.Code) }
 
-func (m *StatusCodeMetrics) MetricColor(name *string) cell.Color {
+func (*StatusCodeMetrics) MetricColor(name *string) cell.Color {
 	switch *name {
 	case "2xx":
 		return cell.ColorGreen
@@ -230,7 +230,7 @@ func (m *StatusCodeMetrics) MetricColor(name *string) cell.Color {
 	}
 }
 
-func (s *StatusCodeMetrics) LineChartOptions() []linechart.Option {
+func (*StatusCodeMetrics) LineChartOptions() []linechart.Option {
 	return []linechart.Option{}
 }
 
