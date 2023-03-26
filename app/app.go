@@ -730,8 +730,31 @@ func (a *App) ConfigPrefix() string {
 }
 
 // GetConfig returns a list of config parameters for the app
-func (a *App) GetConfig() ([]*ssm.Parameter, error) {
-	return SsmParameters(a.Session, a.ConfigPrefix())
+func (a *App) GetConfig() (ConfigVariables, error) {
+	prefix := a.ConfigPrefix()
+	parameters, err := SsmParameters(a.Session, prefix)
+	if err != nil {
+		return nil, err
+	}
+	return NewConfigVariables(parameters), nil
+}
+
+// GetConfigWithManaged returns a list of config parameters for the app with managed value populated
+func (a *App) GetConfigWithManaged() (ConfigVariables, error) {
+	configVars, err := a.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	ssmSvc := ssm.New(a.Session)
+	err = configVars.Transform(func(v *ConfigVariable) error {
+		return v.LoadManaged(ssmSvc.ListTagsForResource)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return configVars, nil
 }
 
 // SetConfig sets a config value for the app

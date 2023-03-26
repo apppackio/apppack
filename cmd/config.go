@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/apppackio/apppack/app"
-	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -108,51 +107,46 @@ var unsetCmd = &cobra.Command{
 	},
 }
 
-func printRow(w *ansiterm.TabWriter, name, value string) {
-	w.SetForeground(ansiterm.Green)
-	fmt.Fprintf(w, "%s:", name)
-	w.SetForeground(ansiterm.Default)
-	fmt.Fprintf(w, "\t%s\n", value)
-}
-
-// listCmd represents the list command
-var listCmd = &cobra.Command{
+// configListCmd represents the list command
+var configListCmd = &cobra.Command{
 	Use:                   "list",
 	Short:                 "list all config variables and values",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		// minwidth, tabwidth, padding, padchar, flags
-		w := ansiterm.NewTabWriter(os.Stdout, 8, 8, 0, '\t', 0)
-		if isatty.IsTerminal(os.Stdout.Fd()) {
-			w.SetColorCapable(true)
-		}
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
-		parameters, err := a.GetConfig()
+		configVars, err := a.GetConfig()
 		checkErr(err)
-		bridge.SortParameters(parameters)
 		ui.Spinner.Stop()
-		ui.PrintHeaderln(fmt.Sprintf("%s Config Vars", AppName))
-		for _, value := range parameters {
-			parts := strings.Split(*value.Name, "/")
-			varname := parts[len(parts)-1]
-			printRow(w, varname, *value.Value)
+
+		if AsJSON {
+			buf, err := configVars.ToJSON()
+			checkErr(err)
+			fmt.Println(buf.String())
+			return
 		}
+
+		// minwidth, tabwidth, padding, padchar, flags
+		w := ansiterm.NewTabWriter(os.Stdout, 8, 8, 0, '\t', 0)
+
+		if isatty.IsTerminal(os.Stdout.Fd()) {
+			w.SetColorCapable(true)
+		}
+
+		ui.PrintHeaderln(fmt.Sprintf("%s Config Vars", AppName))
+		configVars.ToConsole(w)
 		checkErr(w.Flush())
+
 		if a.IsReviewApp() {
 			fmt.Println()
 			a.ReviewApp = nil
+			ui.StartSpinner()
 			parameters, err := a.GetConfig()
 			checkErr(err)
-			bridge.SortParameters(parameters)
 			ui.Spinner.Stop()
-			for _, value := range parameters {
-				parts := strings.Split(*value.Name, "/")
-				varname := parts[len(parts)-1]
-				printRow(w, varname, *value.Value)
-			}
+			parameters.ToConsole(w)
 			ui.PrintHeaderln(fmt.Sprintf("%s Config Vars (inherited)", a.Name))
 			checkErr(w.Flush())
 		}
@@ -160,23 +154,6 @@ var listCmd = &cobra.Command{
 }
 
 var includeManagedVars bool
-
-// parameterIsManaged checks is the parameter was created by a Cloudformation stack
-func parameterIsManaged(ssmSvc *ssm.SSM, parameter *ssm.Parameter) (*bool, error) {
-	resp, err := ssmSvc.ListTagsForResource(&ssm.ListTagsForResourceInput{
-		ResourceId:   parameter.Name,
-		ResourceType: aws.String(ssm.ResourceTypeForTaggingParameter),
-	})
-	if err != nil {
-		return nil, err
-	}
-	for _, tag := range resp.TagList {
-		if *tag.Key == "aws:cloudformation:stack-id" || *tag.Key == "apppack:cloudformation:stack-id" {
-			return aws.Bool(true), nil
-		}
-	}
-	return aws.Bool(false), nil
-}
 
 // configExportCmd represents the config export command
 var configExportCmd = &cobra.Command{
@@ -188,29 +165,17 @@ var configExportCmd = &cobra.Command{
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
-		parameters, err := a.GetConfig()
-		bridge.SortParameters(parameters)
-		checkErr(err)
-		config := make(map[string]string)
-		ssmSvc := ssm.New(a.Session)
-		for _, p := range parameters {
-			parts := strings.Split(*p.Name, "/")
-			varname := parts[len(parts)-1]
-			if !includeManagedVars {
-				isManaged, err := parameterIsManaged(ssmSvc, p)
-				checkErr(err)
-				if *isManaged {
-					continue
-				}
-			}
-			config[varname] = *p.Value
-		}
-		j, err := json.Marshal(config)
+		configVars, err := a.GetConfigWithManaged()
 		checkErr(err)
 		ui.Spinner.Stop()
-		b := bytes.NewBuffer([]byte{})
-		checkErr(json.Indent(b, j, "", "  "))
-		fmt.Println(b.String())
+		var buf *bytes.Buffer
+		if includeManagedVars {
+			buf, err = configVars.ToJSON()
+		} else {
+			buf, err = configVars.ToJSONUnmanaged()
+		}
+		checkErr(err)
+		fmt.Println(buf.String())
 	},
 }
 
@@ -274,7 +239,8 @@ func init() {
 	configCmd.AddCommand(getCmd)
 	configCmd.AddCommand(setCmd)
 	configCmd.AddCommand(unsetCmd)
-	configCmd.AddCommand(listCmd)
+	configCmd.AddCommand(configListCmd)
+	configListCmd.Flags().BoolVarP(&AsJSON, "json", "j", false, "output as JSON")
 	configCmd.AddCommand(configExportCmd)
 	configExportCmd.Flags().BoolVar(&includeManagedVars,
 		"all",

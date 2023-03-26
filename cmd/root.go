@@ -34,17 +34,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var debug bool
+const timeFmt = "Jan 02, 2006 15:04:05 -0700"
 
-const (
-	timeFmt = "Jan 02, 2006 15:04:05 -0700"
-)
-
-// AppName is the `--app-name` flag
-var AppName string
-
-// AccountIDorAlias is the `--account` flag
 var (
+	// debug is the `--debug` flag
+	debug bool
+	// AppName is the `--app-name` flag
+	AppName string
+	// AsJSON is the `--json` flag
+	AsJSON bool
+	// AccountIDorAlias is the `--account` flag
 	AccountIDorAlias          string
 	UseAWSCredentials         = false
 	SessionDurationSeconds    = 900

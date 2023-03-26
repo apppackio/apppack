@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -45,6 +47,7 @@ func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error)
 		WithDecryption: aws.Bool(true),
 	}
 	err := ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
+		logrus.WithFields(logrus.Fields{"path": *input.Path}).Debug("loading parameter by path page")
 		for _, parameter := range resp.Parameters {
 			if parameter == nil {
 				continue
@@ -78,5 +81,22 @@ func S3FromURL(sess *session.Session, logURL string) (*strings.Builder, error) {
 	if err != nil {
 		return nil, err
 	}
+	return buf, nil
+}
+
+var JSONIndent = "  "
+
+func toJSON(v interface{}) (*bytes.Buffer, error) {
+	j, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := bytes.NewBuffer([]byte{})
+
+	if err = json.Indent(buf, j, "", JSONIndent); err != nil {
+		return nil, err
+	}
+
 	return buf, nil
 }
