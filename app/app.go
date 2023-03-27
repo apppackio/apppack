@@ -299,14 +299,17 @@ func (a *App) ReviewAppSettings() (*Settings, error) {
 	return &i.Settings, nil
 }
 
+// ServiceName gets the name of a service for the app taking into account review apps
+func (a *App) ServiceName(service string) string {
+	if a.IsReviewApp() {
+		return fmt.Sprintf("%s-pr%s-%s", a.Name, *a.ReviewApp, service)
+	}
+	return fmt.Sprintf("%s-%s", a.Name, service)
+}
+
 // TaskDefinition gets the Task Definition for a specific task type
 func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, []*ecs.Tag, error) {
-	var family string
-	if a.IsReviewApp() {
-		family = fmt.Sprintf("%s-pr%s-%s", a.Name, *a.ReviewApp, name)
-	} else {
-		family = fmt.Sprintf("%s-%s", a.Name, name)
-	}
+	family := a.ServiceName(name)
 	ecsSvc := ecs.New(a.Session)
 	// verify task exists
 	task, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
@@ -843,7 +846,7 @@ func (a *App) GetECSEvents(service string) ([]*ecs.ServiceEvent, error) {
 	logrus.WithFields(logrus.Fields{"service": service}).Debug("fetching service events")
 	serviceStatus, err := ecsSvc.DescribeServices(&ecs.DescribeServicesInput{
 		Cluster:  &a.Settings.Cluster.ARN,
-		Services: aws.StringSlice([]string{fmt.Sprintf("%s-%s", a.Name, service)}),
+		Services: aws.StringSlice([]string{a.ServiceName(service)}),
 	})
 	if err != nil {
 		return nil, err

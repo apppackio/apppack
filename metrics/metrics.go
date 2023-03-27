@@ -111,7 +111,7 @@ func (m *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricData
 						},
 						{
 							Name:  aws.String("ServiceName"),
-							Value: aws.String(fmt.Sprintf("%s-%s", m.App.Name, m.Service)),
+							Value: aws.String(m.GetApp().ServiceName(m.Service)),
 						},
 					},
 				},
@@ -132,7 +132,7 @@ func (m *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricData
 						},
 						{
 							Name:  aws.String("ServiceName"),
-							Value: aws.String(fmt.Sprintf("%s-%s", m.App.Name, m.Service)),
+							Value: aws.String(m.GetApp().ServiceName(m.Service)),
 						},
 					},
 				},

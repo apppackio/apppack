@@ -43,9 +43,11 @@ var eventsCmd = &cobra.Command{
 		checkErr(err)
 		events, err := a.GetECSEvents(args[0])
 		checkErr(err)
-		waitForSteadyState := cmd.Flag("wait-for-steady").Value.String() == "true"
 		ui.Spinner.Stop()
-		fmt.Println("⏳", aurora.Blue(fmt.Sprintf("waiting for `%s` service to reach a steady state...", args[0])))
+		waitForSteadyState := cmd.Flag("wait-for-steady").Value.String() == "true"
+		if waitForSteadyState {
+			fmt.Println("⏳", aurora.Blue(fmt.Sprintf("waiting for `%s` service to reach a steady state...", args[0])))
+		}
 		for _, event := range events {
 			// when waiting for steady, only show the last minute of events to start
 			if !waitForSteadyState || event.CreatedAt.After(time.Now().Add(-time.Minute)) {
