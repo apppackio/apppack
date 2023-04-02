@@ -34,8 +34,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const timeFmt = "Jan 02, 2006 15:04:05 -0700"
-
 var (
 	// debug is the `--debug` flag
 	debug bool

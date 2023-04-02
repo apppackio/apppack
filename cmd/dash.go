@@ -93,7 +93,7 @@ func BuildLineChart(ctx context.Context, appMetrics metrics.AppMetrics) (*linech
 // Exits when the context expires.
 func periodic(ctx context.Context, interval time.Duration, fn func() error) {
 	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+
 	if err := fn(); err != nil {
 		logrus.WithFields(logrus.Fields{"error": err}).Error("error executing periodic function")
 	}
@@ -105,6 +105,8 @@ func periodic(ctx context.Context, interval time.Duration, fn func() error) {
 				logrus.WithFields(logrus.Fields{"error": err}).Error("error executing periodic function")
 			}
 		case <-ctx.Done():
+			ticker.Stop()
+
 			return
 		}
 	}

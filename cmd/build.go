@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,7 +30,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/codebuild"
 	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/dustin/go-humanize"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -38,8 +38,17 @@ import (
 )
 
 const (
-	indentStr = "    "
-	Started   = "started"
+	Started      = "started"
+	PollInterval = 5 * time.Second
+)
+
+var (
+	BuildListCount            int
+	watchBuildFlag            bool
+	ErrBuildFailed            = fmt.Errorf("build failed")
+	ErrBuildWaitDeprecated    = fmt.Errorf("build wait is deprecated, use `build watch` instead")
+	ErrTaskNotFound           = fmt.Errorf("task not found")
+	ErrCodebuildBuildNotFound = fmt.Errorf("codebuild build not found")
 )
 
 func indent(text, indent string) string {
@@ -48,57 +57,28 @@ func indent(text, indent string) string {
 	}
 	if text[len(text)-1:] == "\n" {
 		result := ""
+
 		for _, j := range strings.Split(text[:len(text)-1], "\n") {
 			result += indent + j + "\n"
 		}
+
 		return result
 	}
+
 	result := ""
 	for _, j := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
 		result += indent + j + "\n"
 	}
+
 	return result[:len(result)-1]
-}
-
-func printBuild(buildStatus *app.BuildStatus) {
-	icon := map[string]aurora.Value{
-		app.PhaseInProgress: aurora.Faint(aurora.Blue("ℹ")),
-		app.PhaseSuccess:    aurora.Green("✔"),
-		app.PhaseFailed:     aurora.Red("✖"),
-	}
-	ui.PrintHeader(fmt.Sprintf("%d", buildStatus.BuildNumber))
-	currentPhase := buildStatus.CurrentPhase()
-	if currentPhase != nil {
-		fmt.Print(" in progress")
-	}
-	fmt.Print(" ", aurora.Blue(buildStatus.Commit))
-	fmt.Printf("\n%s", indentStr)
-	finalPhase, _ := buildStatus.FinalPhase()
-	for _, p := range buildStatus.NamedPhases() {
-		if p.Phase.State == "" {
-			continue
-		}
-		fmt.Printf("%s %s", icon[p.Phase.State], p.Name)
-		if (currentPhase != nil && p.Name == currentPhase.Name) || (finalPhase != nil && p.Name == finalPhase.Name) {
-			fmt.Println()
-
-			break
-		}
-		fmt.Print(aurora.Faint("  |  ").String())
-	}
-	if finalPhase != nil {
-		fmt.Println(aurora.Faint(fmt.Sprintf("%s%s ~ %s", indentStr, finalPhase.Phase.EndTime().Local().Format(timeFmt), humanize.Time(finalPhase.Phase.EndTime()))))
-	} else {
-		fmt.Println(aurora.Faint(fmt.Sprintf("%sstarted %s ~ %s", indentStr, buildStatus.Build.StartTime().Local().Format(timeFmt), humanize.Time(buildStatus.Build.StartTime()))))
-	}
 }
 
 func printCommitLog(sess *session.Session, buildStatus *app.BuildStatus) {
 	commitLog, err := buildStatus.GetCommitLog(sess)
 	if err == nil {
-		fmt.Println(indent(*commitLog, indentStr))
+		fmt.Println(indent(*commitLog, ui.Indent))
 	} else {
-		fmt.Print(indentStr)
+		fmt.Print(ui.Indent)
 		printWarning(fmt.Sprintf("unable to read commit data for build #%d", buildStatus.BuildNumber))
 		fmt.Println()
 	}
@@ -107,130 +87,149 @@ func printCommitLog(sess *session.Session, buildStatus *app.BuildStatus) {
 func pollBuildStatus(a *app.App, buildNumber, retries int) (*app.BuildStatus, error) {
 	// retry a few times for the initial status to show up
 	// once it does, stop retrying
-	buildStatus, err := a.GetBuildStatus(buildNumber)
-	if err != nil {
-		if retries > 0 {
-			time.Sleep(3 * time.Second)
-			return pollBuildStatus(a, buildNumber, retries-1)
+	var (
+		buildStatus *app.BuildStatus
+		err         error
+	)
+
+	for range time.Tick(3 * time.Second) {
+		buildStatus, err = a.GetBuildStatus(buildNumber)
+
+		if retries == 0 {
+			return buildStatus, err
 		}
-		return nil, err
+
+		if err != nil {
+			retries--
+
+			continue
+		}
+
+		break
 	}
+
 	return buildStatus, nil
 }
 
+// handlePhase handles watching a specific phase of the build
+func handlePhase(a *app.App, buildStatus *app.BuildStatus, phaseName app.BuildPhaseLabel) error {
+	var err error
+
+	handlers := map[app.BuildPhaseLabel]func(*app.App, *app.BuildStatus, app.BuildPhaseLabel) error{
+		app.BuildPhaseName:      watchBuildPhase,
+		app.TestPhaseName:       watchTestPhase,
+		app.FinalizePhaseName:   func(*app.App, *app.BuildStatus, app.BuildPhaseLabel) error { return nil },
+		app.ReleasePhaseName:    watchEcsTaskPhase,
+		app.PostdeployPhaseName: watchEcsTaskPhase,
+		app.DeployPhaseName:     watchDeployPhase,
+	}
+
+	if handler, ok := handlers[phaseName]; ok {
+		logrus.WithField("phase", phaseName).Debug("starting phase handler")
+		if err = handler(a, buildStatus, phaseName); err != nil {
+			return err
+		}
+
+		ui.Spinner.Suffix = ""
+
+		ui.StartSpinner()
+	} else {
+		// sleep so the spinner doesn't show "X running for now"
+		time.Sleep(500 * time.Millisecond)
+	}
+	return nil
+}
+
+func waitForNextPhase(a *app.App, buildStatus *app.BuildStatus, lastPhase *app.BuildPhase) (*app.BuildStatus, *app.BuildPhase, error) {
+	var err error
+
+	currentPhase := buildStatus.NextActivePhase(lastPhase)
+	if currentPhase.Name != lastPhase.Name {
+		return buildStatus, currentPhase, nil
+	}
+
+	// wait for the next phase
+	for range time.Tick(PollInterval) {
+		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		currentPhase = buildStatus.NextActivePhase(lastPhase)
+		if currentPhase != lastPhase {
+			break
+		}
+	}
+
+	return buildStatus, currentPhase, nil
+}
+
 func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
-	var lastPhase *app.BuildPhase
-	var currentPhase *app.BuildPhase
-	var failedPhase *app.BuildPhase
-	var lastUpdate time.Time
-	var status string
+	var (
+		lastPhase   *app.BuildPhase
+		failedPhase *app.BuildPhase
+		status      string
+	)
 
 	ui.StartSpinner()
+
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
 	if err != nil {
 		return err
 	}
+	// always start at the build phase
+	currentPhase := buildStatus.NamedPhases()[0]
 
 	for {
-		// catch up with any already completed phases
-		if lastPhase == nil {
-			logrus.Debug("setting current phase to Build")
-			buildPhase := buildStatus.NamedPhases()[0]
-			currentPhase = &buildPhase
-		} else {
-			failedPhase = buildStatus.FirstFailedPhase()
-			if failedPhase != nil {
-				return fmt.Errorf("%s failed at %s", failedPhase.Name, failedPhase.Phase.EndTime().Local().Format(timeFmt))
-			}
-			currentPhase = buildStatus.NextActivePhase(lastPhase)
+		// bail out if there is a failure
+		failedPhase = buildStatus.FirstFailedPhase()
+		if failedPhase != nil {
+			return fmt.Errorf(
+				"%s failed at %s %w",
+				failedPhase.Name,
+				failedPhase.Phase.EndTime().Local().Format(ui.TimeFmt),
+				ErrBuildFailed,
+			)
 		}
 
 		// nothing is currently running
-		if currentPhase == nil {
-			logrus.WithFields(logrus.Fields{"phase": nil}).Debug("current phase")
-			finalPhase, err := buildStatus.FinalPhase()
-			if err != nil {
-				logrus.Debug("waiting for the next phase to start")
-				time.Sleep(5 * time.Second)
+		if currentPhase != nil {
 
-				continue
-			}
-			if finalPhase.Phase.State == "failed" {
-				return fmt.Errorf("%s failed at %s", finalPhase.Name, finalPhase.Phase.EndTime().Local().Format(timeFmt))
-			}
-			if finalPhase.Name == "Deploy" {
-				break
-			}
-			time.Sleep(5 * time.Second)
+			logrus.WithFields(logrus.Fields{"phase": currentPhase.Name}).Debug("current phase")
 
-			continue
+			// phase changed since last iteration
+			if lastPhase == nil || lastPhase.Name != currentPhase.Name {
+				status = fmt.Sprintf("%s started", currentPhase.Name)
+
+				ui.Spinner.Stop()
+				ui.Spinner.Suffix = ""
+
+				if lastPhase != nil && lastPhase.Name == app.TestPhaseName && buildStatus.Status == app.PhaseInProgress {
+					// give test logs a chance to catch-up
+					time.Sleep(1 * time.Second)
+				}
+
+				fmt.Printf(
+					"\n⚡️ %s\t%s\n",
+					aurora.Yellow(status),
+					aurora.Faint(currentPhase.Phase.StartTime().Local().Format(ui.TimeFmt)),
+				)
+				ui.StartSpinner()
+
+				if err = handlePhase(a, buildStatus, currentPhase.Name); err != nil {
+					return err
+				}
+
+				if currentPhase.Name == app.DeployPhaseName {
+					break
+				}
+			}
 		}
-		logrus.WithFields(logrus.Fields{"phase": currentPhase.Name}).Debug("current phase")
-		lastUpdate = currentPhase.Phase.StartTime()
-		// phase changed since last iteration
-		if lastPhase == nil || lastPhase.Name != currentPhase.Name {
-			caser := cases.Title(language.English)
-			status = fmt.Sprintf("%s started", caser.String(currentPhase.Name))
-			ui.Spinner.Stop()
-			ui.Spinner.Suffix = ""
-			if lastPhase != nil && lastPhase.Name == "Test" {
-				// give test logs a chance to catch-up
-				time.Sleep(1 * time.Second)
-			}
-			fmt.Printf("\n⚡️ %s\t%s\n", aurora.Yellow(status), aurora.Faint(currentPhase.Phase.StartTime().Local().Format(timeFmt)))
-			ui.StartSpinner()
-			lastPhase = currentPhase
 
-			switch currentPhase.Name {
-			case "Build":
-				err = watchBuildPhase(a, buildStatus)
-				if err != nil {
-					return err
-				}
-				ui.Spinner.Suffix = ""
-				ui.StartSpinner()
-			case "Test":
-				err = watchTestPhase(a, buildStatus)
-				if err != nil {
-					return err
-				}
-				ui.Spinner.Suffix = ""
-				ui.StartSpinner()
-			case "Release":
-				err = watchReleasePhase(a, buildStatus)
-				if err != nil {
-					return err
-				}
-				ui.Spinner.Suffix = ""
-				ui.StartSpinner()
-			case "Postdeploy":
-				err = watchPostdeployPhase(a, buildStatus)
-				if err != nil {
-					return err
-				}
-				ui.Spinner.Suffix = ""
-				ui.StartSpinner()
-			case "Deploy":
-				err = watchDeployPhase(a, buildStatus)
-				if err != nil {
-					return err
-				}
-				ui.Spinner.Suffix = ""
-				ui.StartSpinner()
-			default:
-				// sleep for a second so the spinner doesn't show "X running for now"
-				time.Sleep(500 * time.Millisecond)
-			}
-		} else {
-			ui.Spinner.Suffix = fmt.Sprintf(" %s running for %s", currentPhase.Name, strings.Replace(humanize.Time(lastUpdate), " ago", "", 1))
-		}
-		// sleep for a bit if we're not ready to move onto the next phase
-		if buildStatus.NextActivePhase(lastPhase) == lastPhase {
-			time.Sleep(5 * time.Second)
-			buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
-			if err != nil {
-				return err
-			}
+		lastPhase = currentPhase
+		buildStatus, currentPhase, err = waitForNextPhase(a, buildStatus, lastPhase)
+		if err != nil {
+			return err
 		}
 	}
 	ui.Spinner.Stop()
@@ -244,12 +243,14 @@ func logMarker(name string) string {
 
 func printLogLine(line string) {
 	ui.Spinner.Stop()
-	if strings.HasPrefix(line, "===> ") {
+
+	switch {
+	case strings.HasPrefix(line, "===> "):
 		fmt.Printf("%s %s\n", aurora.Blue("===>"), aurora.White(strings.SplitN(line, " ", 2)[1]))
-	} else if strings.HasPrefix(line, "Unable to delete previous cache image: DELETE") {
+	case strings.HasPrefix(line, "Unable to delete previous cache image: DELETE"):
 		// https://github.com/aws/containers-roadmap/issues/1229
 		logrus.WithFields(logrus.Fields{"line": line}).Debug("skipping inconsequential error")
-	} else {
+	default:
 		fmt.Printf("%s\n", line)
 	}
 }
@@ -266,12 +267,17 @@ func S3Log(sess *session.Session, logURL string) error {
 	return nil
 }
 
+// StreamEvents fetches events from a CloudWatch log group and streams all events between the markers to stdout
+// until the stopTailing channel is closed.
 func StreamEvents(sess *session.Session, logURL string, marker *string, stopTailing <-chan bool) error {
-	var lastSeenTime *int64
-	var seenEventIDs map[string]bool
-	var markerStart *string
-	var markerStop *string
-	var errorRe *regexp.Regexp
+	var (
+		lastSeenTime *int64
+		seenEventIDs map[string]bool
+		markerStart  *string
+		markerStop   *string
+		errorRe      *regexp.Regexp
+	)
+
 	markerFound := false
 	cloudwatchlogsSvc := cloudwatchlogs.New(sess)
 	parts := strings.Split(strings.TrimPrefix(logURL, "cloudwatch://"), "#")
@@ -288,6 +294,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 		markerStop = aws.String(logMarker(fmt.Sprintf("%s-end", *marker)))
 		errorRe = regexp.MustCompile(`^[Container] .* Command did not exit successfully .*`)
 	}
+
 	clearSeenEventIds := func() {
 		seenEventIDs = make(map[string]bool)
 	}
@@ -299,6 +306,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 	updateLastSeenTime := func(ts *int64) {
 		if lastSeenTime == nil || *ts > *lastSeenTime {
 			lastSeenTime = ts
+
 			clearSeenEventIds()
 		}
 	}
@@ -309,38 +317,44 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 			// messages may or may not have a newline. normalize them
 			message = strings.TrimSuffix(*event.Message, "\n")
 			updateLastSeenTime(event.Timestamp)
-			if _, seen := seenEventIDs[*event.EventId]; !seen {
-				if markerFound {
-					if markerStop != nil && *markerStop == message {
-						logrus.WithFields(logrus.Fields{
-							"marker": *markerStop,
-						}).Debug("found log marker")
-						doneTailing = true
-						return false
-					}
-					if errorRe != nil && errorRe.FindStringIndex(message) != nil {
-						logrus.WithFields(logrus.Fields{
-							"error": message,
-						}).Debug("found error")
-						doneTailing = true
-						return false
-					}
-					printLogLine(message)
-				} else if markerStart != nil {
-					if *markerStart == strings.TrimSuffix(message, "\n") {
-						logrus.WithFields(logrus.Fields{
-							"marker": *markerStart,
-						}).Debug("found log marker")
-						markerFound = true
-					}
-				}
-				addSeenEventIDs(event.EventId)
+			if _, seen := seenEventIDs[*event.EventId]; seen {
+				continue
 			}
+			if markerFound {
+				if markerStop != nil && *markerStop == message {
+					logrus.WithFields(logrus.Fields{
+						"marker": *markerStop,
+					}).Debug("found log marker")
+
+					doneTailing = true
+					return false
+				}
+				if errorRe != nil && errorRe.FindStringIndex(message) != nil {
+					logrus.WithFields(logrus.Fields{
+						"error": message,
+					}).Debug("found error")
+
+					doneTailing = true
+					return false
+				}
+				printLogLine(message)
+			} else if markerStart != nil {
+				if *markerStart == strings.TrimSuffix(message, "\n") {
+					logrus.WithFields(logrus.Fields{
+						"marker": *markerStart,
+					}).Debug("found log marker")
+
+					markerFound = true
+				}
+			}
+			addSeenEventIDs(event.EventId)
 		}
 		return false
 	}
 	input := cloudwatchlogs.FilterLogEventsInput{LogGroupName: &logGroup, LogStreamNames: []*string{&logStream}}
+
 	logrus.WithFields(logFields).Debug("starting log tail")
+
 	stopSignalReceived := false
 	countdown := 60
 
@@ -348,6 +362,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 		select {
 		case <-stopTailing:
 			logrus.WithFields(logFields).Debug("log tail stop signal received")
+
 			stopSignalReceived = true
 		default:
 			// log producer complete, but end marker not found
@@ -378,29 +393,101 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 	}
 }
 
-func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
-	ui.StartSpinner()
-	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
-	if err != nil {
-		return err
+// hasHiddenBuildFailure returns true if the build failed outside of BUILD or POST_BUILD phases
+func hasHiddenBuildFailure(build *codebuild.Build) *codebuild.BuildPhase {
+	for _, phase := range build.Phases {
+		if phase == nil || phase.PhaseType == nil || phase.PhaseStatus == nil {
+			continue
+		}
+
+		hidden := !(*phase.PhaseType == "BUILD" || *phase.PhaseType == "POST_BUILD")
+		failed := !(*phase.PhaseStatus == "IN_PROGRESS" || *phase.PhaseStatus == "SUCCEEDED")
+
+		if hidden && failed {
+			return phase
+		}
 	}
+	return nil
+}
+
+// dumpCodebuildLogForPhase prints the logs for a given phase to stdout.
+func dumpCodebuildLogForPhase(sess *session.Session, build *codebuild.Build, phase *codebuild.BuildPhase) error {
+	logsSvc := cloudwatchlogs.New(sess)
+	return logsSvc.GetLogEventsPages(&cloudwatchlogs.GetLogEventsInput{
+		StartTime:     aws.Int64(phase.StartTime.UnixMilli()),
+		EndTime:       aws.Int64(phase.EndTime.UnixMilli() + 5000), // add 5 seconds to ensure we get all the logs
+		LogGroupName:  build.Logs.GroupName,
+		LogStreamName: build.Logs.StreamName,
+	}, func(page *cloudwatchlogs.GetLogEventsOutput, _ bool) bool {
+		for _, event := range page.Events {
+			printLogLine(*event.Message)
+		}
+		return true
+	})
+}
+
+// loadCodebuildBuild loads the Codebuild build from the AWS API.
+func loadCodebuildBuild(codebuildSvc codebuild.CodeBuild, buildARN string) (*codebuild.Build, error) {
+	buildID := strings.Split(buildARN, "/")[1]
+	builds, err := codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
+		Ids: []*string{&buildID},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(builds.Builds) == 0 {
+		return nil, ErrCodebuildBuildNotFound
+	}
+
+	return builds.Builds[0], nil
+}
+
+// watchBuildPhase watches the Codebuild process and prints the logs to the console.
+func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus, _ app.BuildPhaseLabel) error {
+	ui.StartSpinner()
+
+	// bail early if the logs are already on S3
 	if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Build.Logs)
 	}
+
 	codebuildSvc := codebuild.New(a.Session)
 	buildLogTailing := false
 	stopTailing := make(chan bool)
 
-	for buildStatus.Build.State == Started {
-		buildID := strings.Split(buildStatus.Build.Arns[0], "/")[1]
-		builds, err := codebuildSvc.BatchGetBuilds(&codebuild.BatchGetBuildsInput{
-			Ids: []*string{&buildID},
-		})
+	build, err := loadCodebuildBuild(*codebuildSvc, buildStatus.Build.Arns[0])
+	if err != nil {
+		return err
+	}
+
+	failedAt := hasHiddenBuildFailure(build)
+	if failedAt != nil {
+		return dumpCodebuildLogForPhase(a.Session, build, failedAt)
+	}
+
+	for range time.Tick(PollInterval) {
+		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
 		if err != nil {
 			return err
 		}
-		build := builds.Builds[0]
-		if *build.CurrentPhase == "BUILD" {
+
+		if buildStatus.Build.State != Started {
+			return nil
+		}
+
+		build, err := loadCodebuildBuild(*codebuildSvc, buildStatus.Build.Arns[0])
+		if err != nil {
+			return err
+		}
+
+		failedAt := hasHiddenBuildFailure(build)
+		if failedAt != nil {
+			return dumpCodebuildLogForPhase(a.Session, build, failedAt)
+		}
+
+		switch {
+		case *build.CurrentPhase == "BUILD":
 			if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
 				return S3Log(a.Session, buildStatus.Build.Logs)
 			}
@@ -408,139 +495,136 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 				buildLogTailing = true
 				go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"), stopTailing)
 			}
-		} else if *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD" {
+		case *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD":
 			ui.StartSpinner()
+
 			caser := cases.Title(language.English)
 			ui.Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", caser.String(strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " "))))
-		} else {
+		default:
 			logrus.WithFields(logrus.Fields{"phase": *build.CurrentPhase}).Debug("watch build stopped")
 			if buildLogTailing {
 				stopTailing <- true
 			}
+
 			return nil
 		}
-		time.Sleep(5 * time.Second)
-		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
-		if err != nil {
-			return err
-		}
 	}
+
 	return nil
 }
 
-func watchTestPhase(a *app.App, buildStatus *app.BuildStatus) error {
+func watchTestPhase(a *app.App, buildStatus *app.BuildStatus, _ app.BuildPhaseLabel) error {
 	ui.StartSpinner()
+
 	stopTailing := make(chan bool)
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
 	if err != nil {
 		return err
 	}
+
 	if strings.HasPrefix(buildStatus.Test.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Test.Logs)
 	}
+
 	go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("test"), stopTailing)
 
-	for buildStatus.Test.State == Started {
-		time.Sleep(5 * time.Second)
+	for range time.Tick(PollInterval) {
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
 		if err != nil {
 			return err
 		}
+
+		if buildStatus.Test.State != Started {
+			break
+		}
 	}
+
 	stopTailing <- true
+
 	return nil
 }
 
-func watchReleasePhase(a *app.App, buildStatus *app.BuildStatus) error {
-	ui.StartSpinner()
-	stopTailing := make(chan bool)
-	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
+// getTaskStatus returns the last status of a task from ECS
+func getTaskStatus(ecsSvc *ecs.ECS, clusterArn string, taskArn string) (string, error) {
+	task, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+		Tasks:   []*string{&taskArn},
+		Cluster: &clusterArn,
+	})
 	if err != nil {
-		return err
+		return "", err
 	}
-	ecsSvc := ecs.New(a.Session)
-	if err = a.LoadSettings(); err != nil {
-		return err
+	if len(task.Tasks) == 0 {
+		return "", ErrTaskNotFound
 	}
-	releaseLogTailing := false
-	if strings.HasPrefix(buildStatus.Release.Logs, "s3://") {
-		return S3Log(a.Session, buildStatus.Release.Logs)
-	}
-	for buildStatus.Release.State == Started {
-		if len(buildStatus.Release.Arns) > 0 {
-			out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
-				Cluster: &a.Settings.Cluster.ARN,
-				Tasks:   []*string{&buildStatus.Release.Arns[0]},
-			})
-			if err != nil {
-				return err
-			}
-			status := *out.Tasks[0].LastStatus
-			if status == "RUNNING" && !releaseLogTailing {
-				releaseLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Release.Logs, nil, stopTailing)
-			}
-			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
-				stopTailing <- true
-				ui.StartSpinner()
-			}
-			caser := cases.Title(language.English)
-			ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", caser.String(strings.ToLower(status)))
-		}
-		time.Sleep(5 * time.Second)
-		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
-		if err != nil {
-			return err
-		}
-	}
-	logrus.Debug("loop end")
-	logrus.WithFields(logrus.Fields{"phase": "release"}).Debug("phase completed")
-	return nil
+	return *task.Tasks[0].LastStatus, nil
 }
 
-// TODO DRY with watchReleasePhase. Combine to watchEcsTaskPhase
-func watchPostdeployPhase(a *app.App, buildStatus *app.BuildStatus) error {
+// fetchBuildPhase fetches the build status from DDB and returns the specified phase by name
+func fetchBuildPhase(a *app.App, buildNumber int, phaseName app.BuildPhaseLabel) (*app.BuildPhaseDetail, error) {
+	buildStatus, err := a.GetBuildStatus(buildNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildStatus.PhaseByName(phaseName)
+}
+
+func watchEcsTaskPhase(a *app.App, buildStatus *app.BuildStatus, phaseName app.BuildPhaseLabel) error {
 	ui.StartSpinner()
+
 	stopTailing := make(chan bool)
-	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
+	isTailing := false
+
+	phase, err := buildStatus.PhaseByName(phaseName)
 	if err != nil {
 		return err
 	}
+
+	// if the logs are in s3, just return those
+	if strings.HasPrefix(phase.Logs, "s3://") {
+		return S3Log(a.Session, phase.Logs)
+	}
+
 	ecsSvc := ecs.New(a.Session)
+
 	if err = a.LoadSettings(); err != nil {
 		return err
 	}
-	postdeployLogTailing := false
-	if strings.HasPrefix(buildStatus.Postdeploy.Logs, "s3://") {
-		return S3Log(a.Session, buildStatus.Postdeploy.Logs)
-	}
-	for buildStatus.Postdeploy.State == Started {
-		if len(buildStatus.Postdeploy.Arns) > 0 {
-			out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
-				Cluster: &a.Settings.Cluster.ARN,
-				Tasks:   []*string{&buildStatus.Postdeploy.Arns[0]},
-			})
-			if err != nil {
-				return err
-			}
-			status := *out.Tasks[0].LastStatus
-			if status == "RUNNING" && !postdeployLogTailing {
-				postdeployLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Postdeploy.Logs, nil, stopTailing)
-			}
-			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
-				stopTailing <- true
-				ui.StartSpinner()
-			}
-			caser := cases.Title(language.English)
-			ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", caser.String(strings.ToLower(status)))
-		}
-		time.Sleep(5 * time.Second)
-		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
+
+	for range time.Tick(PollInterval) {
+		phase, err = fetchBuildPhase(a, buildStatus.BuildNumber, phaseName)
 		if err != nil {
 			return err
 		}
+		// only watch while the phase is in progress
+		if phase.State != Started {
+			return nil
+		}
+		// if a task hasn't been created yet, just keep waiting
+		if len(phase.Arns) == 0 {
+			continue
+		}
+
+		status, err := getTaskStatus(ecsSvc, a.Settings.Cluster.ARN, phase.Arns[0])
+		if err != nil {
+			return err
+		}
+
+		if status == "RUNNING" && !isTailing {
+			isTailing = true
+			go StreamEvents(a.Session, phase.Logs, nil, stopTailing)
+		}
+
+		if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
+			stopTailing <- true
+
+			ui.StartSpinner()
+		}
+
+		caser := cases.Title(language.English)
+		ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", caser.String(strings.ToLower(status)))
 	}
+
 	return nil
 }
 
@@ -549,18 +633,22 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 	if err != nil {
 		return err
 	}
+
 	serviceARNs := buildStatus.Deploy.Arns
 	ecsSvc := ecs.New(a.Session)
+	seenEventIDs := map[string]bool{}
+
 	if err = a.LoadSettings(); err != nil {
 		return err
 	}
-	seenEventIDs := map[string]bool{}
+
 	var serviceStatus *ecs.DescribeServicesOutput
 
 	for buildStatus.Deploy.State == Started {
 		logrus.WithFields(logrus.Fields{
 			"services": serviceARNs,
 		}).Debug("polling service status")
+
 		serviceStatus, err = ecsSvc.DescribeServices(&ecs.DescribeServicesInput{
 			Cluster:  &a.Settings.Cluster.ARN,
 			Services: aws.StringSlice(serviceARNs),
@@ -568,11 +656,14 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 		if err != nil {
 			return err
 		}
+
 		for _, service := range serviceStatus.Services {
 			eventCount := len(service.Events)
+
 			for i := range service.Events {
 				// iterate slice in reverse
 				event := service.Events[eventCount-1-i]
+
 				if _, seen := seenEventIDs[*event.Id]; seen {
 					continue
 				} else if event.CreatedAt.Unix() < buildStatus.Deploy.Start {
@@ -584,13 +675,17 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 
 					continue
 				}
+
 				seenEventIDs[*event.Id] = true
+
 				ui.Spinner.Stop()
 				fmt.Printf("%s\n", *event.Message)
 			}
 		}
+
 		ui.StartSpinner()
-		time.Sleep(5 * time.Second)
+		time.Sleep(PollInterval)
+
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
 		if err != nil {
 			return err
@@ -599,7 +694,7 @@ func streamEcsServiceEvents(a *app.App, buildStatus *app.BuildStatus) error {
 	return nil
 }
 
-func watchDeployPhase(a *app.App, buildStatus *app.BuildStatus) error {
+func watchDeployPhase(a *app.App, buildStatus *app.BuildStatus, _ app.BuildPhaseLabel) error {
 	ui.StartSpinner()
 	return streamEcsServiceEvents(a, buildStatus)
 }
@@ -635,7 +730,7 @@ var buildStartCmd = &cobra.Command{
 		buildStatus, err := pollBuildStatus(a, int(*build.BuildNumber), 10)
 		checkErr(err)
 		ui.Spinner.Stop()
-		printBuild(buildStatus)
+		buildStatus.ToConsole(os.Stdout)
 		if watchBuildFlag {
 			checkErr(watchBuild(a, buildStatus))
 		}
@@ -648,7 +743,7 @@ var buildWaitCmd = &cobra.Command{
 	Short:                 "wait is deprecated -- use `watch` instead",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		checkErr(fmt.Errorf("the `build wait` command is deprecated -- use `build watch` instead"))
+		checkErr(ErrBuildWaitDeprecated)
 	},
 }
 
@@ -673,7 +768,7 @@ var buildWatchCmd = &cobra.Command{
 		}
 		checkErr(err)
 		ui.Spinner.Stop()
-		printBuild(build)
+		build.ToConsole(os.Stdout)
 		printCommitLog(a.Session, build)
 		checkErr(watchBuild(a, build))
 	},
@@ -688,17 +783,23 @@ var buildListCmd = &cobra.Command{
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
-		builds, err := a.RecentBuilds(15)
+		builds, err := a.RecentBuilds(BuildListCount)
 		checkErr(err)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			buf, err := builds.ToJSON()
+			checkErr(err)
+			fmt.Println(buf.String())
+			return
+		}
+
 		for i := range builds {
-			printBuild(&builds[i])
-			printCommitLog(a.Session, &builds[i])
+			builds[i].ToConsole(os.Stdout)
+			printCommitLog(a.Session, builds[i])
 		}
 	},
 }
-
-var watchBuildFlag bool
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
@@ -710,7 +811,10 @@ func init() {
 	buildStartCmd.Flags().BoolVarP(&watchBuildFlag, "watch", "w", false, "watch build process")
 	buildStartCmd.Flags().BoolVar(&watchBuildFlag, "wait", false, "watch build process")
 	buildStartCmd.Flags().MarkDeprecated("wait", "please use --watch instead")
+
 	buildCmd.AddCommand(buildListCmd)
+	buildListCmd.Flags().IntVarP(&BuildListCount, "num", "n", 15, "limit number of builds to list")
+	buildListCmd.Flags().BoolVarP(&AsJSON, "json", "j", false, "output as JSON")
 
 	buildCmd.AddCommand(buildWaitCmd)
 	buildCmd.AddCommand(buildWatchCmd)

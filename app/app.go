@@ -661,7 +661,7 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 }
 
 // ListBuilds lists recent CodeBuild runs
-func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
+func (a *App) RecentBuilds(count int) (BuildStatuses, error) {
 	ddbSvc := dynamodb.New(a.Session)
 	primaryID := fmt.Sprintf("APP#%s", a.Name)
 	if a.IsReviewApp() {
@@ -682,24 +682,13 @@ func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	if ddbResp.Items == nil {
-		return nil, fmt.Errorf("could not find any builds")
-	}
-	var i []BuildStatus
-	err = dynamodbattribute.UnmarshalListOfMaps(ddbResp.Items, &i)
-	if err != nil {
-		return nil, err
-	}
-	if len(i) == 0 {
-		return nil, fmt.Errorf("could not find any builds")
-	}
-	return i, nil
+	return NewBuildStatuses(ddbResp.Items)
 }
 
 // GetBuildStatus retrieves a build from the buildNumber
 // if buildNumber is -1, the most recent build will be retrieved
 func (a *App) GetBuildStatus(buildNumber int) (*BuildStatus, error) {
-	var build BuildStatus
+	var build *BuildStatus
 	if buildNumber == -1 {
 		builds, err := a.RecentBuilds(1)
 		if err != nil {
@@ -711,15 +700,17 @@ func (a *App) GetBuildStatus(buildNumber int) (*BuildStatus, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = dynamodbattribute.UnmarshalMap(*item, &build)
+
+		build, err = NewBuildStatus(*item)
 		if err != nil {
 			return nil, err
 		}
+
 		if len(build.Build.Arns) == 0 {
 			return nil, fmt.Errorf("build has not started yet -- try again in a few seconds")
 		}
 	}
-	return &build, nil
+	return build, nil
 }
 
 // ConfigPrefix returns the SSM Parameter Store prefix for config variables
