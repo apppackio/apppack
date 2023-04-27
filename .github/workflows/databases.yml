@@ -62,7 +62,7 @@ jobs:
                 --aws-credentials \
                 --non-interactive \
                 --cluster apppack \
-                --instance-class db.t3.micro \
+                --instance-class db.t4g.micro \
                 --engine mysql \
                 --allocated-storage 10 \
                 --max-allocated-storage 20 \
@@ -98,7 +98,7 @@ jobs:
                 --aws-credentials \
                 --non-interactive \
                 --cluster apppack \
-                --instance-class db.t3.micro \
+                --instance-class db.t4g.micro \
                 --engine postgres \
                 --allocated-storage 10 \
                 --max-allocated-storage 20 \
@@ -134,7 +134,7 @@ jobs:
                 --aws-credentials \
                 --non-interactive \
                 --cluster apppack \
-                --instance-class db.t3.medium \
+                --instance-class db.t4g.medium \
                 --engine aurora-mysql \
                 --allocated-storage 10 \
                 --max-allocated-storage 20 \
@@ -170,7 +170,7 @@ jobs:
                 --aws-credentials \
                 --non-interactive \
                 --cluster apppack \
-                --instance-class db.t3.medium \
+                --instance-class db.t4g.medium \
                 --engine aurora-postgresql \
                 aurora-postgres
         timeout-minutes: 25
