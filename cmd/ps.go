@@ -251,6 +251,8 @@ func init() {
 	psCmd.AddCommand(psResizeCmd)
 	psResizeCmd.Flags().Float64Var(&scaleCPU, "cpu", 0.5, "CPU cores available for process")
 	psResizeCmd.Flags().StringVar(&scaleMemory, "memory", "1G", "memory (e.g. '2G', '512M') available for process")
+	psResizeCmd.MarkFlagRequired("cpu")
+	psResizeCmd.MarkFlagRequired("memory")
 
 	psCmd.AddCommand(psScaleCmd)
 	psCmd.AddCommand(psExecCmd)
