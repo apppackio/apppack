@@ -24,8 +24,12 @@ import (
 	"github.com/juju/ansiterm/tabwriter"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/browser"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
+
+// noBrowser is a flag to disable opening a browser
+var noBrowser bool
 
 // authCmd represents the auth command
 var authCmd = &cobra.Command{
@@ -43,10 +47,19 @@ func Login() *auth.UserInfo {
 	checkErr(err)
 	fmt.Println("Your verification code is", deviceCode.UserCode)
 	fmt.Println("Finish authentication in your web browser...")
-	err = browser.OpenURL(deviceCode.VerificationURIComplete)
-	if err != nil {
-		fmt.Println("URL:", aurora.White(deviceCode.VerificationURIComplete).String())
+	if !noBrowser {
+		err = browser.OpenURL(deviceCode.VerificationURIComplete)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{"error": err}).Debug("failed to open browser")
+
+			noBrowser = true
+		}
 	}
+	if noBrowser {
+		fmt.Println("URL:", aurora.White(deviceCode.VerificationURIComplete).String())
+		fmt.Println()
+	}
+
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " waiting for verification"
 	tokens, err := auth.Oauth.PollForToken(deviceCode)
@@ -183,6 +196,7 @@ var accountsCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(loginCmd)
+	loginCmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the URL instead of opening a browser window")
 	authCmd.AddCommand(logoutCmd)
 	authCmd.AddCommand(whoAmICmd)
 	authCmd.AddCommand(appsCmd)
