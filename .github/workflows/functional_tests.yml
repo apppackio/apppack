@@ -131,17 +131,6 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      # TODO: remove after account stack has smarter handling of this role
-      -
-        name: Delete ECS Service Linked Role
-        if: always()
-        shell: bash
-        run: |
-          aws iam delete-service-linked-role --role-name AWSServiceRoleForECS
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
       -
         name: Disable account
         if: always()
