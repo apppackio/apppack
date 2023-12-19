@@ -24,7 +24,7 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0
 )
 
-require github.com/cli/cli/v2 v2.25.1 // indirect
+require github.com/cli/cli/v2 v2.25.1
 
 require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2 // indirect
@@ -49,10 +49,10 @@ require (
 	github.com/rivo/uniseg v0.4.3 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
-	golang.org/x/crypto v0.5.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/term v0.6.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/crypto v0.17.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/text v0.14.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
