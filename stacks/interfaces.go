@@ -149,7 +149,7 @@ func ExportParameters(parameters Parameters, sess *session.Session, name *string
 }
 
 // PruneUnsupportedParameters removes parameters that are not supported by the current stack version
-func PruneUnsupportedParameters(supportedParameters []*cloudformation.Parameter, desiredParameters []*cloudformation.Parameter) []*cloudformation.Parameter {
+func PruneUnsupportedParameters(supportedParameters, desiredParameters []*cloudformation.Parameter) []*cloudformation.Parameter {
 	var supportedParameterNames []string
 	for _, param := range supportedParameters {
 		supportedParameterNames = append(supportedParameterNames, *param.ParameterKey)

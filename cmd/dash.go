@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/metrics"
@@ -293,10 +294,11 @@ var dashCmd = &cobra.Command{
 		var graphButtons []widgetapi.Widget
 		for i := range appMetrics {
 			shortcut := i + 1
+			shortcutRune, _ := utf8.DecodeRuneInString(fmt.Sprintf("%d", shortcut))
 			idx := i // create new int in scope for closure below
 			opts := append(
 				buttonOpts,
-				button.GlobalKey(keyboard.Key([]rune(fmt.Sprintf("%d", shortcut))[0])),
+				button.GlobalKey(keyboard.Key(shortcutRune)),
 				button.FillColor(cell.ColorGreen),
 			)
 			text := fmt.Sprintf("[%d] %s", shortcut, appMetrics[idx].ShortName())
@@ -349,9 +351,10 @@ var dashCmd = &cobra.Command{
 
 		for _, tf := range timeframes {
 			thisTimeframe := tf.Clone()
+			shortcutRune, _ := utf8.DecodeRuneInString(tf.ShortcutKey)
 			opts := append(
 				buttonOpts,
-				button.GlobalKey(keyboard.Key([]rune(tf.ShortcutKey)[0])),
+				button.GlobalKey(keyboard.Key(shortcutRune)),
 				button.FillColor(cell.ColorBlue),
 			)
 			text := strings.Replace(tf.Name, tf.ShortcutKey, fmt.Sprintf("[%s]", tf.ShortcutKey), 1)

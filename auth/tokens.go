@@ -26,7 +26,7 @@ type Tokens struct {
 
 func (t *Tokens) GetUserInfo() (*UserInfo, error) {
 	logrus.WithFields(logrus.Fields{"url": userInfoURL}).Debug("fetching user info")
-	req, err := http.NewRequest(http.MethodGet, userInfoURL, nil)
+	req, err := http.NewRequest(http.MethodGet, userInfoURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (t *Tokens) IsExpired() (*bool, error) {
 
 func (t *Tokens) GetAppList() ([]*AppRole, error) {
 	logrus.WithFields(logrus.Fields{"url": appListURL}).Debug("fetching app list")
-	req, err := http.NewRequest(http.MethodGet, appListURL, nil)
+	req, err := http.NewRequest(http.MethodGet, appListURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (t *Tokens) GetAppRole(name string) (*AppRole, error) {
 
 func (t *Tokens) GetAdminList() ([]*AdminRole, error) {
 	logrus.WithFields(logrus.Fields{"url": adminListURL}).Debug("fetching admin list")
-	req, err := http.NewRequest(http.MethodGet, adminListURL, nil)
+	req, err := http.NewRequest(http.MethodGet, adminListURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

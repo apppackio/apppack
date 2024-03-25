@@ -64,7 +64,7 @@ func CheckForUpdate(ctx context.Context, client *http.Client, stateFilePath, rep
 }
 
 func getLatestReleaseInfo(ctx context.Context, client *http.Client, repo string) (*ReleaseInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo), http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func setStateEntry(stateFilePath string, t time.Time, r ReleaseInfo) error {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Dir(stateFilePath), 0o755)
+	err = os.MkdirAll(filepath.Dir(stateFilePath), 0o750)
 	if err != nil {
 		return err
 	}

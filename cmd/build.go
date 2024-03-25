@@ -286,7 +286,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 	} else {
 		markerStart = aws.String(logMarker(fmt.Sprintf("%s-start", *marker)))
 		markerStop = aws.String(logMarker(fmt.Sprintf("%s-end", *marker)))
-		errorRe = regexp.MustCompile(`^[Container] .* Command did not exit successfully .*`)
+		errorRe = regexp.MustCompile(`^\[Container\] .* Command did not exit successfully .*`)
 	}
 	clearSeenEventIds := func() {
 		seenEventIDs = make(map[string]bool)

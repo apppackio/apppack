@@ -429,10 +429,10 @@ func (a *App) LoadECSConfig() error {
 func (a *App) GetDeployStatus(buildARN string) (*DeployStatus, error) {
 	key := "DEPLOYSTATUS"
 	if a.IsReviewApp() {
-		key = strings.Join([]string{key, *a.ReviewApp}, "#")
+		key = key + "#" + *a.ReviewApp
 	}
 	if buildARN != "" {
-		key = strings.Join([]string{key, buildARN}, "#")
+		key = key + "#" + buildARN
 	}
 	Item, err := a.ddbItem(key)
 	if err != nil {

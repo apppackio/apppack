@@ -72,7 +72,7 @@ func TestScheduledTasksCreate(t *testing.T) {
 		"PutParameter",
 		&ssm.PutParameterInput{
 			Name:      &parameterName,
-			Value:     aws.String(fmt.Sprintf("[{\"schedule\":\"%s\",\"command\":\"%s\"}]", schedule, command)),
+			Value:     aws.String(fmt.Sprintf("[{\"schedule\":%q,\"command\":%q}]", schedule, command)),
 			Type:      aws.String("String"),
 			Overwrite: aws.Bool(true),
 		},
@@ -100,7 +100,7 @@ func TestScheduledTasksDelete(t *testing.T) {
 	a.AWS.(*MockAWS).On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
-	).Return(aws.String(fmt.Sprintf("[{\"schedule\":\"%s\",\"command\":\"%s\"}]", schedule, command)), nil)
+	).Return(aws.String(fmt.Sprintf("[{\"schedule\":%q,\"command\":%q}]", schedule, command)), nil)
 	a.AWS.(*MockAWS).On(
 		"PutParameter",
 		&ssm.PutParameterInput{

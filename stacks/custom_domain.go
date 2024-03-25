@@ -205,7 +205,7 @@ func (*CustomDomainStack) StackType() string {
 func (a *CustomDomainStack) Tags(*string) []*cloudformation.Tag {
 	return []*cloudformation.Tag{
 		{Key: aws.String("apppack:customDomain"), Value: &a.Parameters.CertificateName},
-		// TODO
+		// TODO: add app name tag
 		// {Key: aws.String("apppack:appName"), Value: appName},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}

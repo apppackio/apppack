@@ -36,7 +36,7 @@ func instanceNameWeight(name string) string {
 		size = parts[1]
 	}
 	// extract multiplier (8xlarge) from size
-	re := regexp.MustCompile("[0-9]+")
+	re := regexp.MustCompile(`\d+`)
 	multiplier := re.FindString(size)
 	if multiplier != "" {
 		num, err := strconv.Atoi(multiplier)
