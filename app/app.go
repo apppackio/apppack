@@ -27,6 +27,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const maxEcsDescribeTaskCount = 100
+
 var (
 	maxLifetime    = 12 * 60 * 60
 	waitForConnect = 60
@@ -785,16 +787,26 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 		return nil, err
 	}
 	ecsSvc := ecs.New(a.Session)
-	var taskARNs []*string
+	chunkedTaskARNs := [][]*string{{}}
 	input := ecs.ListTasksInput{
 		Cluster: &a.Settings.Cluster.ARN,
 	}
+	logrus.WithFields(logrus.Fields{"cluster": a.Settings.Cluster.ARN}).Debug("fetching task list")
+
+	// handle chunking logic
+	addTaskARNToChunk := func(taskARN *string) {
+		if len(chunkedTaskARNs[len(chunkedTaskARNs)-1]) >= maxEcsDescribeTaskCount {
+			chunkedTaskARNs = append(chunkedTaskARNs, []*string{})
+		}
+		chunkedTaskARNs[len(chunkedTaskARNs)-1] = append(chunkedTaskARNs[len(chunkedTaskARNs)-1], taskARN)
+	}
+
 	err = ecsSvc.ListTasksPages(&input, func(resp *ecs.ListTasksOutput, lastPage bool) bool {
 		for _, taskARN := range resp.TaskArns {
 			if taskARN == nil {
 				continue
 			}
-			taskARNs = append(taskARNs, taskARN)
+			addTaskARNToChunk(taskARN)
 		}
 
 		return !lastPage
@@ -802,16 +814,21 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	describeTasksOutput, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
-		Tasks:   taskARNs,
-		Cluster: &a.Settings.Cluster.ARN,
-		Include: []*string{aws.String("TAGS")},
-	})
-	if err != nil {
-		return nil, err
+	var describedTasks []*ecs.Task
+	for i := range chunkedTaskARNs {
+		logrus.WithFields(logrus.Fields{"count": len(chunkedTaskARNs[i])}).Debug("fetching task descriptions")
+		describeTasksOutput, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+			Tasks:   chunkedTaskARNs[i],
+			Cluster: &a.Settings.Cluster.ARN,
+			Include: []*string{aws.String("TAGS")},
+		})
+		if err != nil {
+			return nil, err
+		}
+		describedTasks = append(describedTasks, describeTasksOutput.Tasks...)
 	}
 	var appTasks []*ecs.Task
-	for _, task := range describeTasksOutput.Tasks {
+	for _, task := range describedTasks {
 		isApp := false
 		isReviewApp := false
 		for _, t := range task.Tags {
