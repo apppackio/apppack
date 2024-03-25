@@ -1,4 +1,4 @@
-go = "1.19"
+go = "1.22"
 sort-results = true
 
 [linters]
@@ -44,8 +44,6 @@ exclude = [
     "Error return value of `\\(\\*github\\.com/spf13/pflag\\.FlagSet\\)\\.Mark(Hidden|Deprecated)` is not checked",
     "use of `fmt\\.Print(|f|ln)` forbidden by pattern"
 ]
-
-[run]
-skip-dirs = [
+exclude-dirs = [
     "version"
 ]
