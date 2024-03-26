@@ -9,18 +9,15 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      -
-        name: Set up Go
+      - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: "1.22"
-      -
-        name: Run GoReleaser
+      - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
@@ -29,26 +26,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-      -
-        name: Upload Windows binary
+      - name: Upload Windows binary
         uses: actions/upload-artifact@v4
         with:
           name: apppack_windows_amd64
           path: dist/apppack_windows_amd64_v1
-      -
-        name: Upload Darwin binary
+      - name: Upload Darwin binary
         uses: actions/upload-artifact@v4
         with:
           name: apppack_darwin_amd64
           path: dist/apppack_darwin_amd64_v1
-      -
-        name: Upload Darwin binary (ARM)
+      - name: Upload Darwin binary (ARM)
         uses: actions/upload-artifact@v4
         with:
           name: apppack_darwin_arm64
           path: dist/apppack_darwin_arm64
-      -
-        name: Upload Linux binary
+      - name: Upload Linux binary
         uses: actions/upload-artifact@v4
         with:
           name: apppack_linux_amd64
