@@ -175,7 +175,8 @@ func (t *Tokens) GetAdminRole(idOrAlias string) (*AdminRole, error) {
 		}
 	}
 	if found == nil {
-		return nil, fmt.Errorf("account %s not found", idOrAlias)
+		// user does not have admin access to the account
+		return nil, fmt.Errorf("administrator privileges required (account %s)", idOrAlias)
 	}
 	return found, nil
 }
