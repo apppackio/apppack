@@ -36,18 +36,15 @@ func (t *Tokens) GetUserInfo() (*UserInfo, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
 	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		if err != nil {
-			return nil, fmt.Errorf("unable to retrieve user info. Status code %d", resp.StatusCode)
-		}
+		return nil, fmt.Errorf("unable to retrieve user info. Status code %d", resp.StatusCode)
 	}
-	if err != nil {
-		return nil, err
-	}
+
 	var userInfo UserInfo
 
 	if err = json.Unmarshal(contents, &userInfo); err != nil {
