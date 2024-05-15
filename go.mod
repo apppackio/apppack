@@ -24,7 +24,20 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0
 )
 
-require github.com/cli/cli/v2 v2.25.1
+require (
+	github.com/aws/session-manager-plugin v0.0.0-20240103212942-e12e3d7a44af
+	github.com/cli/cli/v2 v2.25.1
+)
+
+require (
+	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
+	github.com/eiannone/keyboard v0.0.0-20220611211555-0d226195f203 // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/twinj/uuid v0.0.0-20151029044442-89173bcdda19 // indirect
+	github.com/xtaci/smux v1.5.24 // indirect
+	golang.org/x/sync v0.1.0 // indirect
+)
 
 require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2 // indirect
