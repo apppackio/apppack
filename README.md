@@ -10,9 +10,7 @@ The command line interface for [AppPack.io](https://apppack.io).
 
 The release process is designed to ensure that all changes are accurately tracked, versioned, and distributed according to [`Semantic Versioning (SemVer)` standards](https://semver.org/). Here's a step-by-step guide to releasing a new version of AppPack:
 
-
 ### Documenting Changes
-
 
 * Update `CHANGELOG.md`: Enhance the `CHANGELOG.md` file with all relevant changes associated with the upcoming release, including the release tag and the date. This step is crucial for maintaining a clear history of updates and enhancements.
 
