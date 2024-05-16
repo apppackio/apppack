@@ -222,12 +222,10 @@ apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 pr
 
 // execCmd represents the exec command
 var psExecCmd = &cobra.Command{
-	Use:   "exec -- <command>",
-	Args:  cobra.MinimumNArgs(1),
-	Short: "run an interactive command in the remote environment",
-	Long: `Run an interactive command in the remote environment
-
-Requires installation of Amazon's SSM Session Manager. https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html`,
+	Use:                   "exec -- <command>",
+	Args:                  cobra.MinimumNArgs(1),
+	Short:                 "run an interactive command in the remote environment",
+	Long:                  `Run an interactive command in the remote environment`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()

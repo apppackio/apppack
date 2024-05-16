@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/apppackio/apppack/auth"
@@ -23,7 +21,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/logrusorgru/aurora"
+
+	sessionManagerPluginSession "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
+	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/portsession"
+	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/shellsession"
 	"github.com/sirupsen/logrus"
 )
 
@@ -617,23 +618,21 @@ func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, e
 
 // ConnectToEcsSession open a SSM Session to the Docker host and exec into container
 func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
-	binaryPath, err := exec.LookPath("session-manager-plugin")
-	if err != nil {
-		fmt.Println(aurora.Red("AWS Session Manager plugin was not found on the path. Install it locally to use this feature."))
-		fmt.Println(aurora.White("https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html"))
-		os.Exit(1)
-	}
 	region := a.Session.Config.Region
 	arg1, err := json.Marshal(ecsSession)
 	if err != nil {
 		return err
 	}
-	return syscall.Exec(binaryPath, []string{
+
+	args := []string{
 		"session-manager-plugin",
 		string(arg1),
 		*region,
 		"StartSession",
-	}, os.Environ())
+	}
+
+	sessionManagerPluginSession.ValidateInputAndStartSession(args, os.Stdout)
+	return nil
 }
 
 // StartBuild starts a new CodeBuild run
