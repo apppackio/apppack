@@ -8,10 +8,21 @@ The command line interface for [AppPack.io](https://apppack.io).
 
 ## Release Process Overview
 
-To manage releases effectively, we follow a structured procedure that ensures all changes are documented and distributed as intended. Below are the steps involved in releasing a new version of our software:
+The release process is designed to ensure that all changes are accurately tracked, versioned, and distributed according to [`Semantic Versioning (SemVer)` standards](https://semver.org/). Here's a step-by-step guide to releasing a new version of AppPack:
 
-**Document Changes**: Update the `CHANGELOG.md` file with a comprehensive list of changes that occurred since the last release. Include the release tag and the date to provide context for when these changes were implemented.
 
-**Version Control**: Commit these changes to your local repository, ensuring that the new version number is properly tagged alongside the commit that introduced this change. This tag will be used to reference the specific release in question.
+### Documenting Changes
 
-**Automated Release and Distribution**: Upon pushing the commit and tag to our repository, our automated Github Actions workflow will take over. It will generate a new release using the version number specified in the tag. Additionally, it will trigger the go releaser tool, which will compile and package the software for the supported operating systems and automatically upload the binaries to our release assets on GitHub.
+
+* Update `CHANGELOG.md`: Enhance the `CHANGELOG.md` file with all relevant changes associated with the upcoming release, including the release tag and the date. This step is crucial for maintaining a clear history of updates and enhancements.
+
+* **Semantic Versioning (SemVer)**: Adhere to [SemVer guidelines](https://semver.org/) when incrementing version numbers.
+
+### Automated Release with GoReleaser
+
+* **Commit and Tag**: Commit the changes to your local repository, including a tag with the new version number that corresponds to the release you've documented in the CHANGELOG.
+
+* **GoReleaser Configuration**:  Filters are applied in GoReleaser configuration
+that ensures that the changelog only includes changes that affect the functionality of the software, thereby adhering to SemVer practices.
+
+* **Distribution**: Once you push the commit and tag to the repository, `GoReleaser` will take over through Github Actions, creating a new release with the version number specified in your tag. It will also compile the latest code, create OS-specific binaries, and upload these artifacts to the release assets on GitHub.
