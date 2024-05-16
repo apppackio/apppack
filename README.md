@@ -4,9 +4,13 @@
 
 The command line interface for [AppPack.io](https://apppack.io).
 
-**[Documentation](https://docs.apppack.io)**
+**[End user documentation](https://docs.apppack.io)**
 
-When commit logs think of the impact to the end user. Commits are listed in the release notes on GitHub with the exception of [the prefixes defined in .goreleaser.yml](https://github.com/apppackio/apppack/blob/main/.goreleaser.yml#L57-L62). Use those whenever you're making changes which don't effect the end-user.
+---
+
+## Development
+
+When writing commit logs think of the impact to the end user. Commits are listed in the release notes on GitHub with the exception of [the prefixes defined in .goreleaser.yml](https://github.com/apppackio/apppack/blob/main/.goreleaser.yml#L57-L62). Use those whenever you're making changes which don't effect the end-user.
 
 ## Release Process Overview
 
