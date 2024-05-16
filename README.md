@@ -26,4 +26,4 @@ Here's a step-by-step guide to releasing a new version of AppPack:
 
 ### Update docs
 
-* Run the [docs workflow](https://github.com/apppackio/apppack-docs/actions/workflows/ci_cd.yml) to update the docs once GoReleaser completes
+* Run the [docs workflow](https://github.com/apppackio/apppack-docs/actions/workflows/ci_cd.yml) to update the docs once GoReleaser completes. Make sure to run workflow from `deploy/prod` branch to make it live.
