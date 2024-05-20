@@ -166,6 +166,11 @@ var psResizeCmd = &cobra.Command{
 		processType := args[0]
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
+		a.LoadDeployStatus()
+		_, err = a.DeployStatus.FindProcess(processType)
+		if err != nil {
+			printWarning(fmt.Sprintf("Service: %s not found.\n", processType))
+		}
 		size, err := humanToECSSizeConfiguration(scaleCPU, scaleMemory)
 		checkErr(err)
 		checkErr(a.ValidateECSTaskSize(*size))
