@@ -169,7 +169,7 @@ var psResizeCmd = &cobra.Command{
 		a.LoadDeployStatus()
 		_, err = a.DeployStatus.FindProcess(processType)
 		if err != nil {
-			printWarning(fmt.Sprintf("Service: %s not found.\n", processType))
+			printWarning(fmt.Sprintf("Service \"%s\" does not exist. Settings will be used if the service is created later.\n", processType))
 		}
 		size, err := humanToECSSizeConfiguration(scaleCPU, scaleMemory)
 		checkErr(err)
