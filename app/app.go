@@ -394,6 +394,20 @@ func (a *App) GetReviewApps() ([]*ReviewApp, error) {
 	return reviewApps, nil
 }
 
+func (a *App) ReviewAppExists() (bool, error) {
+	reviewApps, err := a.GetReviewApps()
+	if err != nil {
+		return false, err
+	}
+	for _, r := range reviewApps {
+		prNumber := strings.Split(r.PullRequest, "/")[1]
+		if *a.ReviewApp == prNumber {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("ReviewApp named %s:%s does not exist", a.Name, *a.ReviewApp)
+}
+
 func (a *App) ddbItem(key string) (*map[string]*dynamodb.AttributeValue, error) {
 	if !a.IsReviewApp() {
 		return ddbItem(a.Session, fmt.Sprintf("APP#%s", a.Name), key)
