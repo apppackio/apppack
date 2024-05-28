@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -509,7 +510,13 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 						Message: "Custom Domain(s)",
 						Default: strings.Join(a.Parameters.Domains, "\n"),
 					},
-					Validate: survey.MaxLength(4),
+					Validate: func(val interface{}) error {
+						domains := strings.Split(val.(string), "\n")
+						if len(domains) > 4 {
+							return errors.New("only maximum of 4 custom domains are supported")
+						}
+						return nil
+					},
 				},
 			},
 		}...)
