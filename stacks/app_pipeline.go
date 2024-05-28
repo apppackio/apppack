@@ -509,6 +509,7 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 						Message: "Custom Domain(s)",
 						Default: strings.Join(a.Parameters.Domains, "\n"),
 					},
+					Validate: survey.MaxLength(4),
 				},
 			},
 		}...)
