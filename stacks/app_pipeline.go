@@ -513,7 +513,7 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 					Validate: func(val interface{}) error {
 						domains := strings.Split(val.(string), "\n")
 						if len(domains) > 4 {
-							return errors.New("only maximum of 4 custom domains are supported")
+							return errors.New("limit of 4 custom domains exceeded")
 						}
 						return nil
 					},
