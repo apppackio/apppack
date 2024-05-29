@@ -398,14 +398,11 @@ func (a *App) ReviewAppExists() (bool, error) {
 	if !a.Pipeline {
 		return false, fmt.Errorf("%s is not a pipeline and cannot have review apps", a.Name)
 	}
-	parameter, err := SsmParameter(a.Session, fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s/", a.Name, *a.ReviewApp))
+	_, err := SsmParameter(a.Session, fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s", a.Name, *a.ReviewApp))
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("ReviewApp named %s:%s does not exist", a.Name, *a.ReviewApp)
 	}
-	if parameter != nil {
-		return true, nil
-	}
-	return false, fmt.Errorf("ReviewApp named %s:%s does not exist", a.Name, *a.ReviewApp)
+	return true, nil
 }
 
 func (a *App) ddbItem(key string) (*map[string]*dynamodb.AttributeValue, error) {

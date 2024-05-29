@@ -63,10 +63,10 @@ func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error)
 	return parameters, nil
 }
 
-func SsmParameter(sess *session.Session, path string) (*ssm.Parameter, error) {
+func SsmParameter(sess *session.Session, name string) (*ssm.Parameter, error) {
 	ssmSvc := ssm.New(sess)
 	input := &ssm.GetParameterInput{
-		Name:           aws.String(path),
+		Name:           aws.String(name),
 		WithDecryption: aws.Bool(true),
 	}
 
@@ -74,8 +74,6 @@ func SsmParameter(sess *session.Session, path string) (*ssm.Parameter, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	logrus.WithFields(logrus.Fields{"path": path}).Debug("loaded parameter by path")
 
 	return result.Parameter, nil
 }
