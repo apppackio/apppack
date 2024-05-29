@@ -63,6 +63,23 @@ func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error)
 	return parameters, nil
 }
 
+func SsmParameter(sess *session.Session, path string) (*ssm.Parameter, error) {
+	ssmSvc := ssm.New(sess)
+	input := &ssm.GetParameterInput{
+		Name:           aws.String(path),
+		WithDecryption: aws.Bool(true),
+	}
+
+	result, err := ssmSvc.GetParameter(input)
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.WithFields(logrus.Fields{"path": path}).Debug("loaded parameter by path")
+
+	return result.Parameter, nil
+}
+
 func S3FromURL(sess *session.Session, logURL string) (*strings.Builder, error) {
 	s3Svc := s3.New(sess)
 	parts := strings.Split(strings.TrimPrefix(logURL, "s3://"), "/")
