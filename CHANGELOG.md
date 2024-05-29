@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* Limits the number of custom domains to 4.
 * `ps resize` raises a warning for non-existent service.
 
 ## [4.5.0] - 2024-05-16
