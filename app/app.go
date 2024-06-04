@@ -394,6 +394,25 @@ func (a *App) GetReviewApps() ([]*ReviewApp, error) {
 	return reviewApps, nil
 }
 
+func (a *App) ReviewAppExists() (bool, error) {
+	if !a.Pipeline {
+		return false, fmt.Errorf("%s is not a pipeline and cannot have review apps", a.Name)
+	}
+	parameter, err := SsmParameter(a.Session, fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s", a.Name, *a.ReviewApp))
+	if err != nil {
+		return false, fmt.Errorf("ReviewApp named %s:%s does not exist", a.Name, *a.ReviewApp)
+	}
+	r := ReviewApp{}
+	err = json.Unmarshal([]byte(*parameter.Value), &r)
+	if err != nil {
+		return false, err
+	}
+	if r.Status != "created" {
+		return false, fmt.Errorf("ReviewApp isn't created")
+	}
+	return true, nil
+}
+
 func (a *App) ddbItem(key string) (*map[string]*dynamodb.AttributeValue, error) {
 	if !a.IsReviewApp() {
 		return ddbItem(a.Session, fmt.Sprintf("APP#%s", a.Name), key)
