@@ -655,8 +655,8 @@ func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
 	// reset the signal afterward so the main function
 	// can handle interrupts during the rest of the program's execution.
 	signal.Ignore(syscall.SIGINT)
+	defer signal.Reset(syscall.SIGINT)
 	sessionManagerPluginSession.ValidateInputAndStartSession(args, os.Stdout)
-	signal.Reset(syscall.SIGINT)
 	return nil
 }
 
