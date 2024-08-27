@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"strconv"
 	"strings"
 	"time"
@@ -649,8 +651,12 @@ func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
 		*region,
 		"StartSession",
 	}
-
+	// Ignore Ctrl+C to keep the session active;
+	// reset the signal afterward so the main function
+	// can handle interrupts during the rest of the program's execution.
+	signal.Ignore(syscall.SIGINT)
 	sessionManagerPluginSession.ValidateInputAndStartSession(args, os.Stdout)
+	signal.Reset(syscall.SIGINT)
 	return nil
 }
 
