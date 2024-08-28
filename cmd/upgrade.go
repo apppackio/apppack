@@ -20,6 +20,7 @@ import (
 
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
@@ -174,7 +175,7 @@ var upgradeDatabaseCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(upgradeCmd)
-	upgradeCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias. Use this flag to override the APPPACK_ACCOUNT environment variable (not needed if you are the administrator of only one account).")
+	upgradeCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", utils.AccountFlagHelpText)
 	upgradeCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	upgradeCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	upgradeCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to upgrade resources in")

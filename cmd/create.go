@@ -22,6 +22,7 @@ import (
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
@@ -310,7 +311,7 @@ var createRegionCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(createCmd)
-	createCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias. Use this flag to override the APPPACK_ACCOUNT environment variable (not needed if you are the administrator of only one account).")
+	createCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", utils.AccountFlagHelpText)
 	createCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	createCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")

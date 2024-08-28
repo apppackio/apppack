@@ -22,6 +22,7 @@ import (
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/stringslice"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/spf13/cobra"
 )
@@ -137,7 +138,7 @@ func init() {
 		"account",
 		"c",
 		"",
-		"AWS account ID or alias. Use this flag to override the APPPACK_ACCOUNT environment variable (not needed if you are the administrator of only one account).",
+		utils.AccountFlagHelpText,
 	)
 	adminsCmd.PersistentFlags().BoolVar(
 		&UseAWSCredentials,

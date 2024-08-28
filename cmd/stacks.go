@@ -23,6 +23,7 @@ import (
 
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/juju/ansiterm/tabwriter"
 	"github.com/logrusorgru/aurora"
@@ -113,6 +114,6 @@ var stacksCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(stacksCmd)
-	stacksCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias. Use this flag to override the APPPACK_ACCOUNT environment variable (not needed if you are the administrator of only one account).")
+	stacksCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", utils.AccountFlagHelpText)
 	stacksCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 }
