@@ -293,7 +293,7 @@ var createRegionCmd = &cobra.Command{
 	Short:                 "setup AppPack resources for an AWS region",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		region := sess.Config.Region

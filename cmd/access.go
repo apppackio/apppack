@@ -107,7 +107,7 @@ var accessCmd = &cobra.Command{
 	Short:                 "list users with access to the app",
 	Args:                  cobra.NoArgs,
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		var err error
 		sess, err := adminSession(SessionDurationSeconds)
@@ -131,7 +131,7 @@ Updates the application Cloudformation stack to add access for the user.`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
 	Example:               "apppack -a my-app access add user1@example.com user2@example.com",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		for _, email := range args {
 			if !validateEmail(email) {
 				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
@@ -163,7 +163,7 @@ Updates the application Cloudformation stack to remove access for the user.`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
 	Example:               "apppack -a my-app access remove user1@example.com user2@example.com",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		for _, email := range args {
 			if !validateEmail(email) {
 				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))

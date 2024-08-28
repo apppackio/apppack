@@ -80,7 +80,7 @@ var destroyAccountCmd = &cobra.Command{
 	Short:                 "destroy AWS resources used by your AppPack account",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -94,7 +94,7 @@ var destroyRegionCmd = &cobra.Command{
 	Short:                 "destroy AWS resources used by an AppPack region",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -109,7 +109,7 @@ var destroyRedisCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -124,7 +124,7 @@ var destroyDatabaseCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -139,7 +139,7 @@ var destroyClusterCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -154,7 +154,7 @@ var destroyAppCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -169,7 +169,7 @@ var destroyPipelineCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -184,7 +184,7 @@ var destroyCustomDomainCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
