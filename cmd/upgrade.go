@@ -76,7 +76,7 @@ var upgradeAccountCmd = &cobra.Command{
 	Short:                 "upgrade your AppPack account stack",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -90,7 +90,7 @@ var upgradeRegionCmd = &cobra.Command{
 	Short:                 "upgrade your AppPack region stack",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -105,7 +105,7 @@ var upgradeAppCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -120,7 +120,7 @@ var upgradePipelineCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -135,7 +135,7 @@ var upgradeClusterCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -150,7 +150,7 @@ var upgradeRedisCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -165,7 +165,7 @@ var upgradeDatabaseCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
