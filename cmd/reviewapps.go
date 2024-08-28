@@ -40,7 +40,7 @@ var reviewappsCmd = &cobra.Command{
 	Short:                 "list deployed review apps",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		accountFlagIgnoredWarning()
 		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
@@ -69,7 +69,7 @@ var reviewappsCreateCmd = &cobra.Command{
 	Long:                  `Creates a review app from a pull request on the pipeline repository and triggers the iniital build`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		accountFlagIgnoredWarning()
 		name := args[0]
@@ -130,7 +130,7 @@ var reviewappsDestroyCmd = &cobra.Command{
 	Short:                 "destroys the review app",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		accountFlagIgnoredWarning()
 		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
