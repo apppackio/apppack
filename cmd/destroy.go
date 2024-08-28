@@ -194,7 +194,7 @@ var destroyCustomDomainCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(destroyCmd)
-	destroyCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+	destroyCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias. Use this flag to override the APPPACK_ACCOUNT environment variable (not needed if you are the administrator of only one account).")
 	destroyCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	destroyCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to destroy resources in")
 
