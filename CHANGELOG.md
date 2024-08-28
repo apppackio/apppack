@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Limits the number of custom domains to 4.
 * `ps resize` raises a warning for non-existent service.
+* `reviewapps` cmd optionally accepts `-c`/ `account` flag.
 
 ## [4.5.0] - 2024-05-16
 
