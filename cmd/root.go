@@ -50,6 +50,14 @@ var (
 	MaxSessionDurationSeconds = 3600
 )
 
+func userHasMultipleAccounts() bool {
+	ui.StartSpinner()
+	admins, err := auth.AdminList()
+	checkErr(err)
+	ui.Spinner.Stop()
+	return len(admins) > 1
+}
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:                   "apppack",
@@ -57,12 +65,21 @@ var rootCmd = &cobra.Command{
 	Long:                  `AppPack is a tool to manage applications deployed on AWS via AppPack.io`,
 	DisableAutoGenTag:     true,
 	DisableFlagsInUseLine: true,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		if debug {
 			logrus.SetOutput(os.Stdout)
 			logrus.SetLevel(logrus.DebugLevel)
 		} else {
 			logrus.SetLevel(logrus.ErrorLevel)
+		}
+		// Check for account flag or environment variable
+		if AccountIDorAlias == "" {
+			AccountIDorAlias = os.Getenv("APPPACK_ACCOUNT")
+		}
+
+		// If neither is set and the user has multiple accounts, throw an error
+		if AccountIDorAlias == "" && userHasMultipleAccounts() {
+			checkErr(fmt.Errorf("you must specify an account using the -c flag or the APPPACK_ACCOUNT environment variable"))
 		}
 	},
 }

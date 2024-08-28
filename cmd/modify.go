@@ -90,7 +90,7 @@ package cmd
 
 // func init() {
 // 	rootCmd.AddCommand(modifyCmd)
-// 	modifyCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+// 	modifyCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", utils.AccountFlagHelpText)
 // 	modifyCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 // 	modifyCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 // 	modifyCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for user input")

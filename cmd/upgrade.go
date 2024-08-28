@@ -20,6 +20,7 @@ import (
 
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
@@ -75,7 +76,7 @@ var upgradeAccountCmd = &cobra.Command{
 	Short:                 "upgrade your AppPack account stack",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -89,7 +90,7 @@ var upgradeRegionCmd = &cobra.Command{
 	Short:                 "upgrade your AppPack region stack",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -104,7 +105,7 @@ var upgradeAppCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -119,7 +120,7 @@ var upgradePipelineCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -134,7 +135,7 @@ var upgradeClusterCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -149,7 +150,7 @@ var upgradeRedisCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -164,7 +165,7 @@ var upgradeDatabaseCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
@@ -174,7 +175,7 @@ var upgradeDatabaseCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(upgradeCmd)
-	upgradeCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+	upgradeCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", utils.AccountFlagHelpText)
 	upgradeCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	upgradeCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	upgradeCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to upgrade resources in")

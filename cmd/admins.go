@@ -22,6 +22,7 @@ import (
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/stringslice"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/spf13/cobra"
 )
@@ -57,7 +58,7 @@ var adminsCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	Args:                  cobra.NoArgs,
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
@@ -78,7 +79,7 @@ var adminsAddCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
 	Example:               "apppack admins add user1@example.com user2@example.com",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		for _, email := range args {
 			if !validateEmail(email) {
 				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
@@ -108,7 +109,7 @@ var adminsRemoveCmd = &cobra.Command{
 Updates the application Cloudformation stack to remove an administrators.`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		for _, email := range args {
 			if !validateEmail(email) {
 				checkErr(fmt.Errorf("%s does not appear to be a valid email address", email))
@@ -137,7 +138,7 @@ func init() {
 		"account",
 		"c",
 		"",
-		"AWS account ID or alias (not needed if you are only the administrator of one account)",
+		utils.AccountFlagHelpText,
 	)
 	adminsCmd.PersistentFlags().BoolVar(
 		&UseAWSCredentials,
