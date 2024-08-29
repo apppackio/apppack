@@ -16,14 +16,14 @@ func GetOrCreateCachePath() (string, error) {
 		return path, err
 	}
 
-	err = os.Mkdir(path, os.FileMode(0o700))
-
-	if err != nil {
-		if !os.IsExist(err) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// Directory does not exist, so create it
+		if err := os.Mkdir(path, os.FileMode(0o700)); err != nil {
 			return path, err
 		}
 	}
-	return path, err
+
+	return path, nil
 }
 
 func WriteToCache(name string, data []byte) error {
