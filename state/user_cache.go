@@ -10,18 +10,26 @@ import (
 
 const cachePrefix = "io.apppack"
 
-func WriteToCache(name string, data []byte) error {
+func GetOrCreateCachePath() (string, error) {
 	path, err := CacheDir()
 	if err != nil {
-		return err
+		return path, err
 	}
 
 	err = os.Mkdir(path, os.FileMode(0o700))
 
 	if err != nil {
 		if !os.IsExist(err) {
-			return err
+			return path, err
 		}
+	}
+	return path, err
+}
+
+func WriteToCache(name string, data []byte) error {
+	path, err := GetOrCreateCachePath()
+	if err != nil {
+		return err
 	}
 
 	filename := filepath.Join(path, name)
@@ -42,7 +50,7 @@ func WriteToCache(name string, data []byte) error {
 }
 
 func ReadFromCache(name string) ([]byte, error) {
-	path, err := CacheDir()
+	path, err := GetOrCreateCachePath()
 	if err != nil {
 		return nil, err
 	}
