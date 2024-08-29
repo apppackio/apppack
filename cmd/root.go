@@ -72,15 +72,6 @@ var rootCmd = &cobra.Command{
 		} else {
 			logrus.SetLevel(logrus.ErrorLevel)
 		}
-		// Check for account flag or environment variable
-		if AccountIDorAlias == "" {
-			AccountIDorAlias = os.Getenv("APPPACK_ACCOUNT")
-		}
-
-		// If neither is set and the user has multiple accounts, throw an error
-		if AccountIDorAlias == "" && userHasMultipleAccounts() {
-			checkErr(fmt.Errorf("you must specify an account using the -c flag or the APPPACK_ACCOUNT environment variable"))
-		}
 	},
 }
 

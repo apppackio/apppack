@@ -5,6 +5,9 @@ on:
   workflow_dispatch: {}
   schedule:
     - cron: '0 1 * * *'
+  push:
+    branches:
+      - release-4.6.1
 
 jobs:
   functional-tests:
