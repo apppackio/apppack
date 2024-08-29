@@ -50,14 +50,6 @@ var (
 	MaxSessionDurationSeconds = 3600
 )
 
-func userHasMultipleAccounts() bool {
-	ui.StartSpinner()
-	admins, err := auth.AdminList()
-	checkErr(err)
-	ui.Spinner.Stop()
-	return len(admins) > 1
-}
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:                   "apppack",
