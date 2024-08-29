@@ -97,11 +97,15 @@ func checkForUpdate(ctx context.Context, currentVersion string) (*version.Releas
 	return version.CheckForUpdate(ctx, http.DefaultClient, stateFilePath, repo, currentVersion)
 }
 
+func exitWithCode(code int) {
+	os.Exit(code)
+}
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	retcode := 0
-	defer func() { os.Exit(retcode) }
+	defer exitWithCode(retcode)
 
 	// start update check process in the background
 	ctx := context.Background()
