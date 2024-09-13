@@ -24,6 +24,97 @@ jobs:
         name: Build
         run: go build
 
+      -
+        name: AppPack Account
+        run: |
+            STACK_NAME=apppack-account
+            AWS_PAGER=""
+            set -ex
+            aws cloudformation create-stack \
+              --stack-name $STACK_NAME \
+              --template-url https://s3.amazonaws.com/apppack-cloudformations/latest/account.json \
+              --capabilities CAPABILITY_IAM \
+              --parameters ParameterKey=Administrators,ParameterValue=user@apppack.io
+            aws cloudformation wait stack-create-complete \
+              --stack-name $STACK_NAME
+        timeout-minutes: 10
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+      -
+        name: AppPack Cluster
+        run: |
+          ./apppack create cluster \
+            --aws-credentials \
+            --region us-east-1 \
+            --create-region \
+            --dockerhub-username $DOCKERHUB_USERNAME \
+            --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN \
+            --domain testclusters.apppack.io \
+            --non-interactive
+        timeout-minutes: 20
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Create app
+        run: |
+            ./apppack create app \
+              --aws-credentials \
+              --region us-east-1 \
+              --non-interactive \
+              --cluster apppack \
+              --repository https://github.com/apppackio/apppack-demo-python.git \
+              --branch main \
+              --users user@apppack.io \
+              app-test
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Verify user
+        run: |
+          echo "Waiting for user to get created..."
+          while [ "$(aws dynamodb get-item --table-name apppack --key '{"primary_id": {"S": "USER#user@apppack.io"}, "secondary_id": {"S": "891426818781#app-test"}}' --query Item)" = "null" ]; do
+            sleep 10
+          done
+        timeout-minutes: 3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.APPPACK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+      # TODO: authorize CLI
+      # -
+      #   name: Deploy app
+      #   run:  |
+      #       ./apppack build start -a app-test --wait
+      #   timeout-minutes: 5
+      # -
+      #   name: Check app
+      #   run: curl --fail https://app-test.testclusters.apppack.io
+      -
+        name: Destroy app
+        run: |
+          yes apppack-app-app-test | ./apppack destroy app app-test --aws-credentials --region us-east-1
+        if: always()
+        timeout-minutes: 5
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Destroy cluster
+        run: |
+          yes apppack-cluster-apppack | ./apppack destroy cluster apppack  --aws-credentials --region us-east-1
+        if: always()
+        timeout-minutes: 10
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
       - name: Check and Delete CNAME Record
         if: always()
         run: |
@@ -33,8 +124,8 @@ jobs:
           echo "Checking if CNAME record exists ..."
           # Check if the CNAME record exists
           record_value=$(aws route53 list-resource-record-sets --hosted-zone-id $hosted_zone_id \
-                         --query "ResourceRecordSets[?Name == '$record_name.']" \
-                         --output text)
+                          --query "ResourceRecordSets[?Name == '$record_name.']" \
+                          --output text)
 
           if [[ -n "$record_value" ]]; then
             echo "CNAME record exists, deleting..."
@@ -67,126 +158,34 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
 
-      # -
-      #   name: AppPack Account
-      #   run: |
-      #       STACK_NAME=apppack-account
-      #       AWS_PAGER=""
-      #       set -ex
-      #       aws cloudformation create-stack \
-      #         --stack-name $STACK_NAME \
-      #         --template-url https://s3.amazonaws.com/apppack-cloudformations/latest/account.json \
-      #         --capabilities CAPABILITY_IAM \
-      #         --parameters ParameterKey=Administrators,ParameterValue=user@apppack.io
-      #       aws cloudformation wait stack-create-complete \
-      #         --stack-name $STACK_NAME
-      #   timeout-minutes: 10
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     AWS_DEFAULT_REGION: us-east-1
-      # -
-      #   name: AppPack Cluster
-      #   run: |
-      #     ./apppack create cluster \
-      #       --aws-credentials \
-      #       --region us-east-1 \
-      #       --create-region \
-      #       --dockerhub-username $DOCKERHUB_USERNAME \
-      #       --dockerhub-access-token $DOCKERHUB_ACCESS_TOKEN \
-      #       --domain testclusters.apppack.io \
-      #       --non-interactive
-      #   timeout-minutes: 20
-      #   env:
-      #     DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      #     DOCKERHUB_ACCESS_TOKEN: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      # -
-      #   name: Create app
-      #   run: |
-      #       ./apppack create app \
-      #         --aws-credentials \
-      #         --region us-east-1 \
-      #         --non-interactive \
-      #         --cluster apppack \
-      #         --repository https://github.com/apppackio/apppack-demo-python.git \
-      #         --branch main \
-      #         --users user@apppack.io \
-      #         app-test
-      #   timeout-minutes: 5
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      # -
-      #   name: Verify user
-      #   run: |
-      #     echo "Waiting for user to get created..."
-      #     while [ "$(aws dynamodb get-item --table-name apppack --key '{"primary_id": {"S": "USER#user@apppack.io"}, "secondary_id": {"S": "891426818781#app-test"}}' --query Item)" = "null" ]; do
-      #       sleep 10
-      #     done
-      #   timeout-minutes: 3
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.APPPACK_AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
-      #     AWS_DEFAULT_REGION: us-east-1
-      # # TODO: authorize CLI
-      # # -
-      # #   name: Deploy app
-      # #   run:  |
-      # #       ./apppack build start -a app-test --wait
-      # #   timeout-minutes: 5
-      # # -
-      # #   name: Check app
-      # #   run: curl --fail https://app-test.testclusters.apppack.io
-      # -
-      #   name: Destroy app
-      #   run: |
-      #     yes apppack-app-app-test | ./apppack destroy app app-test --aws-credentials --region us-east-1
-      #   if: always()
-      #   timeout-minutes: 5
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      # -
-      #   name: Destroy cluster
-      #   run: |
-      #     yes apppack-cluster-apppack | ./apppack destroy cluster apppack  --aws-credentials --region us-east-1
-      #   if: always()
-      #   timeout-minutes: 10
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-
-      # -
-      #   name: Destroy region
-      #   run: |
-      #     yes apppack-region-us-east-1 | ./apppack destroy region --aws-credentials --region us-east-1
-      #   if: always()
-      #   timeout-minutes: 3
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      # -
-      #   name: Destroy account
-      #   run: |
-      #     yes apppack-account | ./apppack destroy account --aws-credentials --region us-east-1
-      #   if: always()
-      #   timeout-minutes: 3
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      # -
-      #   name: Disable account
-      #   if: always()
-      #   shell: bash
-      #   run: |
-      #     aws dynamodb delete-item --table-name apppack --key '{
-      #       "primary_id": {"S": "ACCT#${{ env.ACCOUNT_ID }}"},
-      #       "secondary_id": {"S": "-"}
-      #     }'
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.APPPACK_AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
-      #     AWS_DEFAULT_REGION: us-east-1
+      -
+        name: Destroy region
+        run: |
+          yes apppack-region-us-east-1 | ./apppack destroy region --aws-credentials --region us-east-1
+        if: always()
+        timeout-minutes: 3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Destroy account
+        run: |
+          yes apppack-account | ./apppack destroy account --aws-credentials --region us-east-1
+        if: always()
+        timeout-minutes: 3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      -
+        name: Disable account
+        if: always()
+        shell: bash
+        run: |
+          aws dynamodb delete-item --table-name apppack --key '{
+            "primary_id": {"S": "ACCT#${{ env.ACCOUNT_ID }}"},
+            "secondary_id": {"S": "-"}
+          }'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.APPPACK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.APPPACK_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
