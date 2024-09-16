@@ -115,44 +115,55 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Check and Delete CNAME Record
+      - name: Check and Delete CNAME and A Records
         if: always()
         run: |
           hosted_zone_id="Z05906472T84V7X7Q6UDY"
-          record_name="_5b8b09a8917e1fbb8c6aead5121fb550.testclusters.apppack.io"
 
-          echo "Checking if CNAME record exists ..."
-          # Check if the CNAME record exists
-          record_value=$(aws route53 list-resource-record-sets --hosted-zone-id $hosted_zone_id \
-                          --query "ResourceRecordSets[?Name == '$record_name.']" \
-                          --output text)
+          # Record details
+          cname_record_name="_5b8b09a8917e1fbb8c6aead5121fb550.testclusters.apppack.io"
+          a_record_name="*.testcluster.apppack.io"
 
-          if [[ -n "$record_value" ]]; then
-            echo "CNAME record exists, deleting..."
+          # Function to check and delete a record
+          delete_record() {
+            record_name=$1
+            record_type=$2
 
-            # Extract the actual value of the CNAME record to use in the deletion
-            cname_value=$(aws route53 list-resource-record-sets --hosted-zone-id $hosted_zone_id \
-                          --query "ResourceRecordSets[?Name == '$record_name.'].ResourceRecords[0].Value" \
-                          --output text)
+            echo "Checking if $record_type record '$record_name' exists ..."
+            record_value=$(aws route53 list-resource-record-sets --hosted-zone-id $hosted_zone_id \
+                            --query "ResourceRecordSets[?Name == '$record_name.']" \
+                            --output text)
+            if [[ -n "$record_value" ]]; then
+              echo "$record_type record exists, deleting..."
+              # Extract the actual value of the record to use in the deletion
+              record_actual_value=$(aws route53 list-resource-record-sets --hosted-zone-id $hosted_zone_id \
+                                        --query "ResourceRecordSets[?Name == '$record_name.'].ResourceRecords[0].Value" \
+                                        --output text)
+              # Delete the record
+              aws route53 change-resource-record-sets --hosted-zone-id "$hosted_zone_id" \
+                --change-batch "{
+                  \"Changes\": [{
+                    \"Action\": \"DELETE\",
+                    \"ResourceRecordSet\": {
+                      \"Name\": \"$record_name\",
+                      \"Type\": \"$record_type\",
+                      \"TTL\": 300,
+                      \"ResourceRecords\": [{\"Value\": \"$record_actual_value\"}]
+                    }
+                  }]
+                }"
+              echo "$record_type record '$record_name' deleted successfully."
+            else
+              echo "$record_type record '$record_name' does not exist, skipping deletion."
+            fi
+          }
 
-            # Delete the CNAME record
-            aws route53 change-resource-record-sets --hosted-zone-id "$hosted_zone_id" \
-              --change-batch "{
-                \"Changes\": [{
-                  \"Action\": \"DELETE\",
-                  \"ResourceRecordSet\": {
-                    \"Name\": \"$record_name\",
-                    \"Type\": \"CNAME\",
-                    \"TTL\": 300,
-                    \"ResourceRecords\": [{\"Value\": \"$cname_value\"}]
-                  }
-                }]
-              }"
+          # Delete CNAME record
+          delete_record "$cname_record_name" "CNAME"
 
-            echo "CNAME record deleted successfully."
-          else
-            echo "CNAME record does not exist, skipping deletion."
-          fi
+          # Delete A record
+          delete_record "$a_record_name" "A"
+
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
