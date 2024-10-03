@@ -167,6 +167,10 @@ var psResizeCmd = &cobra.Command{
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		a.LoadDeployStatus()
+		if a.IsReviewApp() {
+			_, err = a.ReviewAppExists()
+			checkErr(err)
+		}
 		_, err = a.DeployStatus.FindProcess(processType)
 		if err != nil {
 			printWarning(fmt.Sprintf("Service %q does not exist. Settings will be used if the service is created later.\n", processType))
