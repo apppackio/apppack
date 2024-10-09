@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"syscall"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/apppackio/apppack/auth"
