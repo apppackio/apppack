@@ -23,6 +23,7 @@ import (
 
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/juju/ansiterm/tabwriter"
 	"github.com/logrusorgru/aurora"
@@ -67,7 +68,7 @@ var stacksCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		sess, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
@@ -113,6 +114,6 @@ var stacksCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(stacksCmd)
-	stacksCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+	stacksCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", utils.AccountFlagHelpText)
 	stacksCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 }

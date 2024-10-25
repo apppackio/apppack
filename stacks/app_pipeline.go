@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -455,7 +456,7 @@ func (a *AppStack) CanChangeParameter(name string) (bool, error) {
 	return *currentVal == "", nil
 }
 
-func (a *AppStack) AskQuestions(sess *session.Session) error {
+func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R1005
 	var questions []*ui.QuestionExtra
 	var err error
 	if a.Stack == nil {
@@ -508,6 +509,13 @@ func (a *AppStack) AskQuestions(sess *session.Session) error {
 					Prompt: &survey.Multiline{
 						Message: "Custom Domain(s)",
 						Default: strings.Join(a.Parameters.Domains, "\n"),
+					},
+					Validate: func(val interface{}) error {
+						domains := strings.Split(val.(string), "\n")
+						if len(domains) > 4 {
+							return errors.New("limit of 4 custom domains exceeded")
+						}
+						return nil
 					},
 				},
 			},

@@ -5,11 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
 ## [Unreleased] - TBD
+
+### Fixed
+
+* Verify existence of review app before resizing process with `ps resize`.
 
 ### Removed
 
 * Region creation no longer requires Docker Hub credentials
+
+## [4.6.2] - 2024-09-03
+
+### Fixed
+
+* Allow `apppack build` commands to work for non-pipeline apps.
+
+## [4.6.1] - 2024-08-28
+
+### Fixed
+
+* Revert the ability to provide `APPPACK_ACCOUNT` for multiple accounts.
+
+## [4.6.0] - 2024-08-28
+
+### Fixed
+
+* Prevent `Ctrl+C` from exiting the remote shell session prematurely.
+
+### Changed
+
+* Limits the number of custom domains to 4.
+* `ps resize` raises a warning for non-existent service.
+* `reviewapps` cmd optionally accepts `-c`/ `account` flag.
+* Implemented a check that throws an error if neither the `-c` flag nor the `APPPACK_ACCOUNT` environment variable is set and the user has multiple accounts. This ensures that users specify an account explicitly to avoid ambiguity.
 
 ## [4.5.0] - 2024-05-16
 

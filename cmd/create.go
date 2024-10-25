@@ -22,6 +22,7 @@ import (
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
@@ -293,7 +294,7 @@ var createRegionCmd = &cobra.Command{
 	Short:                 "setup AppPack resources for an AWS region",
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		region := sess.Config.Region
@@ -310,7 +311,7 @@ var createRegionCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(createCmd)
-	createCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", "AWS account ID or alias (not needed if you are only the administrator of one account)")
+	createCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", utils.AccountFlagHelpText)
 	createCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	createCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
 	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")

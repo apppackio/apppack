@@ -28,14 +28,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func accountFlagIgnoredWarning() {
+	if AccountIDorAlias != "" {
+		fmt.Println(aurora.Yellow("Warning: The 'account' flag is ignored for reviewapps and all its subcommands. Reviewapps depend on access to the pipeline rather than access to the account."))
+	}
+}
+
 // reviewappsCmd represents the reviewapps command
 var reviewappsCmd = &cobra.Command{
 	Use:                   "reviewapps <pipeline>",
 	Short:                 "list deployed review apps",
 	Args:                  cobra.ExactArgs(1),
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
+		accountFlagIgnoredWarning()
 		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		reviewApps, err := a.GetReviewApps()
@@ -62,8 +69,9 @@ var reviewappsCreateCmd = &cobra.Command{
 	Long:                  `Creates a review app from a pull request on the pipeline repository and triggers the iniital build`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
+		accountFlagIgnoredWarning()
 		name := args[0]
 		if len(strings.Split(name, ":")) != 2 {
 			checkErr(fmt.Errorf("invalid review app name -- must be in format <pipeline>:<pr-number>"))
@@ -122,8 +130,9 @@ var reviewappsDestroyCmd = &cobra.Command{
 	Short:                 "destroys the review app",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
+		accountFlagIgnoredWarning()
 		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if !a.IsReviewApp() { // TODO: validate
@@ -140,4 +149,13 @@ func init() {
 	reviewappsCreateCmd.Flags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
 	upgradeCmd.PersistentFlags().MarkHidden("release")
 	reviewappsCmd.AddCommand(reviewappsDestroyCmd)
+
+	reviewappsCmd.PersistentFlags().StringVarP(
+		&AccountIDorAlias,
+		"account",
+		"c",
+		"",
+		"AWS account ID or alias (not needed if you are only the administrator of one account)",
+	)
+	reviewappsCmd.PersistentFlags().MarkHidden("account")
 }

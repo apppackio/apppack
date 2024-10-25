@@ -57,7 +57,7 @@ var rootCmd = &cobra.Command{
 	Long:                  `AppPack is a tool to manage applications deployed on AWS via AppPack.io`,
 	DisableAutoGenTag:     true,
 	DisableFlagsInUseLine: true,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		if debug {
 			logrus.SetOutput(os.Stdout)
 			logrus.SetLevel(logrus.DebugLevel)

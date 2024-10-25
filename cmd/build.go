@@ -627,6 +627,14 @@ var buildStartCmd = &cobra.Command{
 		}
 		a, err := app.Init(AppName, UseAWSCredentials, duration)
 		checkErr(err)
+		if a.Pipeline {
+			if a.ReviewApp == nil {
+				err := fmt.Errorf("%q is a pipeline. You can build ReviewApps within a pipeline", a.Name)
+				checkErr(err)
+			}
+			_, err = a.ReviewAppExists()
+			checkErr(err)
+		}
 		build, err := a.StartBuild(false)
 		checkErr(err)
 		ui.Spinner.Stop()
