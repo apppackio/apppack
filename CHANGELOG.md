@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Excluded `limitless` suffix from Aurora PostgreSQL version selection to ensure compatibility with general-purpose instance types.
 * Verify existence of review app before resizing process with `ps resize`.
 
 ## [4.6.2] - 2024-09-03

@@ -74,7 +74,13 @@ func getLatestRdsVersion(sess *session.Session, engine *string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	return *resp.DBEngineVersions[len(resp.DBEngineVersions)-1].EngineVersion, nil
+	// Filter for the latest version without "limitless"
+	for i := len(resp.DBEngineVersions) - 1; i >= 0; i-- {
+		if version := *resp.DBEngineVersions[i].EngineVersion; !strings.Contains(version, "limitless") {
+			return version, nil
+		}
+	}
+	return "", fmt.Errorf("no compatible version found for engine %s", *engine)
 }
 
 func listRDSInstanceClasses(sess *session.Session, engine, version *string) ([]string, error) {
