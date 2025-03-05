@@ -129,6 +129,9 @@ type DeployStatus struct {
 }
 
 func (d *DeployStatus) FindProcess(name string) (*Process, error) {
+	if d == nil {
+		return nil, fmt.Errorf("process '%s' not found", name)
+	}
 	for _, p := range d.Processes {
 		if p.Name == name {
 			return &p, nil

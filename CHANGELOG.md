@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Region creation no longer requires Docker Hub credentials. Existing apps must be upgraded for compatibility.
 
+### Fixed
+
+* Resizing a non-existent service in an undeployed app no longer causes an error.
+
 ## [4.6.3] - 2024-11-04
 
 ### Fixed
