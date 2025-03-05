@@ -195,11 +195,5 @@ func GetTokens() (*Tokens, error) {
 
 func isNetworkError(err error) bool {
 	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-
-	// Handle DNS resolution errors directly
-	var dnsErr *net.DNSError
-	return errors.As(err, &dnsErr)
+	return errors.As(err, &netErr)
 }
