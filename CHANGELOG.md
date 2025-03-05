@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-* Region creation no longer requires Docker Hub credentials
+* Region creation no longer requires Docker Hub credentials. Existing apps must be upgraded for compatibility.
 
 ## [4.6.3] - 2024-11-04
 
