@@ -171,18 +171,30 @@ func UpdateStackAndWait(sess *session.Session, stackInput *cloudformation.Update
 
 func CreateChangeSetAndWait(sess *session.Session, changesetInput *cloudformation.CreateChangeSetInput) (*cloudformation.DescribeChangeSetOutput, error) {
 	cfnSvc := cloudformation.New(sess)
-	_, err := cfnSvc.CreateChangeSet(changesetInput)
-	if err != nil {
+
+	if _, err := cfnSvc.CreateChangeSet(changesetInput); err != nil {
 		return nil, err
 	}
+
 	describeChangeSetInput := cloudformation.DescribeChangeSetInput{
 		ChangeSetName: changesetInput.ChangeSetName,
 		StackName:     changesetInput.StackName,
 	}
-	if err = cfnSvc.WaitUntilChangeSetCreateComplete(&describeChangeSetInput); err != nil {
+	changeSet, err := cfnSvc.DescribeChangeSet(&describeChangeSetInput)
+	if err != nil {
 		return nil, err
 	}
-	return cfnSvc.DescribeChangeSet(&describeChangeSetInput)
+
+	if *changeSet.Status == cloudformation.ChangeSetStatusFailed &&
+		strings.Contains(*changeSet.StatusReason, "didn't contain changes") {
+		return nil, fmt.Errorf("no changes detected in stack %s, skipping execution", *changesetInput.StackName)
+	}
+
+	if err := cfnSvc.WaitUntilChangeSetCreateComplete(&describeChangeSetInput); err != nil {
+		return nil, err
+	}
+
+	return changeSet, nil
 }
 
 // DeleteStackAndWait will execute the PreDelete hook, delete the stack and wait for it to complete,
