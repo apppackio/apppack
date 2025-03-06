@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -181,10 +182,18 @@ func GetTokens() (*Tokens, error) {
 	}
 	tokens, err = Oauth.RefreshTokens(tokens)
 	if err != nil {
+		if isNetworkError(err) {
+			return nil, fmt.Errorf("network issue: %w", err)
+		}
 		return nil, fmt.Errorf("%s: %w", TokenRefreshErr, err)
 	}
 	if err = tokens.WriteToCache(); err != nil {
 		return nil, err
 	}
 	return tokens, nil
+}
+
+func isNetworkError(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr)
 }
