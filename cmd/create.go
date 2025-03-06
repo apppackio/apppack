@@ -379,11 +379,4 @@ func init() {
 	createDatabaseCmd.Flags().Int("max-allocated-storage", stacks.DefaultDatabaseStackParameters.MaxAllocatedStorage, "maximum storage allocated on-demand in GB (does not apply to Aurora engines)")
 
 	createCmd.AddCommand(createRegionCmd)
-	createRegionCmd.Flags().String("dockerhub-username", "", "Docker Hub username")
-	createRegionCmd.Flags().String("dockerhub-access-token", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
-	// All flags need to be added to `createCluster` as well so it can call this cmd
-	createClusterCmd.Flags().String("dockerhub-username", "", "Docker Hub username")
-	createClusterCmd.Flags().String("dockerhub-access-token", "", "Docker Hub Access Token (https://hub.docker.com/settings/security)")
-	createClusterCmd.Flags().MarkHidden("dockerhub-username")
-	createClusterCmd.Flags().MarkHidden("dockerhub-access-token")
 }
