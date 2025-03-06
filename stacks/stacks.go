@@ -194,8 +194,7 @@ func CreateChangeSetAndWait(sess *session.Session, changesetInput *cloudformatio
 		return nil, err
 	}
 
-	// Fetch the latest change set details after waiting
-	return cfnSvc.DescribeChangeSet(&describeChangeSetInput)
+	return changeSet, nil
 }
 
 // DeleteStackAndWait will execute the PreDelete hook, delete the stack and wait for it to complete,
