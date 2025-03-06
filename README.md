@@ -23,8 +23,8 @@ Here's a step-by-step guide to releasing a new version of AppPack:
 
 ### Automated Release with GoReleaser
 
-* Push you changes to `main`
-* Tag the commit with the version number prefixed by `v`. For example, to tag 9.7.5, run `git tag -s v9.7.5`
+* Push your changes to `main`
+* Tag the commit with the version number prefixed by `v`. For example, to tag `9.7.5`, run `git tag -s v9.7.5`
 * `git push --tag`
 * GoReleaser will take over through Github Actions, creating a new release with the version number specified in your tag. It will also compile the latest code, create OS-specific binaries, and upload these artifacts to the release assets on GitHub.
 
