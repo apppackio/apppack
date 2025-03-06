@@ -61,7 +61,7 @@ func (*RegionStack) PostDelete(sess *session.Session, _ *string) error {
 		Name: aws.String("/apppack/account/dockerhub-access-token"),
 	})
 	// Ignore error if the parameter doesn't exist
-	if err != nil && !strings.Contains(err.Error(), "ParameterNotFound") {
+	if err != nil && strings.Contains(err.Error(), "ParameterNotFound") {
 		logrus.WithError(err).Debug("dockerhub-access-token parameter does not exist")
 		return nil
 	}
