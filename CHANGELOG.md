@@ -5,11 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.6.X] - 2025-03-XX
+## [4.6.6] - 2025-03-31
 
 ### Fixed
 
 * Handle and return a clear error for empty CloudFormation change sets instead of `ResourceNotReady` error.
+* Raise an exception when no scheduled tasks are available for deletion.
 
 ## [4.6.5] - 2025-03-06
 
