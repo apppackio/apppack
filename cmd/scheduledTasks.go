@@ -115,6 +115,10 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 		} else {
 			tasks, err := a.ScheduledTasks()
 			checkErr(err)
+			if len(tasks) == 0 {
+				checkErr(fmt.Errorf("no scheduled tasks to delete"))
+				return
+			}
 			var taskList []string
 			for _, t := range tasks {
 				taskList = append(taskList, fmt.Sprintf("%s %s", t.Schedule, t.Command))
