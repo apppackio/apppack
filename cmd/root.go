@@ -83,6 +83,9 @@ func checkForUpdate(ctx context.Context, currentVersion string) (*version.Releas
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	retcode := 0
+	defer func() { os.Exit(retcode) }()
+
 	// start update check process in the background
 	ctx := context.Background()
 	updateCtx, updateCancel := context.WithCancel(ctx)
@@ -101,7 +104,8 @@ func Execute() {
 	// run command
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
-		os.Exit(1)
+		retcode = 1
+		return
 	}
 
 	updateCancel() // if the update checker hasn't completed by now, abort it

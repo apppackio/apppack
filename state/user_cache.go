@@ -1,6 +1,7 @@
 package state
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,28 +18,37 @@ func WriteToCache(name string, data []byte) error {
 	}
 
 	err = os.Mkdir(path, os.FileMode(0o700))
-
-	if err != nil {
-		if !os.IsExist(err) {
-			return err
-		}
+	if err != nil && !os.IsExist(err) {
+		return err
 	}
 
 	filename := filepath.Join(path, name)
 	logrus.WithFields(logrus.Fields{"filename": filename}).Debug("writing to user cache")
+
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	err = file.Chmod(os.FileMode(0o600))
 
+	err = file.Chmod(os.FileMode(0o600))
 	if err != nil {
+		file.Close() // Ensure file is closed even if chmod fails
 		return err
 	}
-	_, err = file.Write(data)
 
-	return err
+	_, err = file.Write(data)
+	if err != nil {
+		file.Close() // Ensure file is closed even if writing fails
+		return err
+	}
+
+	// Close the file and check for errors
+	err = file.Close()
+	if err != nil {
+		return errors.New("error closing file: " + err.Error())
+	}
+
+	return nil
 }
 
 func ReadFromCache(name string) ([]byte, error) {
@@ -53,9 +63,18 @@ func ReadFromCache(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
 
-	return io.ReadAll(file)
+	err = file.Close()
+	if err != nil {
+		return nil, errors.New("error closing file: " + err.Error())
+	}
+
+	return data, nil
 }
 
 func ClearCache() error {
