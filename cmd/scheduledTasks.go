@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/huh"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
 	"github.com/logrusorgru/aurora"
@@ -123,20 +123,26 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 			for _, t := range tasks {
 				taskList = append(taskList, fmt.Sprintf("%s %s", t.Schedule, t.Command))
 			}
-			questions := []*survey.Question{{
-				Name: "task",
-				Prompt: &survey.Select{
-					Message:       "Scheduled task to delete:",
-					Options:       taskList,
-					FilterMessage: "",
-				},
-			}}
-			answers := make(map[string]int)
+			var selectedTask string
+			form := huh.NewForm(
+				huh.NewGroup(
+					huh.NewSelect[string]().
+						Title("Scheduled task to delete:").
+						Options(huh.NewOptions(taskList...)...).
+						Value(&selectedTask),
+				),
+			)
 			ui.Spinner.Stop()
-			if err := survey.Ask(questions, &answers); err != nil {
+			if err := form.Run(); err != nil {
 				checkErr(err)
 			}
-			idx = answers["task"]
+			// Find index of selected task
+			for i, task := range taskList {
+				if task == selectedTask {
+					idx = i
+					break
+				}
+			}
 		}
 		task, err = a.DeleteScheduledTask(idx)
 		checkErr(err)

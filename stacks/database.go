@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/huh"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
@@ -255,6 +255,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 	var questions []*ui.QuestionExtra
 	var err error
 	var aurora bool
+	var auroraSel string = ui.BooleanAsYesNo(aurora)
 	if a.Stack == nil {
 		err = AskForCluster(
 			sess,
@@ -270,30 +271,27 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 			{
 				Verbose:  "What engine should this Database use?",
 				HelpText: "",
-				Question: &survey.Question{
-					Name: "Engine",
-					Prompt: &survey.Select{
-						Message:       "Type",
-						Options:       []string{"postgres", "mysql"},
-						FilterMessage: "",
-						Default:       "postgres",
-					},
-					Validate: survey.Required,
-				},
+				Form: huh.NewForm(
+					huh.NewGroup(
+						huh.NewSelect[string]().
+							Title("Type").
+							Options(huh.NewOptions("postgres", "mysql")...).
+							Value(&a.Parameters.Engine),
+					),
+				),
 			},
 			{
 				Verbose:  "Should this Database use the Aurora engine variant?",
 				HelpText: "Aurora provides many benefits over the standard engines, but is not available on very small instance sizes. For more info see https://aws.amazon.com/rds/aurora/.",
 				WriteTo:  &ui.BooleanOptionProxy{Value: &aurora},
-				Question: &survey.Question{
-					Prompt: &survey.Select{
-						Message:       "Aurora",
-						Options:       []string{"yes", "no"},
-						FilterMessage: "",
-						Default:       ui.BooleanAsYesNo(aurora),
-					},
-					Validate: survey.Required,
-				},
+				Form: huh.NewForm(
+					huh.NewGroup(
+						huh.NewSelect[string]().
+							Title("Aurora").
+							Options(huh.NewOptions("yes", "no")...).
+							Value(&auroraSel),
+					),
+				),
 			},
 		}...)
 		if err = ui.AskQuestions(questions, a.Parameters); err != nil {
@@ -322,20 +320,19 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 	}
 	ui.Spinner.Stop()
 	ui.Spinner.Suffix = ""
+	var multiAZSel string = ui.BooleanAsYesNo(a.Parameters.MultiAZ)
 	questions = append(questions, []*ui.QuestionExtra{
 		{
 			Verbose:  "What instance class should be used for this Database?",
 			HelpText: "Enter the Database instance class. For more info see https://aws.amazon.com/rds/pricing/.",
-			Question: &survey.Question{
-				Name: "InstanceClass",
-				Prompt: &survey.Select{
-					Message:       "Instance Class",
-					Options:       instanceClasses,
-					FilterMessage: "",
-					Default:       a.Parameters.InstanceClass,
-				},
-				Validate: survey.Required,
-			},
+			Form: huh.NewForm(
+				huh.NewGroup(
+					huh.NewSelect[string]().
+						Title("Instance Class").
+						Options(huh.NewOptions(instanceClasses...)...).
+						Value(&a.Parameters.InstanceClass),
+				),
+			),
 		},
 		{
 			Verbose: "Should this Database be setup in multiple availability zones?",
@@ -343,15 +340,14 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 				"but double the cost at AWS. In the case of Aurora databases, enabling multiple availability zones will give you access to a read-replica." +
 				"For more info see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html.",
 			WriteTo: &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "Multi AZ",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(a.Parameters.MultiAZ),
-				},
-				Validate: survey.Required,
-			},
+			Form: huh.NewForm(
+				huh.NewGroup(
+					huh.NewSelect[string]().
+						Title("Multi AZ").
+						Options(huh.NewOptions("yes", "no")...).
+						Value(&multiAZSel),
+				),
+			),
 		},
 	}...)
 	return ui.AskQuestions(questions, a.Parameters)
