@@ -74,7 +74,7 @@ func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 		}
 
 		// Get the underline length - simplified for now
-		var underline int = 10 // Default underline length
+		var underline = 10 // Default underline length
 		fmt.Println(aurora.Faint(strings.Repeat("─", 2+underline)))
 	}
 	return nil
@@ -132,7 +132,7 @@ func CreateConfirmForm(title string, target *bool) *huh.Form {
 func CreateBooleanSelectForm(title string, defaultValue bool, target *bool) *huh.Form {
 	options := []string{"yes", "no"}
 	defaultOption := BooleanAsYesNo(defaultValue)
-	var selected string = defaultOption
+	var selected = defaultOption
 
 	form := huh.NewForm(
 		huh.NewGroup(

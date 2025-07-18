@@ -255,7 +255,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 	var questions []*ui.QuestionExtra
 	var err error
 	var aurora bool
-	var auroraSel string = ui.BooleanAsYesNo(aurora)
+	var auroraSel = ui.BooleanAsYesNo(aurora)
 	if a.Stack == nil {
 		err = AskForCluster(
 			sess,
@@ -320,7 +320,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 	}
 	ui.Spinner.Stop()
 	ui.Spinner.Suffix = ""
-	var multiAZSel string = ui.BooleanAsYesNo(a.Parameters.MultiAZ)
+	var multiAZSel = ui.BooleanAsYesNo(a.Parameters.MultiAZ)
 	questions = append(questions, []*ui.QuestionExtra{
 		{
 			Verbose:  "What instance class should be used for this Database?",

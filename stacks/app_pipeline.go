@@ -178,7 +178,7 @@ func (a *AppStack) AskForDatabase(sess *session.Session) error {
 			"See https://docs.apppack.io/how-to/using-databases/ for more info."
 	}
 	defaultValue := ui.BooleanAsYesNo(enable)
-	var selected string = defaultValue
+	var selected = defaultValue
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  fmt.Sprintf("Should a database be created for this %s?", a.StackType()),
@@ -251,7 +251,7 @@ func (a *AppStack) AskForDatabaseStack(sess *session.Session) error {
 	} else {
 		verbose = "Which database cluster should this app's database be setup on?"
 	}
-	var selectedDatabase string = databases[defaultDatabaseIdx]
+	var selectedDatabase = databases[defaultDatabaseIdx]
 	err = ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose: verbose,
@@ -296,7 +296,7 @@ func (a *AppStack) AskForRedis(sess *session.Session) error {
 			"Answering yes will create a user and provide the credentials to the app as a config variable. " +
 			"See https://docs.apppack.io/how-to/using-redis/ for more info."
 	}
-	var redisSel string = ui.BooleanAsYesNo(enable)
+	var redisSel = ui.BooleanAsYesNo(enable)
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  verbose,
@@ -357,7 +357,7 @@ func (a *AppStack) AskForRedisStack(sess *session.Session) error {
 	} else {
 		verbose = "Which Redis instance should this app's user be setup on?"
 	}
-	var selectedRedis string = redises[defaultRedisIdx]
+	var selectedRedis = redises[defaultRedisIdx]
 	err = ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose: verbose,
@@ -391,7 +391,7 @@ func (a *AppStack) AskForSES() error {
 		verbose = "Should this app be allowed to send email via Amazon SES?"
 		helpText = "Allow this app to send email via SES. See https://docs.apppack.io/how-to/sending-email/ for more info."
 	}
-	var sesSel string = ui.BooleanAsYesNo(enable)
+	var sesSel = ui.BooleanAsYesNo(enable)
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  verbose,
@@ -497,7 +497,7 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 		return err
 	}
 	if !a.Pipeline {
-		var domainText string = strings.Join(a.Parameters.Domains, "\n")
+		var domainText = strings.Join(a.Parameters.Domains, "\n")
 		questions = append(questions, []*ui.QuestionExtra{
 			{
 				Verbose:  "What branch should this app build from?",
@@ -672,7 +672,7 @@ func (a *AppStack) WarnIfDataLoss() error {
 		ui.PrintWarning("The current Redis database will no longer be accessible to the application.")
 	}
 	if privateS3BucketDestroy || publicS3BucketDestroy || databaseDestroy || redisDestroy {
-		var verify string = "no"
+		var verify = "no"
 		form := huh.NewForm(
 			huh.NewGroup(
 				huh.NewSelect[string]().

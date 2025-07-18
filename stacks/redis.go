@@ -168,7 +168,7 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 		a.Parameters.InstanceClass = DefaultRedisStackParameters.InstanceClass
 	}
 
-	var multiAZSel string = ui.BooleanAsYesNo(a.Parameters.MultiAZ)
+	var multiAZSel = ui.BooleanAsYesNo(a.Parameters.MultiAZ)
 	questions = append(questions, []*ui.QuestionExtra{
 		{
 			Verbose: "Should this Redis instance be setup in multiple availability zones?",
