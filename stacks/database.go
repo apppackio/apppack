@@ -283,7 +283,6 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 			{
 				Verbose:  "Should this Database use the Aurora engine variant?",
 				HelpText: "Aurora provides many benefits over the standard engines, but is not available on very small instance sizes. For more info see https://aws.amazon.com/rds/aurora/.",
-				WriteTo:  &ui.BooleanOptionProxy{Value: &aurora},
 				Form: huh.NewForm(
 					huh.NewGroup(
 						huh.NewSelect[string]().
@@ -297,6 +296,8 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 		if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 			return err
 		}
+		// Convert aurora selection back to boolean
+		aurora = (auroraSel == "yes")
 		ui.StartSpinner()
 		if aurora {
 			a.Parameters.Engine, err = auroraEngineName(&a.Parameters.Engine)
@@ -339,7 +340,6 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, " +
 				"but double the cost at AWS. In the case of Aurora databases, enabling multiple availability zones will give you access to a read-replica." +
 				"For more info see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html.",
-			WriteTo: &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewSelect[string]().
@@ -350,7 +350,13 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 			),
 		},
 	}...)
-	return ui.AskQuestions(questions, a.Parameters)
+	err = ui.AskQuestions(questions, a.Parameters)
+	if err != nil {
+		return err
+	}
+	// Convert multiAZ selection back to boolean
+	a.Parameters.MultiAZ = (multiAZSel == "yes")
+	return nil
 }
 
 func (*DatabaseStack) StackName(name *string) *string {

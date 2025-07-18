@@ -212,10 +212,3 @@ func DeleteStackAndWait(sess *session.Session, stack Stack) (*cloudformation.Sta
 	return cfnStack, err
 }
 
-// clusterSelectTransform converts `{name}` -> `{stackName}`
-func clusterSelectTransform(name string) string {
-	if name != "" {
-		return fmt.Sprintf(clusterStackNameTmpl, name)
-	}
-	return name
-}

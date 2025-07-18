@@ -183,7 +183,6 @@ func (a *AppStack) AskForDatabase(sess *session.Session) error {
 		{
 			Verbose:  fmt.Sprintf("Should a database be created for this %s?", a.StackType()),
 			HelpText: helpText,
-			WriteTo:  &ui.BooleanOptionProxy{Value: &enable},
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewSelect[string]().
@@ -197,6 +196,8 @@ func (a *AppStack) AskForDatabase(sess *session.Session) error {
 	if err != nil {
 		return err
 	}
+	// Convert selection back to boolean
+	enable = (selected == "yes")
 
 	if enable {
 		canChange, err := a.CanChangeParameter("DatabaseStackName")
@@ -301,7 +302,6 @@ func (a *AppStack) AskForRedis(sess *session.Session) error {
 		{
 			Verbose:  verbose,
 			HelpText: helpText,
-			WriteTo:  &ui.BooleanOptionProxy{Value: &enable},
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewSelect[string]().
@@ -315,6 +315,8 @@ func (a *AppStack) AskForRedis(sess *session.Session) error {
 	if err != nil {
 		return err
 	}
+	// Convert selection back to boolean
+	enable = (redisSel == "yes")
 	if enable {
 		canChange, err := a.CanChangeParameter("RedisStackName")
 		if err != nil {
@@ -396,7 +398,6 @@ func (a *AppStack) AskForSES() error {
 		{
 			Verbose:  verbose,
 			HelpText: helpText,
-			WriteTo:  &ui.BooleanOptionProxy{Value: &enable},
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewSelect[string]().
@@ -410,6 +411,8 @@ func (a *AppStack) AskForSES() error {
 	if err != nil {
 		return err
 	}
+	// Convert selection back to boolean
+	enable = (sesSel == "yes")
 	if enable {
 		return a.AskForSESDomain()
 	}
@@ -514,7 +517,6 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 			{
 				Verbose:  "Should the app be served on a custom domain? (Optional)",
 				HelpText: "By default, the app will automatically be assigned a domain within the cluster. If you'd like it to respond on other domain(s), enter them here (one-per-line). See https://docs.apppack.io/how-to/custom-domains/ for more info.",
-				WriteTo:  &ui.MultiLineValueProxy{Value: &a.Parameters.Domains},
 				Form: huh.NewForm(
 					huh.NewGroup(
 						huh.NewText().
@@ -525,6 +527,12 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 				),
 			},
 		}...)
+		// Convert domainText back to slice
+		if domainText != "" {
+			a.Parameters.Domains = strings.Split(domainText, "\n")
+		} else {
+			a.Parameters.Domains = []string{}
+		}
 	}
 	var sqsVerbose string
 	var sqsHelpText string
@@ -538,6 +546,11 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 		sqsHelpText = "The SQS Queue can be used to queue up messages between processes. Answering yes will create the queue and provide its name to the app as a config variable. See https://docs.apppack.io/how-to/using-sqs/ for more info."
 		bucketHelpTextApp = "the app"
 	}
+
+	// Variables for boolean selections
+	var privateS3Sel = ui.BooleanAsYesNo(a.Parameters.PrivateS3BucketEnabled)
+	var publicS3Sel = ui.BooleanAsYesNo(a.Parameters.PublicS3BucketEnabled)
+	var sqsSel = ui.BooleanAsYesNo(a.Parameters.SQSQueueEnabled)
 
 	questions = append(questions, []*ui.QuestionExtra{
 		{
@@ -555,48 +568,36 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 		{
 			Verbose:  fmt.Sprintf("Should a private S3 Bucket be created for this %s?", a.StackType()),
 			HelpText: fmt.Sprintf("The S3 Bucket can be used to store files that should not be publicly accessible. Answering yes will create the bucket and provide its name to %s as a config variable. See https://docs.apppack.io/how-to/using-s3/ for more info.", bucketHelpTextApp),
-			WriteTo:  &ui.BooleanOptionProxy{Value: &a.Parameters.PrivateS3BucketEnabled},
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewSelect[string]().
 						Title("Private S3 Bucket").
 						Options(huh.NewOptions("yes", "no")...).
-						Value(func() *string {
-							s := ui.BooleanAsYesNo(a.Parameters.PrivateS3BucketEnabled)
-							return &s
-						}()),
+						Value(&privateS3Sel),
 				),
 			),
 		},
 		{
 			Verbose:  fmt.Sprintf("Should a public S3 Bucket be created for this %s?", a.StackType()),
-			HelpText: fmt.Sprintf("The S3 Bucket can be used to store files that should be publicly accessible. Answering yes will create the bucket and provide its name to %s as a config variable. See https://docs.apppack.io/how-to/using-s3/ for more info.", bucketHelpTextApp),
-			WriteTo:  &ui.BooleanOptionProxy{Value: &a.Parameters.PublicS3BucketEnabled},
+			HelpText: fmt.Sprintf("The S3 Bucket can be used to store files that should not be publicly accessible. Answering yes will create the bucket and provide its name to %s as a config variable. See https://docs.apppack.io/how-to/using-s3/ for more info.", bucketHelpTextApp),
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewSelect[string]().
 						Title("Public S3 Bucket").
 						Options(huh.NewOptions("yes", "no")...).
-						Value(func() *string {
-							s := ui.BooleanAsYesNo(a.Parameters.PublicS3BucketEnabled)
-							return &s
-						}()),
+						Value(&publicS3Sel),
 				),
 			),
 		},
 		{
 			Verbose:  sqsVerbose,
 			HelpText: sqsHelpText,
-			WriteTo:  &ui.BooleanOptionProxy{Value: &a.Parameters.SQSQueueEnabled},
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewSelect[string]().
 						Title("SQS Queue").
 						Options(huh.NewOptions("yes", "no")...).
-						Value(func() *string {
-							s := ui.BooleanAsYesNo(a.Parameters.SQSQueueEnabled)
-							return &s
-						}()),
+						Value(&sqsSel),
 				),
 			),
 		},
@@ -604,6 +605,10 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 		return err
 	}
+	// Convert selections back to booleans
+	a.Parameters.PrivateS3BucketEnabled = (privateS3Sel == "yes")
+	a.Parameters.PublicS3BucketEnabled = (publicS3Sel == "yes")
+	a.Parameters.SQSQueueEnabled = (sqsSel == "yes")
 	if err := a.AskForDatabase(sess); err != nil {
 		return err
 	}
@@ -614,25 +619,28 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 		return err
 	}
 	if a.Stack == nil {
+		var usersText = strings.Join(a.Parameters.AllowedUsers, "\n")
 		err = ui.AskQuestions([]*ui.QuestionExtra{
 			{
 				Verbose:  fmt.Sprintf("Who can manage this %s?", a.StackType()),
 				HelpText: fmt.Sprintf("A list of email addresses (one per line) who have access to manage this %s via AppPack.", a.StackType()),
-				WriteTo:  &ui.MultiLineValueProxy{Value: &a.Parameters.AllowedUsers},
 				Form: huh.NewForm(
 					huh.NewGroup(
 						huh.NewText().
 							Title("Users").
-							Value(func() *string {
-								s := strings.Join(a.Parameters.AllowedUsers, "\n")
-								return &s
-							}()),
+							Value(&usersText),
 					),
 				),
 			},
 		}, a.Parameters)
 		if err != nil {
 			return err
+		}
+		// Convert usersText back to slice
+		if usersText != "" {
+			a.Parameters.AllowedUsers = strings.Split(usersText, "\n")
+		} else {
+			a.Parameters.AllowedUsers = []string{}
 		}
 	} else if err = a.WarnIfDataLoss(); err != nil {
 		return err

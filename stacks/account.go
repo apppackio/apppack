@@ -69,12 +69,11 @@ func (a *AccountStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 }
 
 func (a *AccountStack) AskQuestions(_ *session.Session) error {
-	var administrators string
-	return ui.AskQuestions([]*ui.QuestionExtra{
+	var administrators = strings.Join(a.Parameters.Administrators, "\n")
+	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  "Who can administer this account?",
 			HelpText: "A list of email addresses (one per line) who have access to manage this AppPack account. These users will be assigned a permissive IAM policy in your AWS account and should be fully trusted with any resources within ",
-			WriteTo:  &ui.MultiLineValueProxy{Value: &a.Parameters.Administrators},
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewText().
@@ -84,6 +83,16 @@ func (a *AccountStack) AskQuestions(_ *session.Session) error {
 			),
 		},
 	}, a.Parameters)
+	if err != nil {
+		return err
+	}
+	// Convert administrators text back to slice
+	if administrators != "" {
+		a.Parameters.Administrators = strings.Split(administrators, "\n")
+	} else {
+		a.Parameters.Administrators = []string{}
+	}
+	return nil
 }
 
 func (*AccountStack) StackName(_ *string) *string {

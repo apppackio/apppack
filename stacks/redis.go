@@ -175,7 +175,6 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, " +
 				"but double the cost at AWS. For more info see " +
 				"https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html.",
-			WriteTo: &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
 			Form: huh.NewForm(
 				huh.NewGroup(
 					huh.NewSelect[string]().
@@ -189,6 +188,8 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 		return err
 	}
+	// Convert multiAZ selection back to boolean
+	a.Parameters.MultiAZ = (multiAZSel == "yes")
 	// Clear the questions slice so we can reuse it
 	questions = questions[:0]
 
