@@ -409,6 +409,14 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 				go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"), stopTailing)
 			}
 		} else if *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD" {
+			if build.BuildStatus != nil && (*build.BuildStatus == "FAILED" || *build.BuildStatus == "STOPPED" || *build.BuildStatus == "TIMED_OUT") {
+				ui.Spinner.Stop()
+				fmt.Printf("Build failed during %s phase, showing logs:\n", strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " ")))
+				if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
+					return S3Log(a.Session, buildStatus.Build.Logs)
+				}
+				return StreamEvents(a.Session, buildStatus.Build.Logs, nil, nil)
+			}
 			ui.StartSpinner()
 			caser := cases.Title(language.English)
 			ui.Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", caser.String(strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " "))))
