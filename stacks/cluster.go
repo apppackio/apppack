@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/huh"
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
@@ -225,11 +225,14 @@ func (a *ClusterStack) AskQuestions(_ *session.Session) error {
 			{
 				Verbose:  "What domain should be associated with this cluster?",
 				HelpText: "Apps installed to this cluster will automatically get assigned a subdomain on the provided domain. The domain or a parent domain must already be setup as a Route53 Hosted Zone. See https://docs.apppack.io/how-to/bring-your-own-cluster-domain/ for more info.",
-				Question: &survey.Question{
-					Name:     "Domain",
-					Prompt:   &survey.Input{Message: "Cluster Domain", Default: a.Parameters.Domain},
-					Validate: survey.Required,
-				},
+				Form: huh.NewForm(
+					huh.NewGroup(
+						huh.NewInput().
+							Title("Cluster Domain").
+							Placeholder(a.Parameters.Domain).
+							Value(&a.Parameters.Domain),
+					),
+				),
 			},
 		}...)
 		if err = ui.AskQuestions(questions, a.Parameters); err != nil {

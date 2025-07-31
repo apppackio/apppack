@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/AlecAivazis/survey/v2/core"
 	"github.com/apppackio/apppack/ddb"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -32,18 +30,12 @@ func AskForCluster(sess *session.Session, verbose, helpText string, response int
 	if len(clusters) == 0 {
 		return fmt.Errorf("no AppPack clusters are setup")
 	}
+	var selectedCluster string
 	return ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  verbose,
 			HelpText: helpText,
-			Question: &survey.Question{
-				Name: "ClusterStackName",
-				Prompt: &survey.Select{
-					Message: "Cluster",
-					Options: clusters,
-				},
-				Transform: clusterSelectTransform,
-			},
+			Form: ui.CreateSelectForm("Cluster", "ClusterStackName", clusters, &selectedCluster),
 		},
 	}, response)
 }
@@ -220,14 +212,3 @@ func DeleteStackAndWait(sess *session.Session, stack Stack) (*cloudformation.Sta
 	return cfnStack, err
 }
 
-// clusterSelectTransform converts `{name}` -> `{stackName}`
-func clusterSelectTransform(ans interface{}) interface{} {
-	o, ok := ans.(core.OptionAnswer)
-	if !ok {
-		return ans
-	}
-	if o.Value != "" {
-		o.Value = fmt.Sprintf(clusterStackNameTmpl, o.Value)
-	}
-	return o
-}
