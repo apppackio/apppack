@@ -130,7 +130,7 @@ func interactiveCmd(a *app.App, cmd string) {
 	isBuildpack := *buildSystem == "buildpacks" || *buildSystem == ""
 	exec := cmd
 	if isBuildpack && !shellRoot {
-		exec = fmt.Sprintf("su --preserve-environment --pty --command '/cnb/lifecycle/launcher %s' heroku", cmd)
+		exec = fmt.Sprintf("su --preserve-environment --pty --command 'export HOME=$(getent passwd heroku | cut -d: -f6); exec /cnb/lifecycle/launcher %s' heroku", cmd)
 	} else if !isBuildpack && shellRoot {
 		checkErr(fmt.Errorf("--root is only supported on the buildpack build system"))
 	}
