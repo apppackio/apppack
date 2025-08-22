@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/huh"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
@@ -147,23 +147,30 @@ func interactiveCmd(a *app.App, cmd string) {
 			arnParts := strings.Split(*t.TaskArn, "/")
 			taskList = append(taskList, fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1]))
 		}
-		answers := make(map[string]interface{})
-		questions := []*survey.Question{
-			{
-				Name: "task",
-				Prompt: &survey.Select{
-					Message: "Select task to connect to",
-					Options: taskList,
-				},
-			},
-		}
+		var selectedTask string
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title("Select task to connect to").
+					Options(huh.NewOptions(taskList...)...).
+					Value(&selectedTask),
+			),
+		)
 		ui.Spinner.Stop()
-		if err := survey.Ask(questions, &answers); err != nil {
+		if err := form.Run(); err != nil {
 			checkErr(err)
+		}
+		// Find index of selected task
+		var selectedIndex int
+		for i, task := range taskList {
+			if task == selectedTask {
+				selectedIndex = i
+				break
+			}
 		}
 		ui.StartSpinner()
 		ecsSession, err := a.CreateEcsSession(
-			tasks[answers["task"].(survey.OptionAnswer).Index],
+			tasks[selectedIndex],
 			exec,
 		)
 		checkErr(err)

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/huh"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go/aws"
@@ -168,26 +168,28 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 		a.Parameters.InstanceClass = DefaultRedisStackParameters.InstanceClass
 	}
 
+	var multiAZSel = ui.BooleanAsYesNo(a.Parameters.MultiAZ)
 	questions = append(questions, []*ui.QuestionExtra{
 		{
 			Verbose: "Should this Redis instance be setup in multiple availability zones?",
 			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, " +
 				"but double the cost at AWS. For more info see " +
 				"https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html.",
-			WriteTo: &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "Multi AZ",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(a.Parameters.MultiAZ),
-				},
-			},
+			Form: huh.NewForm(
+				huh.NewGroup(
+					huh.NewSelect[string]().
+						Title("Multi AZ").
+						Options(huh.NewOptions("yes", "no")...).
+						Value(&multiAZSel),
+				),
+			),
 		},
 	}...)
 	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 		return err
 	}
+	// Convert multiAZ selection back to boolean
+	a.Parameters.MultiAZ = (multiAZSel == "yes")
 	// Clear the questions slice so we can reuse it
 	questions = questions[:0]
 
@@ -204,16 +206,14 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 		{
 			Verbose:  "What instance class should be used for this Redis instance?",
 			HelpText: "Enter the Redis instance class. For more info see https://aws.amazon.com/elasticache/pricing/.",
-			Question: &survey.Question{
-				Name: "InstanceClass",
-				Prompt: &survey.Select{
-					Message:       "Instance Class",
-					Options:       instanceClasses,
-					FilterMessage: "",
-					Default:       a.Parameters.InstanceClass,
-				},
-				Validate: survey.Required,
-			},
+			Form: huh.NewForm(
+				huh.NewGroup(
+					huh.NewSelect[string]().
+						Title("Instance Class").
+						Options(huh.NewOptions(instanceClasses...)...).
+						Value(&a.Parameters.InstanceClass),
+				),
+			),
 		},
 	}...)
 	return ui.AskQuestions(questions, a.Parameters)
