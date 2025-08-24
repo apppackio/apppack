@@ -378,6 +378,44 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 	}
 }
 
+func isPreBuildPhase(phase string) bool {
+	return phase == "SUBMITTED" || phase == "QUEUED" || phase == "PROVISIONING" || 
+		   phase == "DOWNLOAD_SOURCE" || phase == "INSTALL" || phase == "PRE_BUILD"
+}
+
+func isBuildFailed(build *codebuild.Build) bool {
+	return build.BuildStatus != nil && 
+		   (*build.BuildStatus == "FAILED" || *build.BuildStatus == "STOPPED" || *build.BuildStatus == "TIMED_OUT")
+}
+
+func handlePreBuildPhaseFailure(buildStatus *app.BuildStatus, phase string, sess *session.Session) error {
+	ui.Spinner.Stop()
+	fmt.Printf("Build failed during %s phase, showing logs:\n", 
+		strings.ToLower(strings.ReplaceAll(phase, "_", " ")))
+	if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
+		return S3Log(sess, buildStatus.Build.Logs)
+	}
+	return StreamEvents(sess, buildStatus.Build.Logs, nil, nil)
+}
+
+func startBuildLogTailing(buildStatus *app.BuildStatus, sess *session.Session, buildLogTailing *bool, stopTailing chan bool) error {
+	if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
+		return S3Log(sess, buildStatus.Build.Logs)
+	}
+	if !*buildLogTailing {
+		*buildLogTailing = true
+		go StreamEvents(sess, buildStatus.Build.Logs, aws.String("build"), stopTailing)
+	}
+	return nil
+}
+
+func updatePreBuildSpinner(phase string) {
+	ui.StartSpinner()
+	caser := cases.Title(language.English)
+	ui.Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", 
+		caser.String(strings.ToLower(strings.ReplaceAll(phase, "_", " "))))
+}
+
 func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 	ui.StartSpinner()
 	buildStatus, err := a.GetBuildStatus(buildStatus.BuildNumber)
@@ -387,6 +425,7 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 	if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Build.Logs)
 	}
+	
 	codebuildSvc := codebuild.New(a.Session)
 	buildLogTailing := false
 	stopTailing := make(chan bool)
@@ -399,26 +438,28 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 		if err != nil {
 			return err
 		}
+		
 		build := builds.Builds[0]
-		if *build.CurrentPhase == "BUILD" {
-			if strings.HasPrefix(buildStatus.Build.Logs, "s3://") {
-				return S3Log(a.Session, buildStatus.Build.Logs)
+		currentPhase := *build.CurrentPhase
+		
+		switch {
+		case currentPhase == "BUILD":
+			if err := startBuildLogTailing(buildStatus, a.Session, &buildLogTailing, stopTailing); err != nil {
+				return err
 			}
-			if !buildLogTailing {
-				buildLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"), stopTailing)
+		case isPreBuildPhase(currentPhase):
+			if isBuildFailed(build) {
+				return handlePreBuildPhaseFailure(buildStatus, currentPhase, a.Session)
 			}
-		} else if *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD" {
-			ui.StartSpinner()
-			caser := cases.Title(language.English)
-			ui.Spinner.Suffix = fmt.Sprintf(" CodeBuild phase: %s", caser.String(strings.ToLower(strings.ReplaceAll(*build.CurrentPhase, "_", " "))))
-		} else {
-			logrus.WithFields(logrus.Fields{"phase": *build.CurrentPhase}).Debug("watch build stopped")
+			updatePreBuildSpinner(currentPhase)
+		default:
+			logrus.WithFields(logrus.Fields{"phase": currentPhase}).Debug("watch build stopped")
 			if buildLogTailing {
 				stopTailing <- true
 			}
 			return nil
 		}
+		
 		time.Sleep(5 * time.Second)
 		buildStatus, err = a.GetBuildStatus(buildStatus.BuildNumber)
 		if err != nil {
