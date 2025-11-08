@@ -105,7 +105,7 @@ var stacksCmd = &cobra.Command{
 				}
 			}
 
-			fmt.Fprintf(w, humanStack.Name)
+			fmt.Fprint(w, humanStack.Name)
 			if humanStack.Cluster != "" {
 				fmt.Fprintf(w, "\t%s\t\n", humanStack.Cluster)
 			} else {
