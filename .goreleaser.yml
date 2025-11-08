@@ -41,7 +41,7 @@ brews:
       owner: apppackio
       name: homebrew-apppack
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    folder: Formula
+    directory: Formula
     homepage: https://apppack.io
     description: CLI for AppPack.io
     license: Apache-2.0
