@@ -84,6 +84,7 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 			if err != nil {
 				return err
 			}
+
 			ref.Field(i).SetInt(int64(val))
 		case reflect.Slice:
 			if field.Type.Elem().Kind() != reflect.String {

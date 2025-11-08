@@ -44,11 +44,13 @@ func GetClusterItem(sess *session.Session, cluster *string, addon string, name *
 	if result.Item == nil {
 		return nil, fmt.Errorf("could not find CLUSTERS/%s", secondaryID)
 	}
+
 	i := stackItem{}
 	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
 	if err != nil {
 		return nil, err
 	}
+
 	return &i.Stack, nil
 }
 
@@ -65,6 +67,7 @@ func ClusterQuery(sess *session.Session, cluster, addon *string) (*[]map[string]
 	if err != nil {
 		return nil, err
 	}
+
 	if result.Items == nil {
 		return nil, fmt.Errorf("could not find any AppPack %s stacks on %s cluster", strings.ToLower(*addon), *cluster)
 	}
@@ -158,8 +161,10 @@ func StackFromItem(sess *session.Session, secondaryID string) (*cloudformation.S
 	if err != nil {
 		return nil, err
 	}
+
 	if len(stacks.Stacks) == 0 {
 		return nil, fmt.Errorf("no stacks found with ID %s", i.Stack.StackID)
 	}
+
 	return stacks.Stacks[0], nil
 }

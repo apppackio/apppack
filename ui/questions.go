@@ -65,7 +65,9 @@ func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 		if q.HelpText != "" {
 			fmt.Println(q.HelpText)
 		}
+
 		fmt.Println()
+
 		if q.WriteTo == nil {
 			if err := survey.Ask([]*survey.Question{q.Question}, response, survey.WithShowCursor(true)); err != nil {
 				return err
@@ -92,6 +94,7 @@ func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 		} else if p, ok := q.Question.Prompt.(*survey.Password); ok {
 			underline = len(p.Message)
 		}
+
 		fmt.Println(aurora.Faint(strings.Repeat("─", 2+underline)))
 	}
 	return nil

@@ -122,7 +122,7 @@ type DatabaseStackParameters struct {
 	Version             string
 	OneTimePassword     string
 	InstanceClass       string `flag:"instance-class"`
-	MultiAZ             bool   `flag:"multi-az" cfnbool:"yesno"`
+	MultiAZ             bool   `cfnbool:"yesno"              flag:"multi-az"`
 	AllocatedStorage    int    `flag:"allocated-storage"`
 	MaxAllocatedStorage int    `flag:"max-allocated-storage"`
 }

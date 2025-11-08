@@ -13,6 +13,7 @@ import (
 // stackExists checks if a named Cfn Stack already exists in the region
 func StackExists(sess *session.Session, stackName string) (*bool, error) {
 	stack, err := GetStack(sess, stackName)
+
 	var exists bool
 	if err != nil {
 		var aerr awserr.Error
@@ -23,9 +24,11 @@ func StackExists(sess *session.Session, stackName string) (*bool, error) {
 				return &exists, nil
 			}
 		}
+
 		return nil, err
 	}
 	exists = *stack.StackStatus != cloudformation.StackStatusDeleteComplete
+
 	return &exists, nil
 }
 
@@ -55,12 +58,15 @@ func GetStack(sess *session.Session, name string) (*cloudformation.Stack, error)
 	if err != nil {
 		return nil, err
 	}
+
 	return stacks.Stacks[0], nil
 }
 
 func ApppackStacks(sess *session.Session) ([]*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
+
 	var stacks []*cloudformation.Stack
+
 	var token *string
 
 	for {
@@ -76,10 +82,13 @@ func ApppackStacks(sess *session.Session) ([]*cloudformation.Stack, error) {
 				stacks = append(stacks, stack)
 			}
 		}
+
 		if resp.NextToken == nil {
 			break
 		}
+
 		token = resp.NextToken
 	}
+
 	return stacks, nil
 }

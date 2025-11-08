@@ -35,7 +35,7 @@ type RedisStackParameters struct {
 	Name               string
 	ClusterStackName   string `flag:"cluster;fmtString:apppack-cluster-%s"`
 	InstanceClass      string `flag:"instance-lass"`
-	MultiAZ            bool   `flag:"multi-az" cfnbool:"yesno"`
+	MultiAZ            bool   `cfnbool:"yesno"                             flag:"multi-az"`
 	AuthTokenParameter string
 }
 

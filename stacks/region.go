@@ -13,8 +13,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-type RegionStackParameters struct {
-}
+type RegionStackParameters struct{}
 
 func (p *RegionStackParameters) Import(parameters []*cloudformation.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)

@@ -30,6 +30,7 @@ func TestFlagsToStruct(t *testing.T) {
 	if len(s.Strsl) != 3 {
 		t.Errorf("Expected 3 strings in strsl, got %d", len(s.Strsl))
 	}
+
 	for i, v := range data {
 		if s.Strsl[i] != v {
 			t.Errorf("Expected %s in strsl, got %s", v, s.Strsl[i])
