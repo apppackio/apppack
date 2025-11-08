@@ -91,7 +91,7 @@ var logoutCmd = &cobra.Command{
 	Use:                   "logout",
 	Short:                 "logout of AppPack.io on this device",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		err := auth.Logout()
 		checkErr(err)
 		printSuccess("Logged out.")
@@ -103,7 +103,7 @@ var whoAmICmd = &cobra.Command{
 	Use:                   "whoami",
 	Short:                 "show login information for the current user",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		email, err := auth.WhoAmI()
 		checkErr(err)
 		printSuccess(fmt.Sprintf("You are currently logged in as %s", aurora.Bold(*email)))
@@ -115,7 +115,7 @@ var appsCmd = &cobra.Command{
 	Use:                   "apps",
 	Short:                 "list the apps you have access to",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		apps, err := auth.AppList()
 		checkErr(err)
@@ -168,7 +168,7 @@ var accountsCmd = &cobra.Command{
 	Use:                   "accounts",
 	Short:                 "list the accounts you have administrator access to",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		admins, err := auth.AdminList()
 		checkErr(err)

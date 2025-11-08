@@ -24,6 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	sessionManagerPluginSession "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
+	// Imported for side effects: registers port and shell session types with session manager plugin
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/portsession"
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/shellsession"
 	"github.com/sirupsen/logrus"
@@ -61,7 +62,7 @@ type App struct {
 	ECSConfig             *ECSConfig
 	DeployStatus          *DeployStatus
 	PendingDeployStatuses []*DeployStatus
-	AWS                   apppackaws.AWSInterface
+	AWS                   apppackaws.Interface
 }
 
 // ReviewApp is a representation of a AppPack review app

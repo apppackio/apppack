@@ -262,7 +262,7 @@ var dashCmd = &cobra.Command{
 	Long:                  "[EXPERIMENTAL] interactive terminal-based dashboard for app metrics",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)

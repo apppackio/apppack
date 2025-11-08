@@ -17,6 +17,8 @@ disable = [
     "godot",
     # deprecated, replaced by usetesting
     "tenv",
+    # no configuration = blocks all imports (not useful)
+    "depguard",
 
     # assess later
     "wrapcheck",

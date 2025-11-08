@@ -760,7 +760,7 @@ var buildStartCmd = &cobra.Command{
 	Use:                   "start",
 	Short:                 "start a new build from the latest commit on the branch defined in AppPack",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		var duration int
 		if watchBuildFlag {
@@ -798,7 +798,7 @@ var buildWaitCmd = &cobra.Command{
 	Use:                   "wait",
 	Short:                 "wait is deprecated -- use `watch` instead",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		checkErr(errors.New("the `build wait` command is deprecated -- use `build watch` instead"))
 	},
 }
@@ -809,7 +809,7 @@ var buildWatchCmd = &cobra.Command{
 	Short:                 "watch the progress of the most recent build",
 	Args:                  cobra.MaximumNArgs(1),
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
@@ -835,7 +835,7 @@ var buildListCmd = &cobra.Command{
 	Use:                   "list",
 	Short:                 "list recent builds",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)

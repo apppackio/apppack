@@ -217,7 +217,7 @@ var shellCmd = &cobra.Command{
 	Short:                 "open an interactive shell in the remote environment",
 	Long:                  `Open an interactive shell in the remote environment`,
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)

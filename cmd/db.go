@@ -79,7 +79,7 @@ var dbShellCmd = &cobra.Command{
 	Use:                   "shell",
 	Short:                 "open an interactive shell prompt to the app database",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
@@ -95,7 +95,7 @@ var dbDumpCmd = &cobra.Command{
 	Short:                 "dump the database to a local file",
 	Long:                  "Dump the database to `<app-name>.dump` in the current directory",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		// db dump load can be really slow, let people open longer sessions to wait for it to finish
 		app, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)

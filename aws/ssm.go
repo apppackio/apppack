@@ -5,7 +5,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
-type AWSInterface interface {
+type Interface interface {
 	GetParameter(input *ssm.GetParameterInput) (*string, error)
 	PutParameter(input *ssm.PutParameterInput) error
 	ValidateEventbridgeCron(schedule string) error

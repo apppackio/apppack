@@ -80,7 +80,7 @@ var psCmd = &cobra.Command{
 	Short:                 "show running processes",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
@@ -171,7 +171,7 @@ var psResizeCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Example:               "apppack -a my-app ps resize web --cpu 2 --memory 4G",
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		processType := args[0]
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
@@ -209,7 +209,7 @@ a range is provided, the process will autoscale within that range based on CPU u
 apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		processType := args[0]
 		var minProcesses int
 		var maxProcesses int
@@ -245,7 +245,7 @@ var psExecCmd = &cobra.Command{
 	Short:                 "run an interactive command in the remote environment",
 	Long:                  `Run an interactive command in the remote environment`,
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)

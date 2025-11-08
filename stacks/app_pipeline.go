@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/AlecAivazis/survey/v2/core"
@@ -87,7 +86,6 @@ func (p *AppStackParameters) ToCloudFormationParameters() ([]*cloudformation.Par
 func (p *AppStackParameters) SetInternalFields(_ *session.Session, name *string) error {
 	// update values from flags if they are set
 	if p.LoadBalancerRulePriority == 0 {
-		rand.Seed(time.Now().UnixNano())                        // skipcq: GO-S1033
 		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // #nosec G404 -- Non-crypto random for LB priority assignment
 	}
 
