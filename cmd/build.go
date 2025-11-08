@@ -288,7 +288,7 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 		markerStop = aws.String(logMarker(fmt.Sprintf("%s-end", *marker)))
 		errorRe = regexp.MustCompile(`^\[Container\] .* Command did not exit successfully .*`)
 	}
-	clearSeenEventIds := func() {
+	clearSeenEventIDs := func() {
 		seenEventIDs = make(map[string]bool)
 	}
 
@@ -299,11 +299,11 @@ func StreamEvents(sess *session.Session, logURL string, marker *string, stopTail
 	updateLastSeenTime := func(ts *int64) {
 		if lastSeenTime == nil || *ts > *lastSeenTime {
 			lastSeenTime = ts
-			clearSeenEventIds()
+			clearSeenEventIDs()
 		}
 	}
 	doneTailing := false
-	handlePage := func(page *cloudwatchlogs.FilterLogEventsOutput, lastPage bool) bool {
+	handlePage := func(page *cloudwatchlogs.FilterLogEventsOutput, _ bool) bool {
 		var message string
 		for _, event := range page.Events {
 			// messages may or may not have a newline. normalize them
@@ -406,7 +406,9 @@ func watchBuildPhase(a *app.App, buildStatus *app.BuildStatus) error {
 			}
 			if !buildLogTailing {
 				buildLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"), stopTailing)
+				go func() {
+					_ = StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("build"), stopTailing)
+				}()
 			}
 		} else if *build.CurrentPhase == "SUBMITTED" || *build.CurrentPhase == "QUEUED" || *build.CurrentPhase == "PROVISIONING" || *build.CurrentPhase == "DOWNLOAD_SOURCE" || *build.CurrentPhase == "INSTALL" || *build.CurrentPhase == "PRE_BUILD" {
 			ui.StartSpinner()
@@ -438,7 +440,9 @@ func watchTestPhase(a *app.App, buildStatus *app.BuildStatus) error {
 	if strings.HasPrefix(buildStatus.Test.Logs, "s3://") {
 		return S3Log(a.Session, buildStatus.Test.Logs)
 	}
-	go StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("test"), stopTailing)
+	go func() {
+		_ = StreamEvents(a.Session, buildStatus.Build.Logs, aws.String("test"), stopTailing)
+	}()
 
 	for buildStatus.Test.State == Started {
 		time.Sleep(5 * time.Second)
@@ -478,7 +482,9 @@ func watchReleasePhase(a *app.App, buildStatus *app.BuildStatus) error {
 			status := *out.Tasks[0].LastStatus
 			if status == "RUNNING" && !releaseLogTailing {
 				releaseLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Release.Logs, nil, stopTailing)
+				go func() {
+					_ = StreamEvents(a.Session, buildStatus.Release.Logs, nil, stopTailing)
+				}()
 			}
 			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 				stopTailing <- true
@@ -526,7 +532,9 @@ func watchPostdeployPhase(a *app.App, buildStatus *app.BuildStatus) error {
 			status := *out.Tasks[0].LastStatus
 			if status == "RUNNING" && !postdeployLogTailing {
 				postdeployLogTailing = true
-				go StreamEvents(a.Session, buildStatus.Postdeploy.Logs, nil, stopTailing)
+				go func() {
+					_ = StreamEvents(a.Session, buildStatus.Postdeploy.Logs, nil, stopTailing)
+				}()
 			}
 			if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 				stopTailing <- true

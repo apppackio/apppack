@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const TokenRefreshErr = "unable to refresh auth token"
+const TokenRefreshErr = "unable to refresh auth token" // #nosec G101 -- Error message, not a credential
 
 type DeviceCodeResp struct {
 	DeviceCode              string `json:"device_code"`

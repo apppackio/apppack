@@ -20,7 +20,7 @@ func StartSpinner() {
 }
 
 func PrintError(text string) {
-	fmt.Println(aurora.Red(fmt.Sprintf("✖ %s", text)))
+	fmt.Println(aurora.Red("✖ " + text))
 }
 
 func PrintSuccess(text string) {

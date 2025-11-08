@@ -195,8 +195,7 @@ func CreateStack(sess *session.Session, s Stack, name, release *string) error {
 		return ErrStackCreationFailed
 	}
 	s.SetStack(cfnStack)
-	s.PostCreate(sess)
-	return nil
+	return s.PostCreate(sess)
 }
 
 // ModifyStack modifies a Cloudformation stack and waits for it to finish
@@ -248,10 +247,10 @@ func CreateStackChangeset(sess *session.Session, s Stack, name, release *string)
 	if err != nil {
 		return "", err
 	}
-	type_ := "CREATE"
-	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(type_), int32(time.Now().Unix()))
+	changeSetType := "CREATE"
+	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(changeSetType), int32(time.Now().Unix()))
 	input := &cloudformation.CreateChangeSetInput{
-		ChangeSetType: &type_,
+		ChangeSetType: &changeSetType,
 		ChangeSetName: &changeSetName,
 		StackName:     s.StackName(name),
 		Parameters:    params,

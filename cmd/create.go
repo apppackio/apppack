@@ -174,7 +174,7 @@ var createClusterCmd = &cobra.Command{
 				fmt.Printf("If this is your first cluster or you want to setup up a new region, type '%s' to continue.\n", aurora.White("yes"))
 				fmt.Print(aurora.White(fmt.Sprintf("Create cluster in %s region? ", *sess.Config.Region)).String())
 				var confirm string
-				fmt.Scanln(&confirm)
+				_, _ = fmt.Scanln(&confirm)
 				if confirm != "yes" {
 					checkErr(fmt.Errorf("aborting due to user input"))
 				}

@@ -123,12 +123,12 @@ func execCmd(command string, args, env []string) error {
 	go func() {
 		for {
 			sig := <-sigChan
-			cmd.Process.Signal(sig)
+			_ = cmd.Process.Signal(sig)
 		}
 	}()
 
 	if err := cmd.Wait(); err != nil {
-		cmd.Process.Signal(os.Kill)
+		_ = cmd.Process.Signal(os.Kill)
 		return fmt.Errorf("failed to wait for command termination: %w", err)
 	}
 
@@ -161,7 +161,7 @@ var awsExecCmd = &cobra.Command{
 	Use:                   "aws-exec -- <command>...",
 	Short:                 "run a local command with AWS credentials",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		if len(args) < 1 {

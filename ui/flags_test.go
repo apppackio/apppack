@@ -1,7 +1,6 @@
 package ui_test
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -10,6 +9,8 @@ import (
 )
 
 func TestFlagsToStruct(t *testing.T) {
+	t.Parallel()
+
 	type TestStruct struct {
 		Strsl []string `flag:"strsl"`
 	}
@@ -18,7 +19,7 @@ func TestFlagsToStruct(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	fs.StringSlice("strsl", []string{}, "")
 	err := fs.Parse([]string{
-		fmt.Sprintf("--strsl=%s", strings.Join(data, ",")),
+		"--strsl=" + strings.Join(data, ","),
 	})
 	if err != nil {
 		t.Errorf("Error parsing flags: %s", err)

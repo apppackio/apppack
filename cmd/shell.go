@@ -116,9 +116,9 @@ func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfig
 			return nil, err
 		}
 		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInMB}, nil
-	} else {
-		return nil, fmt.Errorf("unexpected memory format -- it must end in 'M' (for MB) or 'G' (for GB)")
 	}
+
+	return nil, fmt.Errorf("unexpected memory format -- it must end in 'M' (for MB) or 'G' (for GB)")
 }
 
 func interactiveCmd(a *app.App, cmd string) {

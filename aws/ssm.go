@@ -6,9 +6,9 @@ import (
 )
 
 type AWSInterface interface {
-	GetParameter(*ssm.GetParameterInput) (*string, error)
-	PutParameter(*ssm.PutParameterInput) error
-	ValidateEventbridgeCron(string) error
+	GetParameter(input *ssm.GetParameterInput) (*string, error)
+	PutParameter(input *ssm.PutParameterInput) error
+	ValidateEventbridgeCron(schedule string) error
 }
 
 type AWS struct {

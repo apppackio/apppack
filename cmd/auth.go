@@ -77,7 +77,7 @@ var loginCmd = &cobra.Command{
 	Use:                   "login",
 	Short:                 "login to AppPack.io on this device",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		userInfo := Login()
 		printSuccess(fmt.Sprintf("Logged in as %s", aurora.Bold(userInfo.Email)))
 	},

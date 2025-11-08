@@ -28,7 +28,7 @@ import (
 var openCmd = &cobra.Command{
 	Use:   "open",
 	Short: "open the app in a browser",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		u, err := a.URL(nil)

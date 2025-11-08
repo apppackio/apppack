@@ -47,7 +47,7 @@ var getCmd = &cobra.Command{
 	Short:                 "show the value of a single config variable",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
@@ -69,7 +69,7 @@ var setCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
 	Example:               "apppack -a my-app config set ENVIRONMENT=production",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		if !strings.Contains(args[0], "=") {
 			checkErr(fmt.Errorf("argument should be in the form <variable>=<value>"))
 		}
@@ -92,7 +92,7 @@ var unsetCmd = &cobra.Command{
 	Short:                 "remove a config variable",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		name := args[0]
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
@@ -113,7 +113,7 @@ var configListCmd = &cobra.Command{
 	Short:                 "list all config variables and values",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(0),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
@@ -161,7 +161,7 @@ var configExportCmd = &cobra.Command{
 	Short:                 "export the config variables to JSON",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(0),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
@@ -187,7 +187,7 @@ var configImportCmd = &cobra.Command{
 	Short:                 "import config variables from a JSON file",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)

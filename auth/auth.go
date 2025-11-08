@@ -14,7 +14,7 @@ import (
 
 const (
 	deviceCodeURL = "https://auth.apppack.io/oauth/device/code"
-	oauthTokenURL = "https://auth.apppack.io/oauth/token"
+	oauthTokenURL = "https://auth.apppack.io/oauth/token" // #nosec G101 -- URL path, not a credential
 	userInfoURL   = "https://auth.apppack.io/userinfo"
 	appListURL    = "https://api.apppack.io/apps"
 	adminListURL  = "https://api.apppack.io/accounts"

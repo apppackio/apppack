@@ -164,7 +164,7 @@ func confirmAction(message, text string) {
 	fmt.Printf("\nType %s to confirm.\n%s ", aurora.White(text), aurora.White(">"))
 	var confirm string
 
-	fmt.Scanln(&confirm)
+	_, _ = fmt.Scanln(&confirm)
 	if confirm != text {
 		checkErr(fmt.Errorf("aborting due to user input"))
 	}

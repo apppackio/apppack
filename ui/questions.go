@@ -103,5 +103,5 @@ func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 // PauseUntilEnter waits for the user to press enter
 func PauseUntilEnter(msg string) {
 	fmt.Println(aurora.Bold(aurora.White(msg)))
-	fmt.Scanln()
+	_, _ = fmt.Scanln()
 }

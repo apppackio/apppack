@@ -119,7 +119,7 @@ func serviceEventsText(ctx context.Context, a *app.App, options *metrics.MetricO
 	if err != nil {
 		return nil, err
 	}
-	textWidget.Write("loading", text.WriteCellOpts(cell.FgColor(cell.ColorGray)))
+	_ = textWidget.Write("loading", text.WriteCellOpts(cell.FgColor(cell.ColorGray)))
 
 	go periodic(ctx, 10*time.Second, func() error {
 		events, err := a.GetECSEvents(service)

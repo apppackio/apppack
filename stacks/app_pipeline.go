@@ -30,16 +30,16 @@ type AppStackParameters struct {
 	Type                               string
 	Name                               string
 	ClusterStackName                   string   `flag:"cluster;fmtString:apppack-cluster-%s"`
-	RepositoryUrl                      string   `flag:"repository"`
+	RepositoryURL                      string   `flag:"repository"`
 	Branch                             string   `flag:"branch"`
 	Domains                            []string `flag:"domains"`
-	DefaultAutoscalingAverageCpuTarget int
+	DefaultAutoscalingAverageCPUTarget int
 	HealthCheckPath                    string `flag:"healthcheck-path"`
 	HealthcheckInterval                int
 	DeregistrationDelay                int
 	LoadBalancerRulePriority           int
 	LogRetentionDays                   int
-	AppPackRoleExternalId              string
+	AppPackRoleExternalID              string
 	PrivateS3BucketEnabled             bool   `flag:"addon-private-s3"`
 	PublicS3BucketEnabled              bool   `flag:"addon-public-s3"`
 	SesDomain                          string `flag:"addon-ses-domain"`
@@ -58,7 +58,7 @@ var DefaultAppStackParameters = AppStackParameters{
 	HealthCheckPath:                    "/",
 	HealthcheckInterval:                30,
 	LogRetentionDays:                   30,
-	DefaultAutoscalingAverageCpuTarget: 50,
+	DefaultAutoscalingAverageCPUTarget: 50,
 	DeregistrationDelay:                15,
 	Fargate:                            true,
 	BuildWebhook:                       true,
@@ -69,7 +69,7 @@ var DefaultPipelineStackParameters = AppStackParameters{
 	HealthCheckPath:                    DefaultAppStackParameters.HealthCheckPath,
 	HealthcheckInterval:                DefaultAppStackParameters.HealthcheckInterval,
 	LogRetentionDays:                   DefaultAppStackParameters.LogRetentionDays,
-	DefaultAutoscalingAverageCpuTarget: DefaultAppStackParameters.DefaultAutoscalingAverageCpuTarget,
+	DefaultAutoscalingAverageCPUTarget: DefaultAppStackParameters.DefaultAutoscalingAverageCPUTarget,
 	DeregistrationDelay:                DefaultAppStackParameters.DeregistrationDelay,
 	Fargate:                            DefaultAppStackParameters.Fargate,
 	BuildWebhook:                       DefaultAppStackParameters.BuildWebhook,
@@ -88,14 +88,14 @@ func (p *AppStackParameters) SetInternalFields(_ *session.Session, name *string)
 	// update values from flags if they are set
 	if p.LoadBalancerRulePriority == 0 {
 		rand.Seed(time.Now().UnixNano())                        // skipcq: GO-S1033
-		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // skipcq: GSC-G404
+		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // #nosec G404 -- Non-crypto random for LB priority assignment
 	}
 	if err := p.SetRepositoryType(); err != nil {
 		return err
 	}
-	if p.AppPackRoleExternalId == "" {
+	if p.AppPackRoleExternalID == "" {
 		// TODO: This should come from us instead of the user
-		p.AppPackRoleExternalId = strings.ReplaceAll(uuid.New().String(), "-", "")
+		p.AppPackRoleExternalID = strings.ReplaceAll(uuid.New().String(), "-", "")
 	}
 	if p.Name == "" {
 		p.Name = *name
@@ -105,12 +105,12 @@ func (p *AppStackParameters) SetInternalFields(_ *session.Session, name *string)
 }
 
 func (p *AppStackParameters) SetRepositoryType() error {
-	if strings.Contains(p.RepositoryUrl, "github.com") {
+	if strings.Contains(p.RepositoryURL, "github.com") {
 		p.RepositoryType = "GITHUB"
 
 		return nil
 	}
-	if strings.Contains(p.RepositoryUrl, "bitbucket.org") {
+	if strings.Contains(p.RepositoryURL, "bitbucket.org") {
 		p.RepositoryType = "BITBUCKET"
 
 		return nil
@@ -476,7 +476,7 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 		HelpText: "Use the HTTP URL (e.g., https://github.com/{org}/{repo}.git). BitBucket and Github repositories are supported.",
 		Question: &survey.Question{
 			Name:     "RepositoryUrl",
-			Prompt:   &survey.Input{Message: "Repository URL", Default: a.Parameters.RepositoryUrl},
+			Prompt:   &survey.Input{Message: "Repository URL", Default: a.Parameters.RepositoryURL},
 			Validate: survey.Required,
 		},
 	})

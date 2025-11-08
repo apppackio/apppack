@@ -96,7 +96,7 @@ func (p *ReviewAppStackParameters) SetInternalFields(sess *session.Session, name
 		return err
 	}
 	rand.Seed(time.Now().UnixNano())                        // skipcq: GO-S1033
-	p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // skipcq: GSC-G404
+	p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // #nosec G404 -- Non-crypto random for LB priority assignment
 	p.Name = pr
 	ui.Spinner.Stop()
 	return nil

@@ -111,7 +111,7 @@ var dbDumpCmd = &cobra.Command{
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
 		if *exitCode != 0 {
-			taskLogs(app.Session, task)
+			_ = taskLogs(app.Session, task)
 			printError("database dump failed")
 			return
 		}
@@ -249,10 +249,10 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		ui.Spinner.Stop()
 		// pg_restore can have inconsequential errors... don't assume failure, but notify user
 		if *exitCode != 0 && isPostgres {
-			taskLogs(app.Session, task)
+			_ = taskLogs(app.Session, task)
 			printWarning("check pg_restore output")
 		} else if *exitCode != 0 {
-			taskLogs(app.Session, task)
+			_ = taskLogs(app.Session, task)
 			printError("database load failed")
 		} else {
 			printSuccess(fmt.Sprintf("loaded database dump from %s", args[0]))
