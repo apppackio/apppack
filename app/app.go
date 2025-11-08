@@ -736,7 +736,7 @@ func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
 }
 
 // StartBuild starts a new CodeBuild run
-func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
+func (a *App) StartBuild(createReviewApp bool, ref string) (*codebuild.Build, error) {
 	codebuildSvc := codebuild.New(a.Session)
 
 	err := a.LoadSettings()
@@ -747,16 +747,17 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 	buildInput := codebuild.StartBuildInput{
 		ProjectName: &a.Settings.CodebuildProject.Name,
 	}
-	if a.IsReviewApp() {
-		buildInput.SourceVersion = aws.String("pr/" + *a.ReviewApp)
-		if createReviewApp {
-			buildInput.EnvironmentVariablesOverride = []*codebuild.EnvironmentVariable{
-				{
-					Name:  aws.String("REVIEW_APP_STATUS"),
-					Value: aws.String("created"),
-					Type:  aws.String("PLAINTEXT"),
-				},
-			}
+	sourceVersion := DetermineBuildSourceVersion(a.IsReviewApp(), a.ReviewApp, ref)
+	if sourceVersion != nil {
+		buildInput.SourceVersion = sourceVersion
+	}
+	if a.IsReviewApp() && createReviewApp {
+		buildInput.EnvironmentVariablesOverride = []*codebuild.EnvironmentVariable{
+			{
+				Name:  aws.String("REVIEW_APP_STATUS"),
+				Value: aws.String("created"),
+				Type:  aws.String("PLAINTEXT"),
+			},
 		}
 	}
 
