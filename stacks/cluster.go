@@ -24,26 +24,30 @@ import (
 func splitSubnet(cidrStr string) ([]string, []string, error) {
 	maxSubnetMask := 24
 	minSubnetMask := 16
+
 	_, clusterCIDR, err := net.ParseCIDR(cidrStr)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	mask, _ := clusterCIDR.Mask.Size()
 	if mask < minSubnetMask || mask > maxSubnetMask {
 		return nil, nil, fmt.Errorf("valid subnet mask range is %d-%d", minSubnetMask, maxSubnetMask)
 	}
+
 	subnetMask := net.CIDRMask(mask+4, 32)
+
 	var subnets []*net.IPNet
 	subnets = append(subnets, &net.IPNet{IP: clusterCIDR.IP, Mask: subnetMask})
 	prefix, _ := subnetMask.Size()
 
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		nextCIDR, _ := cidr.NextSubnet(subnets[i], prefix)
 		subnets = append(subnets, nextCIDR)
 	}
 
 	var publicSubnets []string
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		publicSubnets = append(publicSubnets, subnets[i].String())
 	}
 
@@ -51,37 +55,46 @@ func splitSubnet(cidrStr string) ([]string, []string, error) {
 	for i := 6; i < 9; i++ {
 		privateSubnets = append(privateSubnets, subnets[i].String())
 	}
+
 	return publicSubnets, privateSubnets, nil
 }
 
 // checkHostedZone prompts the user if the NS records for the domain don't match what AWS expects
 func checkHostedZone(sess *session.Session, zone *route53.HostedZone) error {
 	r53svc := route53.New(sess)
+
 	results, err := net.LookupNS(*zone.Name)
 	if err != nil {
 		return err
 	}
+
 	var actualServers []string
 	for _, r := range results {
 		actualServers = append(actualServers, strings.TrimSuffix(r.Host, "."))
 	}
+
 	var expectedServers []string
+
 	resp, err := r53svc.GetHostedZone(&route53.GetHostedZoneInput{Id: zone.Id})
 	if err != nil {
 		return err
 	}
+
 	for _, ns := range resp.DelegationSet.NameServers {
 		expectedServers = append(expectedServers, strings.TrimSuffix(*ns, "."))
 	}
+
 	if hasSameItems(actualServers, expectedServers) {
 		return nil
 	}
+
 	ui.Spinner.Stop()
-	ui.PrintWarning(fmt.Sprintf("%s doesn't appear to be using AWS' domain servers", strings.TrimSuffix(*zone.Name, ".")))
+	ui.PrintWarning(strings.TrimSuffix(*zone.Name, ".") + " doesn't appear to be using AWS' domain servers")
 	fmt.Printf("Expected:\n  %s\n\n", strings.Join(expectedServers, "\n  "))
 	fmt.Printf("Actual:\n  %s\n\n", strings.Join(actualServers, "\n  "))
 	fmt.Printf("If nameservers are not setup properly, TLS certificate creation will fail.\n")
 	ui.PauseUntilEnter("Once you've verified the nameservers are correct, press ENTER to continue.")
+
 	return nil
 }
 
@@ -90,13 +103,16 @@ func hasSameItems(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
+
 	sort.Strings(a)
 	sort.Strings(b)
+
 	for i, v := range a {
 		if v != b[i] {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -125,33 +141,42 @@ func (p *ClusterStackParameters) ToCloudFormationParameters() ([]*cloudformation
 func (p *ClusterStackParameters) SetInternalFields(sess *session.Session, _ *string) error {
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " looking up hosted zone"
+
 	zone, err := bridge.HostedZoneForDomain(sess, p.Domain)
 	if err != nil {
 		return err
 	}
+
 	ui.Spinner.Suffix = " verifying DNS"
+
 	if err = checkHostedZone(sess, zone); err != nil {
 		return err
 	}
+
 	p.HostedZone = strings.Split(*zone.Id, "/")[2]
 	ui.Spinner.Suffix = ""
+
 	publicSubnets, privateSubnets, err := splitSubnet(p.Cidr)
 	if err != nil {
 		return err
 	}
+
 	if len(p.PrivateSubnetCidrs) == 0 {
 		p.PrivateSubnetCidrs = privateSubnets
 	}
+
 	if len(p.PublicSubnetCidrs) == 0 {
 		p.PublicSubnetCidrs = publicSubnets
 	}
+
 	p.AvailabilityZones = []string{
-		fmt.Sprintf("%sa", *sess.Config.Region),
-		fmt.Sprintf("%sb", *sess.Config.Region),
-		fmt.Sprintf("%sc", *sess.Config.Region),
+		*sess.Config.Region + "a",
+		*sess.Config.Region + "b",
+		*sess.Config.Region + "c",
 	}
 
 	ui.Spinner.Stop()
+
 	return nil
 }
 
@@ -175,6 +200,7 @@ func (a *ClusterStack) SetStack(stack *cloudformation.Stack) {
 // SetDeletionProtection toggles the deletion protection flag on the load balancer
 func (a *ClusterStack) SetDeletionProtection(sess *session.Session, value bool) error {
 	elbSvc := elbv2.New(sess)
+
 	lbARN, err := bridge.GetStackOutput(a.Stack.Outputs, "LoadBalancerArn")
 	if lbARN != nil {
 		logrus.WithFields(logrus.Fields{"value": value}).Debug("setting load balancer deletion protection")
@@ -187,6 +213,7 @@ func (a *ClusterStack) SetDeletionProtection(sess *session.Session, value bool) 
 				},
 			},
 		})
+
 		return err
 	}
 	// if we get an error trying to set deletion protection, return it
@@ -194,10 +221,12 @@ func (a *ClusterStack) SetDeletionProtection(sess *session.Session, value bool) 
 	// in the case of a stack failure
 	if err != nil {
 		logrus.WithFields(logrus.Fields{"error": err}).Debug("unable to lookup Cloudformation outputs to set Load Balancer deletion protection")
+
 		if value {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -219,7 +248,9 @@ func (a *ClusterStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 
 func (a *ClusterStack) AskQuestions(_ *session.Session) error {
 	var questions []*ui.QuestionExtra
+
 	var err error
+
 	if a.Stack == nil {
 		questions = append(questions, []*ui.QuestionExtra{
 			{
@@ -236,6 +267,7 @@ func (a *ClusterStack) AskQuestions(_ *session.Session) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -267,5 +299,6 @@ func (*ClusterStack) TemplateURL(release *string) *string {
 	if release != nil && *release != "" {
 		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
+
 	return &url
 }

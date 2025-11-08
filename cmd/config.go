@@ -71,7 +71,7 @@ var setCmd = &cobra.Command{
 	Example:               "apppack -a my-app config set ENVIRONMENT=production",
 	Run: func(_ *cobra.Command, args []string) {
 		if !strings.Contains(args[0], "=") {
-			checkErr(fmt.Errorf("argument should be in the form <variable>=<value>"))
+			checkErr(errors.New("argument should be in the form <variable>=<value>"))
 		}
 		parts := strings.SplitN(args[0], "=", 2)
 		name := parts[0]
@@ -82,7 +82,7 @@ var setCmd = &cobra.Command{
 		err = a.SetConfig(name, value, true)
 		checkErr(err)
 		ui.Spinner.Stop()
-		printSuccess(fmt.Sprintf("stored config variable %s", name))
+		printSuccess("stored config variable " + name)
 	},
 }
 
@@ -103,7 +103,7 @@ var unsetCmd = &cobra.Command{
 		})
 		ui.Spinner.Stop()
 		checkErr(err)
-		printSuccess(fmt.Sprintf("removed config variable %s", name))
+		printSuccess("removed config variable " + name)
 	},
 }
 
@@ -125,6 +125,7 @@ var configListCmd = &cobra.Command{
 			buf, err := configVars.ToJSON()
 			checkErr(err)
 			fmt.Println(buf.String())
+
 			return
 		}
 
@@ -135,7 +136,7 @@ var configListCmd = &cobra.Command{
 			w.SetColorCapable(true)
 		}
 
-		ui.PrintHeaderln(fmt.Sprintf("%s Config Vars", AppName))
+		ui.PrintHeaderln(AppName + " Config Vars")
 		configVars.ToConsole(w)
 		checkErr(w.Flush())
 
@@ -147,7 +148,7 @@ var configListCmd = &cobra.Command{
 			checkErr(err)
 			ui.Spinner.Stop()
 			parameters.ToConsole(w)
-			ui.PrintHeaderln(fmt.Sprintf("%s Config Vars (inherited)", a.Name))
+			ui.PrintHeaderln(a.Name + " Config Vars (inherited)")
 			checkErr(w.Flush())
 		}
 	},

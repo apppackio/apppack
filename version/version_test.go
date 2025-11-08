@@ -96,6 +96,7 @@ func TestCheckForUpdate(t *testing.T) {
 			if len(reg.Requests) != 1 {
 				t.Fatalf("expected 1 HTTP request, got %d", len(reg.Requests))
 			}
+
 			requestPath := reg.Requests[0].URL.Path
 			if requestPath != "/repos/OWNER/REPO/releases/latest" {
 				t.Errorf("HTTP path: %q", requestPath)
@@ -108,6 +109,7 @@ func TestCheckForUpdate(t *testing.T) {
 
 				return
 			}
+
 			if rel == nil {
 				t.Fatal("expected to report new release")
 			}
@@ -115,6 +117,7 @@ func TestCheckForUpdate(t *testing.T) {
 			if rel.Version != s.LatestVersion {
 				t.Errorf("Version: %q", rel.Version)
 			}
+
 			if rel.URL != s.LatestURL {
 				t.Errorf("URL: %q", rel.URL)
 			}
@@ -127,6 +130,8 @@ func tempFilePath() string {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	os.Remove(file.Name())
+
 	return file.Name()
 }

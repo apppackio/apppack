@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -29,9 +30,11 @@ func AskForCluster(sess *session.Session, verbose, helpText string, response int
 	if err != nil {
 		return err
 	}
+
 	if len(clusters) == 0 {
-		return fmt.Errorf("no AppPack clusters are setup")
+		return errors.New("no AppPack clusters are setup")
 	}
+
 	return ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  verbose,
@@ -51,18 +54,22 @@ func AskForCluster(sess *session.Session, verbose, helpText string, response int
 // waitForCloudformationStack displays the progress of a Stack while it waits for it to complete
 func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName string) (*cloudformation.Stack, error) {
 	ui.StartSpinner()
+
 	stackDesc, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: &stackName,
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	stack := stackDesc.Stacks[0]
 
 	if strings.HasSuffix(*stack.StackStatus, "_COMPLETE") || strings.HasSuffix(*stack.StackStatus, "_FAILED") {
 		ui.Spinner.Stop()
+
 		return stack, nil
 	}
+
 	stackresources, err := cfnSvc.DescribeStackResources(&cloudformation.DescribeStackResourcesInput{
 		StackName: &stackName,
 	})
@@ -71,8 +78,11 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 	}
 
 	var inProgress []string
+
 	var created []string
+
 	var deleted []string
+
 	var failed []string
 	// sort oldest to newest so we can catch the first error in the stack
 	sort.Slice(stackresources.StackResources, func(i, j int) bool {
@@ -88,8 +98,10 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 				ui.Spinner.Stop()
 				ui.PrintError(fmt.Sprintf("%s failed: %s", *resource.LogicalResourceId, *resource.ResourceStatusReason))
 				ui.StartSpinner()
+
 				stackHasFailure = true
 			}
+
 			failed = append(failed, *resource.ResourceStatus)
 		} else if strings.HasSuffix(*resource.ResourceStatus, "_IN_PROGRESS") {
 			inProgress = append(inProgress, *resource.ResourceStatus)
@@ -99,43 +111,51 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 			deleted = append(deleted, *resource.ResourceStatus)
 		}
 	}
+
 	status := fmt.Sprintf(" resources: %d in progress / %d created / %d deleted", len(inProgress), len(created), len(deleted))
 	if len(failed) > 0 {
 		status = fmt.Sprintf("%s / %d failed", status, len(failed))
 	}
+
 	ui.Spinner.Suffix = status
+
 	time.Sleep(5 * time.Second)
+
 	return waitForCloudformationStack(cfnSvc, stackName)
 }
 
 // retryStackCreation will attempt to destroy and recreate the stack
 func retryStackCreation(sess *session.Session, stackID *string, input *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
+
 	ui.PrintWarning("stack creation failed")
 	fmt.Println("retrying operation... deleting and recreating stack")
 	sentry.CaptureException(fmt.Errorf("Stack creation failed: %s", *input.StackName))
 
 	defer sentry.Flush(time.Second * 5)
+
 	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{StackName: stackID})
 	if err != nil {
 		return nil, err
 	}
+
 	stack, err := waitForCloudformationStack(cfnSvc, *stackID)
 	if err != nil {
 		return nil, err
 	}
+
 	if *stack.StackStatus != DeleteComplete {
 		err = fmt.Errorf("Stack destruction failed: %s", *stack.StackName)
 		sentry.CaptureException(err)
 		fmt.Printf("%s", aurora.Bold(aurora.White(
-			fmt.Sprintf(
-				"Unable to destroy stack. Check Cloudformation console for more details:\n%s",
-				CloudformationStackURL(sess.Config.Region, stackID),
-			),
+			"Unable to destroy stack. Check Cloudformation console for more details:\n"+CloudformationStackURL(sess.Config.Region, stackID),
 		)))
+
 		return nil, err
 	}
+
 	fmt.Println("successfully deleted failed stack...")
+
 	return CreateStackAndWait(sess, input)
 }
 
@@ -143,29 +163,37 @@ var retry = true
 
 func CreateStackAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
+
 	stackOutput, err := cfnSvc.CreateStack(stackInput)
 	if err != nil {
 		return nil, err
 	}
+
 	ui.Spinner.Stop()
 	fmt.Println(aurora.Faint(*stackOutput.StackId))
+
 	stack, err := waitForCloudformationStack(cfnSvc, *stackInput.StackName)
 	if err != nil {
 		return nil, err
 	}
+
 	if retry && *stack.StackStatus == "ROLLBACK_COMPLETE" {
 		retry = false
+
 		return retryStackCreation(sess, stack.StackId, stackInput)
 	}
+
 	return stack, err
 }
 
 func UpdateStackAndWait(sess *session.Session, stackInput *cloudformation.UpdateStackInput) (*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
+
 	_, err := cfnSvc.UpdateStack(stackInput)
 	if err != nil {
 		return nil, err
 	}
+
 	return waitForCloudformationStack(cfnSvc, *stackInput.StackName)
 }
 
@@ -180,6 +208,7 @@ func CreateChangeSetAndWait(sess *session.Session, changesetInput *cloudformatio
 		ChangeSetName: changesetInput.ChangeSetName,
 		StackName:     changesetInput.StackName,
 	}
+
 	changeSet, err := cfnSvc.DescribeChangeSet(&describeChangeSetInput)
 	if err != nil {
 		return nil, err
@@ -203,20 +232,25 @@ func DeleteStackAndWait(sess *session.Session, stack Stack) (*cloudformation.Sta
 	if err := stack.PreDelete(sess); err != nil {
 		return nil, err
 	}
+
 	cfnSvc := cloudformation.New(sess)
+
 	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
 		StackName: stack.GetStack().StackId,
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	cfnStack, err := waitForCloudformationStack(cfnSvc, *stack.GetStack().StackId)
 	if err == nil && *cfnStack.StackStatus == DeleteComplete {
 		if err := stack.PostDelete(sess, nil); err != nil {
 			logrus.WithFields(logrus.Fields{"err": err}).Warning("post-delete failed")
+
 			return nil, err
 		}
 	}
+
 	return cfnStack, err
 }
 
@@ -226,8 +260,10 @@ func clusterSelectTransform(ans interface{}) interface{} {
 	if !ok {
 		return ans
 	}
+
 	if o.Value != "" {
 		o.Value = fmt.Sprintf(clusterStackNameTmpl, o.Value)
 	}
+
 	return o
 }

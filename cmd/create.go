@@ -43,21 +43,29 @@ func CreateStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.
 	stackName := stack.StackName(&name)
 	exists, err := bridge.StackExists(sess, *stackName)
 	checkErr(err)
+
 	if *exists {
 		checkErr(fmt.Errorf("stack %s already exists", *stackName))
 	}
+
 	checkErr(stack.UpdateFromFlags(flags))
 	ui.Spinner.Stop()
+
 	caser := cases.Title(language.English)
 	fmt.Print(aurora.Green(fmt.Sprintf("🏗  Creating %s `%s` in %s", caser.String(stack.StackType()), name, *sess.Config.Region)).String())
+
 	if CurrentAccountRole != nil {
-		fmt.Print(aurora.Green(fmt.Sprintf(" on %s", CurrentAccountRole.GetAccountName())).String())
+		fmt.Print(aurora.Green(" on " + CurrentAccountRole.GetAccountName()).String())
 	}
+
 	fmt.Println()
+
 	if !nonInteractive {
 		checkErr(stack.AskQuestions(sess))
 	}
+
 	ui.StartSpinner()
+
 	if createChangeSet {
 		url, err := stacks.CreateStackChangeset(sess, stack, &name, &release)
 		checkErr(err)
@@ -162,7 +170,7 @@ var createClusterCmd = &cobra.Command{
 		ui.StartSpinner()
 		sess, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		regionExists, err := bridge.StackExists(sess, fmt.Sprintf("apppack-region-%s", *sess.Config.Region))
+		regionExists, err := bridge.StackExists(sess, "apppack-region-"+*sess.Config.Region)
 		checkErr(err)
 		// handle region creation if the user wants
 		if !*regionExists {
@@ -176,7 +184,7 @@ var createClusterCmd = &cobra.Command{
 				var confirm string
 				_, _ = fmt.Scanln(&confirm)
 				if confirm != "yes" {
-					checkErr(fmt.Errorf("aborting due to user input"))
+					checkErr(errors.New("aborting due to user input"))
 				}
 			} else if !createRegion {
 				checkErr(ErrRegionNotSetup)
@@ -320,6 +328,7 @@ func init() {
 	createCmd.PersistentFlags().MarkHidden("release")
 
 	createCmd.AddCommand(appCmd)
+
 	appCmd.Flags().SortFlags = false
 	appCmd.Flags().String("cluster", "apppack", "Cluster name")
 	appCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")
@@ -340,6 +349,7 @@ func init() {
 	appCmd.Flags().Bool("disable-build-webhook", false, "disable creation of a webhook on the repo to automatically trigger builds on push")
 
 	createCmd.AddCommand(pipelineCmd)
+
 	pipelineCmd.Flags().SortFlags = false
 	pipelineCmd.Flags().String("cluster", "apppack", "Cluster name")
 	pipelineCmd.Flags().Bool("ec2", false, "run on EC2 instances (requires EC2 enabled cluster)")

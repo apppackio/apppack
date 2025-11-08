@@ -23,15 +23,18 @@ func New(sess *session.Session) *AWS {
 
 func (a *AWS) GetParameter(input *ssm.GetParameterInput) (*string, error) {
 	ssmSvc := ssm.New(a.session)
+
 	parameterOutput, err := ssmSvc.GetParameter(input)
 	if err != nil {
 		return nil, err
 	}
+
 	return parameterOutput.Parameter.Value, nil
 }
 
 func (a *AWS) PutParameter(input *ssm.PutParameterInput) error {
 	ssmSvc := ssm.New(a.session)
 	_, err := ssmSvc.PutParameter(input)
+
 	return err
 }

@@ -31,12 +31,14 @@ var directory string
 func filePrepender(filename string) string {
 	name := filepath.Base(filename)
 	base := strings.TrimSuffix(name, path.Ext(name))
+
 	commandParts := strings.Split(base, "_")
 	if len(commandParts) > 1 {
 		commandParts = commandParts[1:]
 	} else {
 		commandParts = append(commandParts, "(base command)")
 	}
+
 	return fmt.Sprintf(`---
 title: %s
 ---

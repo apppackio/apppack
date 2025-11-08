@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -20,6 +21,7 @@ func BooleanAsYesNo(defaultValue bool) string {
 	if defaultValue {
 		return "yes"
 	}
+
 	return "no"
 }
 
@@ -31,7 +33,7 @@ type BooleanOptionProxy struct {
 func (b *BooleanOptionProxy) WriteAnswer(_ string, value interface{}) error {
 	ans, ok := value.(core.OptionAnswer)
 	if !ok {
-		return fmt.Errorf("unable to convert value to OptionAnswer")
+		return errors.New("unable to convert value to OptionAnswer")
 	}
 
 	if ans.Value == "yes" {
@@ -39,6 +41,7 @@ func (b *BooleanOptionProxy) WriteAnswer(_ string, value interface{}) error {
 	} else {
 		*b.Value = false
 	}
+
 	return nil
 }
 
@@ -50,9 +53,11 @@ type MultiLineValueProxy struct {
 func (m *MultiLineValueProxy) WriteAnswer(_ string, value interface{}) error {
 	ans, ok := value.(string)
 	if !ok {
-		return fmt.Errorf("unable to convert value to string")
+		return errors.New("unable to convert value to string")
 	}
+
 	*m.Value = strings.Split(ans, "\n")
+
 	return nil
 }
 
@@ -97,6 +102,7 @@ func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 
 		fmt.Println(aurora.Faint(strings.Repeat("─", 2+underline)))
 	}
+
 	return nil
 }
 

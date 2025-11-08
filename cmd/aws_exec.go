@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	osexec "os/exec"
@@ -73,6 +74,7 @@ func execEnvironment(command string, args []string, creds *credentials.Credentia
 		env.Set("AWS_SESSION_TOKEN", val.SessionToken)
 		env.Set("AWS_SECURITY_TOKEN", val.SessionToken)
 	}
+
 	if expiration, err := creds.ExpiresAt(); err == nil {
 		// log.Println("Setting subprocess env: AWS_SESSION_EXPIRATION")
 		env.Set("AWS_SESSION_EXPIRATION", expiration.UTC().Format(time.RFC3339))
@@ -129,11 +131,13 @@ func execCmd(command string, args, env []string) error {
 
 	if err := cmd.Wait(); err != nil {
 		_ = cmd.Process.Signal(os.Kill)
+
 		return fmt.Errorf("failed to wait for command termination: %w", err)
 	}
 
 	waitStatus := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	os.Exit(waitStatus.ExitStatus())
+
 	return nil
 }
 
@@ -165,7 +169,7 @@ var awsExecCmd = &cobra.Command{
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		if len(args) < 1 {
-			checkErr(fmt.Errorf("provide an executable to run as an argument"))
+			checkErr(errors.New("provide an executable to run as an argument"))
 		}
 		err = execEnvironment(args[0], args[1:], a.Session.Config.Credentials)
 		checkErr(err)

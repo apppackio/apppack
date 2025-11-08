@@ -18,6 +18,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -64,6 +65,7 @@ func BuildLineChart(ctx context.Context, appMetrics metrics.AppMetrics) (*linech
 	if err != nil {
 		return nil, nil, err
 	}
+
 	legendText, err := text.New()
 	if err != nil {
 		return nil, nil, err
@@ -74,10 +76,13 @@ func BuildLineChart(ctx context.Context, appMetrics metrics.AppMetrics) (*linech
 		if err != nil {
 			return err
 		}
+
 		legendText.Reset()
+
 		if err = legendText.Write("  "); err != nil {
 			return err
 		}
+
 		for _, l := range legend {
 			if err = legendText.Write(
 				fmt.Sprintf("… %s  ", l.Name),
@@ -85,8 +90,10 @@ func BuildLineChart(ctx context.Context, appMetrics metrics.AppMetrics) (*linech
 				return err
 			}
 		}
+
 		return nil
 	})
+
 	return lc, legendText, nil
 }
 
@@ -95,6 +102,7 @@ func BuildLineChart(ctx context.Context, appMetrics metrics.AppMetrics) (*linech
 func periodic(ctx context.Context, interval time.Duration, fn func() error) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
 	if err := fn(); err != nil {
 		logrus.WithFields(logrus.Fields{"error": err}).Error("error executing periodic function")
 	}
@@ -119,6 +127,7 @@ func serviceEventsText(ctx context.Context, a *app.App, options *metrics.MetricO
 	if err != nil {
 		return nil, err
 	}
+
 	_ = textWidget.Write("loading", text.WriteCellOpts(cell.FgColor(cell.ColorGray)))
 
 	go periodic(ctx, 10*time.Second, func() error {
@@ -126,41 +135,52 @@ func serviceEventsText(ctx context.Context, a *app.App, options *metrics.MetricO
 		if err != nil {
 			return err
 		}
+
 		textWidget.Reset()
+
 		for _, e := range events {
 			if options.TimeframeStart().After(*e.CreatedAt) {
 				continue
 			}
+
 			var created time.Time
 			if options.UTC {
 				created = e.CreatedAt.UTC()
 			} else {
 				created = e.CreatedAt.Local()
 			}
+
 			if err := textWidget.Write(
 				created.Format("Jan 02, 2006 15:04:05 MST"), text.WriteCellOpts(cell.FgColor(cell.ColorGray))); err != nil {
 				return err
 			}
+
 			if err := textWidget.Write(fmt.Sprintf(" %s\n", *e.Message)); err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
+
 	return textWidget, nil
 }
 
 func labelsFromTimestamps(timestamps []*time.Time, utc bool) map[int]string {
 	labels := map[int]string{}
 	format := "15:04"
+
 	if len(timestamps) == 0 {
 		return labels
 	}
+
 	firstDay := timestamps[0].Format("02")
 	lastDay := timestamps[len(timestamps)-1].Format("02")
+
 	if firstDay != lastDay {
 		format = "2T15:04"
 	}
+
 	for i, t := range timestamps {
 		if utc {
 			labels[i] = t.UTC().Format(format)
@@ -168,6 +188,7 @@ func labelsFromTimestamps(timestamps []*time.Time, utc bool) map[int]string {
 			labels[i] = t.Local().Format(format)
 		}
 	}
+
 	return labels
 }
 
@@ -176,16 +197,21 @@ func populateLineChart(appMetrics metrics.AppMetrics, lc *linechart.LineChart) (
 	if err != nil {
 		return nil, err
 	}
+
 	var legend []*LegendItem
+
 	for _, metric := range metrics.MetricDataResults {
 		// "mm" is a special prefix for metrics that start with numbers to make them valid for Cloudwatch (e.g. "mm2xx")
 		name := strings.TrimPrefix(*metric.Id, "mm")
 		color := appMetrics.MetricColor(&name)
+
 		var values []float64
 		for _, v := range metric.Values {
 			values = append(values, *v)
 		}
+
 		labels := labelsFromTimestamps(metric.Timestamps, appMetrics.GetOptions().UTC)
+
 		err = lc.Series(name, values,
 			linechart.SeriesCellOpts(cell.FgColor(color)),
 			linechart.SeriesXLabels(labels),
@@ -193,8 +219,10 @@ func populateLineChart(appMetrics metrics.AppMetrics, lc *linechart.LineChart) (
 		if err != nil {
 			return nil, err
 		}
+
 		legend = append(legend, &LegendItem{Name: name, Color: color})
 	}
+
 	return legend, nil
 }
 
@@ -294,7 +322,7 @@ var dashCmd = &cobra.Command{
 		var graphButtons []widgetapi.Widget
 		for i := range appMetrics {
 			shortcut := i + 1
-			shortcutRune, _ := utf8.DecodeRuneInString(fmt.Sprintf("%d", shortcut))
+			shortcutRune, _ := utf8.DecodeRuneInString(strconv.Itoa(shortcut))
 			idx := i // create new int in scope for closure below
 			opts := append(
 				buttonOpts,
@@ -309,6 +337,7 @@ var dashCmd = &cobra.Command{
 					widgetCancel()
 					currentMetric = appMetrics[idx]
 					UpdateDashContent(widgetCtx, rootContainer, appMetrics[idx])
+
 					return nil
 				},
 				opts...,
@@ -365,6 +394,7 @@ var dashCmd = &cobra.Command{
 					widgetCancel()
 					options.Timeframe = *thisTimeframe
 					UpdateDashContent(widgetCtx, rootContainer, currentMetric)
+
 					return nil
 				},
 				opts...,

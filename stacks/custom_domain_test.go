@@ -8,6 +8,8 @@ import (
 )
 
 func TestCustomDomainStackName(t *testing.T) {
+	t.Parallel()
+
 	scenarios := []struct {
 		input    string
 		expected string

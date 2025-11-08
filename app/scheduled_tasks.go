@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -20,12 +21,15 @@ func (a *App) ScheduledTasks() ([]*ScheduledTask, error) {
 	value, err := a.AWS.GetParameter(&ssm.GetParameterInput{
 		Name: &parameterName,
 	})
+
 	var tasks []*ScheduledTask
+
 	if err != nil {
 		tasks = []*ScheduledTask{}
 	} else if err = json.Unmarshal([]byte(*value), &tasks); err != nil {
 		return nil, err
 	}
+
 	return tasks, nil
 }
 
@@ -34,6 +38,7 @@ func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, e
 	if err := a.AWS.ValidateEventbridgeCron(schedule); err != nil {
 		return nil, err
 	}
+
 	tasks, err := a.ScheduledTasks()
 	if err != nil {
 		return nil, err
@@ -48,16 +53,20 @@ func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, e
 	for _, task := range tasks {
 		tasksBySchedule[task.Schedule] = append(tasksBySchedule[task.Schedule], task.Command)
 	}
+
 	for schedule, commands := range tasksBySchedule {
 		if len(commands) > 5 {
 			return nil, fmt.Errorf("AWS quota limits a single schedule to no more than 5 tasks (%s)", schedule)
 		}
 	}
+
 	tasksBytes, err := json.Marshal(tasks)
 	if err != nil {
 		return nil, err
 	}
+
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
+
 	err = a.AWS.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Value:     aws.String(string(tasksBytes)),
@@ -67,6 +76,7 @@ func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, e
 	if err != nil {
 		return nil, err
 	}
+
 	return tasks, nil
 }
 
@@ -76,16 +86,21 @@ func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if idx >= len(tasks) || idx < 0 {
-		return nil, fmt.Errorf("invalid index for task to delete")
+		return nil, errors.New("invalid index for task to delete")
 	}
+
 	taskToDelete := tasks[idx]
 	tasks = append(tasks[:idx], tasks[idx+1:]...)
+
 	tasksBytes, err := json.Marshal(tasks)
 	if err != nil {
 		return nil, err
 	}
+
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
+
 	err = a.AWS.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Value:     aws.String(string(tasksBytes)),
@@ -95,5 +110,6 @@ func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return taskToDelete, nil
 }

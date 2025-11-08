@@ -7,11 +7,11 @@ type Role interface {
 }
 
 type AppRole struct {
-	RoleARN   string `dynamodbav:"role_arn"      json:"role_arn"`
+	RoleARN   string `dynamodbav:"role_arn"     json:"role_arn"`
 	AccountID string `json:"account_id"`
-	AppName   string `dynamodbav:"secondary_id"  json:"name"`
-	Region    string `dynamodbav:"region"        json:"region"`
-	Pipeline  bool   `dynamodbav:"pipeline"      json:"pipeline"`
+	AppName   string `dynamodbav:"secondary_id" json:"name"`
+	Region    string `dynamodbav:"region"       json:"region"`
+	Pipeline  bool   `dynamodbav:"pipeline"     json:"pipeline"`
 }
 
 func (a *AppRole) GetRoleARN() string {
@@ -19,10 +19,10 @@ func (a *AppRole) GetRoleARN() string {
 }
 
 type AdminRole struct {
-	RoleARN      string `dynamodbav:"role_arn"      json:"role_arn"`
-	AccountID    string `dynamodbav:"secondary_id"  json:"account_id"`
+	RoleARN      string `dynamodbav:"role_arn"     json:"role_arn"`
+	AccountID    string `dynamodbav:"secondary_id" json:"account_id"`
 	AccountAlias string `json:"alias"`
-	Region       string `dynamodbav:"region"        json:"region"`
+	Region       string `dynamodbav:"region"       json:"region"`
 }
 
 func (a *AdminRole) GetRoleARN() string {
@@ -33,5 +33,6 @@ func (a *AdminRole) GetAccountName() string {
 	if a.AccountAlias != "" {
 		return fmt.Sprintf("%s (%s)", a.AccountID, a.AccountAlias)
 	}
+
 	return a.AccountID
 }

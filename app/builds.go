@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -76,6 +77,7 @@ func (b *BuildStatus) CurrentPhase() *BuildPhase {
 			return &p
 		}
 	}
+
 	return nil
 }
 
@@ -86,13 +88,16 @@ func (b *BuildStatus) NextActivePhase(lastPhase *BuildPhase) *BuildPhase {
 		if found && p.Phase.Start != 0 {
 			return &p
 		}
+
 		if !found && p.Name == lastPhase.Name {
 			found = true
 		}
 	}
+
 	if b.Deploy.End != 0 {
 		return nil
 	}
+
 	return lastPhase
 }
 
@@ -101,11 +106,13 @@ func (b *BuildStatus) FinalPhase() (*BuildPhase, error) {
 		if p.Phase.State == PhaseInProgress {
 			return nil, fmt.Errorf("%s phase is still running", p.Name)
 		}
+
 		if p.Phase.State == PhaseSuccess || p.Phase.State == PhaseFailed {
 			return &p, nil
 		}
 	}
-	return nil, fmt.Errorf("no phases completed")
+
+	return nil, errors.New("no phases completed")
 }
 
 func (b *BuildStatus) FirstFailedPhase() *BuildPhase {
@@ -114,21 +121,26 @@ func (b *BuildStatus) FirstFailedPhase() *BuildPhase {
 			return &p
 		}
 	}
+
 	return nil
 }
 
 // GetCommitLog retrieves commit.txt stored in S3
 func (b *BuildStatus) GetCommitLog(sess *session.Session) (*string, error) {
 	if b.Build.Logs == "" || !strings.HasPrefix(b.Build.Logs, "s3://") {
-		return nil, fmt.Errorf("build logs not available yet")
+		return nil, errors.New("build logs not available yet")
 	}
+
 	s3Parts := strings.Split(b.Build.Logs, "/")
 	s3Parts = append(s3Parts[0:len(s3Parts)-1], "commit.txt")
 	commitURL := strings.Join(s3Parts, "/")
+
 	builder, err := S3FromURL(sess, commitURL)
 	if err != nil {
 		return nil, err
 	}
+
 	contents := builder.String()
+
 	return &contents, nil
 }

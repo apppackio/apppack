@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -19,6 +20,7 @@ func (m *MockAWS) GetParameter(input *ssm.GetParameterInput) (*string, error) {
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*string), args.Error(1)
 }
 
@@ -35,6 +37,8 @@ func (m *MockAWS) ValidateEventbridgeCron(rule string) error {
 }
 
 func TestScheduledTasksNoParameter(t *testing.T) {
+	t.Parallel()
+
 	a := &app.App{
 		Name: "test",
 		AWS:  &MockAWS{},
@@ -42,17 +46,21 @@ func TestScheduledTasksNoParameter(t *testing.T) {
 	a.AWS.(*MockAWS).On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: aws.String("/apppack/apps/test/scheduled-tasks")},
-	).Return(nil, fmt.Errorf("parameter not found"))
+	).Return(nil, errors.New("parameter not found"))
+
 	tasks, err := a.ScheduledTasks()
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(tasks) != 0 {
 		t.Errorf("expected 0 tasks, got %d", len(tasks))
 	}
 }
 
 func TestScheduledTasksCreate(t *testing.T) {
+	t.Parallel()
+
 	a := &app.App{
 		Name: "test",
 		AWS:  &MockAWS{},
@@ -61,12 +69,14 @@ func TestScheduledTasksCreate(t *testing.T) {
 	a.AWS.(*MockAWS).On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
-	).Return(nil, fmt.Errorf("parameter not found"))
+	).Return(nil, errors.New("parameter not found"))
+
 	schedule := "0/10 * * * ? *"
 	a.AWS.(*MockAWS).On(
 		"ValidateEventbridgeCron",
 		schedule,
 	).Return(nil)
+
 	command := "echo hello"
 	a.AWS.(*MockAWS).On(
 		"PutParameter",
@@ -77,19 +87,24 @@ func TestScheduledTasksCreate(t *testing.T) {
 			Overwrite: aws.Bool(true),
 		},
 	).Return(nil)
+
 	tasks, err := a.CreateScheduledTask(schedule, command)
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(tasks) != 1 {
 		t.Errorf("expected 1 task, got %d", len(tasks))
 	}
+
 	if tasks[0].Command != command {
 		t.Errorf("expected command %s, got %s", command, tasks[0].Command)
 	}
 }
 
 func TestScheduledTasksDelete(t *testing.T) {
+	t.Parallel()
+
 	a := &app.App{
 		Name: "test",
 		AWS:  &MockAWS{},
@@ -110,16 +125,20 @@ func TestScheduledTasksDelete(t *testing.T) {
 			Overwrite: aws.Bool(true),
 		},
 	).Return(nil)
+
 	task, err := a.DeleteScheduledTask(0)
 	if err != nil {
 		t.Error(err)
 	}
+
 	if task.Command != command {
 		t.Errorf("expected command %s, got %s", command, task.Command)
 	}
 }
 
 func TestScheduledTasksDeleteEmpty(t *testing.T) {
+	t.Parallel()
+
 	a := &app.App{
 		Name: "test",
 		AWS:  &MockAWS{},
@@ -129,6 +148,7 @@ func TestScheduledTasksDeleteEmpty(t *testing.T) {
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
 	).Return(aws.String("[]"), nil)
+
 	_, err := a.DeleteScheduledTask(0)
 	if err == nil {
 		t.Error("expected error trying to delete from empty list")

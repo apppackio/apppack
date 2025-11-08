@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -30,9 +31,12 @@ import (
 func printTasks(tasks []*app.ScheduledTask) {
 	if len(tasks) == 0 {
 		fmt.Printf("%s\n", aurora.Yellow("no scheduled tasks defined"))
+
 		return
 	}
+
 	fmt.Printf("%s\n", aurora.Faint("Min\tHr\tDayMon\tMon\tDayWk\tYr"))
+
 	for _, task := range tasks {
 		fmt.Printf("%s\t%s\n", aurora.Faint(strings.Join(strings.Split(task.Schedule, " "), "\t")), task.Command)
 	}
@@ -49,7 +53,7 @@ var scheduledTasksCmd = &cobra.Command{
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
-			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
+			checkErr(errors.New("review apps do not currently support scheduled tasks"))
 		}
 		tasks, err := a.ScheduledTasks()
 		ui.Spinner.Stop()
@@ -73,14 +77,14 @@ Be sure to wrap your command and schedule in quotes to ensure they are read as a
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(strings.Split(schedule, " ")) != 6 {
-			checkErr(fmt.Errorf("schedule string should contain 6 space separated values\nhttps://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions"))
+			checkErr(errors.New("schedule string should contain 6 space separated values\nhttps://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html#cron-expressions"))
 		}
 		command := strings.Join(args, " ")
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
-			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
+			checkErr(errors.New("review apps do not currently support scheduled tasks"))
 		}
 		tasks, err := a.CreateScheduledTask(schedule, command)
 		ui.Spinner.Stop()
@@ -104,7 +108,7 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
-			checkErr(fmt.Errorf("review apps do not currently support scheduled tasks"))
+			checkErr(errors.New("review apps do not currently support scheduled tasks"))
 		}
 		var idx int
 		var task *app.ScheduledTask
@@ -116,7 +120,8 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 			tasks, err := a.ScheduledTasks()
 			checkErr(err)
 			if len(tasks) == 0 {
-				checkErr(fmt.Errorf("no scheduled tasks to delete"))
+				checkErr(errors.New("no scheduled tasks to delete"))
+
 				return
 			}
 			var taskList []string

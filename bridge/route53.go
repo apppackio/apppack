@@ -23,6 +23,7 @@ func HostedZoneForDomain(sess *session.Session, dnsName string) (*route53.Hosted
 		input := route53.ListHostedZonesByNameInput{
 			DNSName: aws.String(strings.Join(nameParts[i:], ".")),
 		}
+
 		resp, err := r53Svc.ListHostedZonesByName(&input)
 		if err != nil {
 			return nil, err
@@ -34,5 +35,6 @@ func HostedZoneForDomain(sess *session.Session, dnsName string) (*route53.Hosted
 			}
 		}
 	}
+
 	return nil, fmt.Errorf("no hosted zones found for %s", dnsName)
 }

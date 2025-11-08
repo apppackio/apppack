@@ -18,6 +18,7 @@ func (a *AWS) ValidateEventbridgeCron(rule string) error {
 		ScheduleExpression: aws.String(fmt.Sprintf("cron(%s)", rule)),
 		State:              aws.String("DISABLED"),
 	})
+
 	if err == nil {
 		_, err2 := eventSvc.DeleteRule(&eventbridge.DeleteRuleInput{
 			Name: &ruleName,
@@ -26,5 +27,6 @@ func (a *AWS) ValidateEventbridgeCron(rule string) error {
 			logrus.WithError(err2).Debug("failed to delete temporary validation rule")
 		}
 	}
+
 	return err
 }

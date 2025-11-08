@@ -90,13 +90,16 @@ func (p *AppStackParameters) SetInternalFields(_ *session.Session, name *string)
 		rand.Seed(time.Now().UnixNano())                        // skipcq: GO-S1033
 		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // #nosec G404 -- Non-crypto random for LB priority assignment
 	}
+
 	if err := p.SetRepositoryType(); err != nil {
 		return err
 	}
+
 	if p.AppPackRoleExternalID == "" {
 		// TODO: This should come from us instead of the user
 		p.AppPackRoleExternalID = strings.ReplaceAll(uuid.New().String(), "-", "")
 	}
+
 	if p.Name == "" {
 		p.Name = *name
 	}
@@ -110,12 +113,14 @@ func (p *AppStackParameters) SetRepositoryType() error {
 
 		return nil
 	}
+
 	if strings.Contains(p.RepositoryURL, "bitbucket.org") {
 		p.RepositoryType = "BITBUCKET"
 
 		return nil
 	}
-	return fmt.Errorf("unknown repository source")
+
+	return errors.New("unknown repository source")
 }
 
 type AppStack struct {
@@ -156,6 +161,7 @@ func (a *AppStack) StackType() string {
 	if a.Pipeline {
 		return "pipeline"
 	}
+
 	return "app"
 }
 
@@ -164,12 +170,15 @@ func (a *AppStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	if err != nil {
 		return err
 	}
+
 	sort.Strings(a.Parameters.AllowedUsers)
+
 	return nil
 }
 
 func (a *AppStack) AskForDatabase(sess *session.Session) error {
 	enable := a.Parameters.DatabaseStackName != ""
+
 	var helpText string
 	if a.Pipeline {
 		helpText = "Review apps will create databases on a database instance in the cluster. " +
@@ -179,6 +188,7 @@ func (a *AppStack) AskForDatabase(sess *session.Session) error {
 			"Answering yes will create a user and database and provide the credentials to the app as a config variable. " +
 			"See https://docs.apppack.io/how-to/using-databases/ for more info."
 	}
+
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  fmt.Sprintf("Should a database be created for this %s?", a.StackType()),
@@ -203,12 +213,16 @@ func (a *AppStack) AskForDatabase(sess *session.Session) error {
 		if err != nil {
 			return err
 		}
+
 		if canChange {
 			return a.AskForDatabaseStack(sess)
 		}
+
 		return nil
 	}
+
 	a.Parameters.DatabaseStackName = ""
+
 	return nil
 }
 
@@ -218,10 +232,12 @@ func databaseSelectTransform(ans interface{}) interface{} {
 	if !ok {
 		return ans
 	}
+
 	if o.Value != "" {
 		parts := strings.Split(o.Value, " ")
 		o.Value = fmt.Sprintf(databaseStackNameTmpl, parts[0])
 	}
+
 	return o
 }
 
@@ -233,6 +249,7 @@ func (a *AppStack) AskForDatabaseStack(sess *session.Session) error {
 	if err != nil {
 		return err
 	}
+
 	if len(databases) == 0 {
 		return fmt.Errorf("no AppPack databases are setup on %s cluster", clusterName)
 	}
@@ -249,12 +266,14 @@ func (a *AppStack) AskForDatabaseStack(sess *session.Session) error {
 			}
 		}
 	}
+
 	var verbose string
 	if a.Pipeline {
 		verbose = "Which database cluster should this pipeline's review app databases be setup on?"
 	} else {
 		verbose = "Which database cluster should this app's database be setup on?"
 	}
+
 	err = ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose: verbose,
@@ -272,6 +291,7 @@ func (a *AppStack) AskForDatabaseStack(sess *session.Session) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -281,16 +301,21 @@ func redisSelectTransform(ans interface{}) interface{} {
 	if !ok {
 		return ans
 	}
+
 	if o.Value != "" {
 		o.Value = fmt.Sprintf(redisStackNameTmpl, o.Value)
 	}
+
 	return o
 }
 
 func (a *AppStack) AskForRedis(sess *session.Session) error {
 	enable := a.Parameters.RedisStackName != ""
+
 	var verbose string
+
 	var helpText string
+
 	if a.Pipeline {
 		verbose = "Should review apps on this pipeline have access to a Redis database?"
 		helpText = "Create a Redis user for the review apps on this pipeline on a Redis instance in the cluster. " +
@@ -301,6 +326,7 @@ func (a *AppStack) AskForRedis(sess *session.Session) error {
 			"Answering yes will create a user and provide the credentials to the app as a config variable. " +
 			"See https://docs.apppack.io/how-to/using-redis/ for more info."
 	}
+
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  verbose,
@@ -319,27 +345,34 @@ func (a *AppStack) AskForRedis(sess *session.Session) error {
 	if err != nil {
 		return err
 	}
+
 	if enable {
 		canChange, err := a.CanChangeParameter("RedisStackName")
 		if err != nil {
 			return err
 		}
+
 		if canChange {
 			return a.AskForRedisStack(sess)
 		}
+
 		return nil
 	}
+
 	a.Parameters.RedisStackName = ""
+
 	return nil
 }
 
 // AskForRedisStack gives the user a choice of available Redis stacks
 func (a *AppStack) AskForRedisStack(sess *session.Session) error {
 	clusterName := a.ClusterName()
+
 	redises, err := ddb.ListStacks(sess, &clusterName, "REDIS")
 	if err != nil {
 		return err
 	}
+
 	if len(redises) == 0 {
 		return fmt.Errorf("no AppPack Redis instances are setup on %s cluster", clusterName)
 	}
@@ -355,12 +388,14 @@ func (a *AppStack) AskForRedisStack(sess *session.Session) error {
 			}
 		}
 	}
+
 	var verbose string
 	if a.Pipeline {
 		verbose = "Which Redis instance should this pipeline's review apps be setup on?"
 	} else {
 		verbose = "Which Redis instance should this app's user be setup on?"
 	}
+
 	err = ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose: verbose,
@@ -378,13 +413,17 @@ func (a *AppStack) AskForRedisStack(sess *session.Session) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func (a *AppStack) AskForSES() error {
 	enable := a.Parameters.SesDomain != ""
+
 	var verbose string
+
 	var helpText string
+
 	if a.Pipeline {
 		verbose = "Should review apps on this pipeline be allowed to send email via Amazon SES?"
 		helpText = "Allow this pipeline's review apps to send email via SES. See https://docs.apppack.io/how-to/sending-mail/ for more info."
@@ -392,6 +431,7 @@ func (a *AppStack) AskForSES() error {
 		verbose = "Should this app be allowed to send email via Amazon SES?"
 		helpText = "Allow this app to send email via SES. See https://docs.apppack.io/how-to/sending-email/ for more info."
 	}
+
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  verbose,
@@ -410,10 +450,13 @@ func (a *AppStack) AskForSES() error {
 	if err != nil {
 		return err
 	}
+
 	if enable {
 		return a.AskForSESDomain()
 	}
+
 	a.Parameters.SesDomain = ""
+
 	return nil
 }
 
@@ -425,6 +468,7 @@ func (a *AppStack) AskForSESDomain() error {
 	} else {
 		verbose = "Which domain should this app be allowed to send from?"
 	}
+
 	err := ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  verbose,
@@ -439,6 +483,7 @@ func (a *AppStack) AskForSESDomain() error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -448,6 +493,7 @@ func (a *AppStack) CanChangeParameter(name string) (bool, error) {
 	if a.Stack == nil {
 		return true, nil
 	}
+
 	currentVal, err := bridge.GetStackParameter(a.Stack.Parameters, name)
 	if err != nil {
 		return false, err
@@ -458,6 +504,7 @@ func (a *AppStack) CanChangeParameter(name string) (bool, error) {
 
 func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R1005
 	var questions []*ui.QuestionExtra
+
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(
@@ -470,7 +517,9 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 			return err
 		}
 	}
+
 	sort.Strings(a.Parameters.AllowedUsers)
+
 	questions = append(questions, &ui.QuestionExtra{
 		Verbose:  fmt.Sprintf("What code repository should this %s build from?", a.StackType()),
 		HelpText: "Use the HTTP URL (e.g., https://github.com/{org}/{repo}.git). BitBucket and Github repositories are supported.",
@@ -483,13 +532,17 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 		return err
 	}
+
 	questions = []*ui.QuestionExtra{}
+
 	if err := a.Parameters.SetRepositoryType(); err != nil {
 		return err
 	}
+
 	if err = verifySourceCredentials(sess, a.Parameters.RepositoryType); err != nil {
 		return err
 	}
+
 	if !a.Pipeline {
 		questions = append(questions, []*ui.QuestionExtra{
 			{
@@ -515,15 +568,20 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 						if len(domains) > 4 {
 							return errors.New("limit of 4 custom domains exceeded")
 						}
+
 						return nil
 					},
 				},
 			},
 		}...)
 	}
+
 	var sqsVerbose string
+
 	var sqsHelpText string
+
 	var bucketHelpTextApp string
+
 	if a.Pipeline {
 		sqsVerbose = "Should an SQS Queue be created for review apps on this pipeline?"
 		sqsHelpText = "The SQS Queue can be used to queue up messages between processes. Answering yes will create the queue for each review app and provide its name to the app as a config variable. See https://docs.apppack.io/how-to/using-sqs/ for more info."
@@ -587,15 +645,19 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 		return err
 	}
+
 	if err := a.AskForDatabase(sess); err != nil {
 		return err
 	}
+
 	if err := a.AskForRedis(sess); err != nil {
 		return err
 	}
+
 	if err := a.AskForSES(); err != nil {
 		return err
 	}
+
 	if a.Stack == nil {
 		err = ui.AskQuestions([]*ui.QuestionExtra{
 			{
@@ -620,36 +682,46 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 
 func (a *AppStack) WarnIfDataLoss() error {
 	fmt.Println()
+
 	privateS3BucketDestroy, err := a.PrivateS3BucketToBeDestroyed()
 	if err != nil {
 		return err
 	}
+
 	publicS3BucketDestroy, err := a.PublicS3BucketToBeDestroyed()
 	if err != nil {
 		return err
 	}
+
 	databaseDestroy, err := a.DatabaseToBeDestroyed()
 	if err != nil {
 		return err
 	}
+
 	redisDestroy, err := a.RedisToBeDestroyed()
 	if err != nil {
 		return err
 	}
+
 	if privateS3BucketDestroy {
 		ui.PrintWarning("The current private S3 Bucket and all files in it will be permanently destroyed.")
 	}
+
 	if publicS3BucketDestroy {
 		ui.PrintWarning("The current public S3 Bucket and all files in it will be permanently destroyed.")
 	}
+
 	if databaseDestroy {
 		ui.PrintWarning("The current app database and all data in it will be permanently destroyed.")
 	}
+
 	if redisDestroy {
 		ui.PrintWarning("The current Redis database will no longer be accessible to the application.")
 	}
+
 	if privateS3BucketDestroy || publicS3BucketDestroy || databaseDestroy || redisDestroy {
 		var verify string
+
 		err := survey.AskOne(&survey.Select{
 			Message:       "Are you sure you want to continue?",
 			Options:       []string{"yes", "no"},
@@ -659,10 +731,12 @@ func (a *AppStack) WarnIfDataLoss() error {
 		if err != nil {
 			return err
 		}
+
 		if verify != "yes" {
-			return fmt.Errorf("aborted due to user input")
+			return errors.New("aborted due to user input")
 		}
 	}
+
 	return nil
 }
 
@@ -671,6 +745,7 @@ func (a *AppStack) PublicS3BucketToBeDestroyed() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return *val == Enabled && !a.Parameters.PublicS3BucketEnabled, nil
 }
 
@@ -679,6 +754,7 @@ func (a *AppStack) PrivateS3BucketToBeDestroyed() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return *val == Enabled && !a.Parameters.PrivateS3BucketEnabled, nil
 }
 
@@ -687,6 +763,7 @@ func (a *AppStack) DatabaseToBeDestroyed() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return *val != "" && *val != a.Parameters.DatabaseStackName, nil
 }
 
@@ -695,6 +772,7 @@ func (a *AppStack) RedisToBeDestroyed() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return *val != "" && *val != a.Parameters.RedisStackName, nil
 }
 
@@ -705,6 +783,7 @@ func (a *AppStack) StackName(name *string) *string {
 	} else {
 		stackName = fmt.Sprintf(AppStackNameTmpl, *name)
 	}
+
 	return &stackName
 }
 
@@ -720,6 +799,7 @@ func (a *AppStack) Tags(name *string) []*cloudformation.Tag {
 			Value: aws.String("true"),
 		})
 	}
+
 	return tags
 }
 
@@ -734,21 +814,26 @@ func (*AppStack) TemplateURL(release *string) *string {
 	if release != nil {
 		url = strings.Replace(appFormationURL, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
+
 	return &url
 }
 
 func verifySourceCredentials(sess *session.Session, repositoryType string) error {
 	codebuildSvc := codebuild.New(sess)
+
 	sourceCredentialsOutput, err := codebuildSvc.ListSourceCredentials(&codebuild.ListSourceCredentialsInput{})
 	if err != nil {
 		return err
 	}
+
 	hasCredentials := false
+
 	for _, cred := range sourceCredentialsOutput.SourceCredentialsInfos {
 		if *cred.ServerType == repositoryType {
 			hasCredentials = true
 		}
 	}
+
 	if !hasCredentials {
 		var friendlySourceName string
 		if repositoryType == "BITBUCKET" {
@@ -758,19 +843,22 @@ func verifySourceCredentials(sess *session.Session, repositoryType string) error
 		} else {
 			return fmt.Errorf("unsupported repository type: %s", repositoryType)
 		}
+
 		ui.Spinner.Stop()
-		ui.PrintWarning(fmt.Sprintf("CodeBuild needs to be authenticated to access your repository at %s", friendlySourceName))
+		ui.PrintWarning("CodeBuild needs to be authenticated to access your repository at " + friendlySourceName)
 		fmt.Println("On the CodeBuild new project page:")
 		fmt.Printf("    1. Scroll to the %s section\n", aurora.Bold("Source"))
 		fmt.Printf("    2. Select %s for the %s\n", aurora.Bold(friendlySourceName), aurora.Bold("Source provider"))
 		fmt.Printf("    3. Keep the default %s\n", aurora.Bold("Connect using OAuth"))
-		fmt.Printf("    4. Click %s\n", aurora.Bold(fmt.Sprintf("Connect to %s", friendlySourceName)))
+		fmt.Printf("    4. Click %s\n", aurora.Bold("Connect to "+friendlySourceName))
 		fmt.Printf("    5. Click %s in the popup window\n", aurora.Bold("Confirm"))
 		fmt.Printf("    6. %s You can close the browser window and continue with app setup here.\n\n", aurora.Bold("That's it!"))
 		newProjectURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/project/new", *sess.Config.Region)
+
 		url, err := auth.GetConsoleURL(sess, newProjectURL)
 		if err == nil && isatty.IsTerminal(os.Stdin.Fd()) {
 			fmt.Println("Opening the CodeBuild new project page now...")
+
 			err = browser.OpenURL(*url)
 			if err != nil {
 				fmt.Println("Open this URL in your browser to view logs:")
@@ -779,9 +867,12 @@ func verifySourceCredentials(sess *session.Session, repositoryType string) error
 		} else {
 			fmt.Printf("Visit the following URL to authenticate: %s", newProjectURL)
 		}
+
 		ui.PauseUntilEnter("Finish authentication in your web browser then press ENTER to continue.")
+
 		return verifySourceCredentials(sess, repositoryType)
 	}
+
 	return nil
 }
 

@@ -56,6 +56,7 @@ func CheckForUpdate(ctx context.Context, client *http.Client, stateFilePath, rep
 	if err != nil {
 		return nil, err
 	}
+
 	if versionGreaterThan(releaseInfo.Version, currentVersion) {
 		return releaseInfo, nil
 	}
@@ -68,22 +69,29 @@ func getLatestReleaseInfo(ctx context.Context, client *http.Client, repo string)
 	if err != nil {
 		return nil, err
 	}
+
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() {
 		_, _ = io.Copy(io.Discard, res.Body)
 		res.Body.Close()
 	}()
+
 	if res.StatusCode != 200 {
 		return nil, fmt.Errorf("unexpected HTTP %d", res.StatusCode)
 	}
+
 	dec := json.NewDecoder(res.Body)
+
 	var latestRelease ReleaseInfo
+
 	if err := dec.Decode(&latestRelease); err != nil {
 		return nil, err
 	}
+
 	return &latestRelease, nil
 }
 
@@ -94,6 +102,7 @@ func getStateEntry(stateFilePath string) (*StateEntry, error) {
 	}
 
 	var stateEntry StateEntry
+
 	err = json.Unmarshal(content, &stateEntry)
 	if err != nil {
 		return nil, err
@@ -104,6 +113,7 @@ func getStateEntry(stateFilePath string) (*StateEntry, error) {
 
 func setStateEntry(stateFilePath string, t time.Time, r ReleaseInfo) error {
 	data := StateEntry{CheckedForUpdateAt: t, LatestRelease: r}
+
 	content, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -115,6 +125,7 @@ func setStateEntry(stateFilePath string, t time.Time, r ReleaseInfo) error {
 	}
 
 	err = os.WriteFile(stateFilePath, content, 0o600)
+
 	return err
 }
 
@@ -122,6 +133,7 @@ func versionGreaterThan(v, w string) bool {
 	w = gitDescribeSuffixRE.ReplaceAllStringFunc(w, func(m string) string {
 		idx := strings.IndexRune(m, '-')
 		n, _ := strconv.Atoi(m[0:idx])
+
 		return fmt.Sprintf("%d-pre.0", n+1)
 	})
 

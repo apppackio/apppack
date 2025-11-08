@@ -31,36 +31,48 @@ import (
 // DestroyStackCmd destroys the given stack after user confirmation
 func DestroyStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 	ui.StartSpinner()
+
 	if err := stacks.LoadStackFromCloudformation(sess, stack, &name); err != nil {
 		// if the stack doesn't exist, try to do the post-cleanup
 		// to make sure we don't leave orphaned resources
 		if err1 := stack.PostDelete(sess, &name); err1 != nil {
 			logrus.WithFields(logrus.Fields{"err": err1}).Warning("post-delete failed")
 		}
+
 		checkErr(err)
 	}
+
 	stackName := stack.GetStack().StackName
+
 	ui.Spinner.Stop()
+
 	caser := cases.Title(language.English)
 	confirmAction(fmt.Sprintf("This will permanently destroy all resources in the `%s` %s stack.", name, caser.String(stack.StackType())), *stackName)
 	ui.StartSpinner()
 	// retry deletion once on failure for transient errors
 	retry := true
+
 	var destroy func() error
 	destroy = func() error {
 		stack, err := stacks.DeleteStackAndWait(sess, stack)
 		if err != nil {
 			return err
 		}
+
 		ui.Spinner.Stop()
+
 		if *stack.StackStatus != stacks.DeleteComplete {
 			if retry {
 				ui.PrintWarning("deletion did not complete successfully, retrying...")
+
 				retry = false
+
 				destroy()
 			}
+
 			return fmt.Errorf("failed to delete %s", *stack.StackName)
 		}
+
 		return nil
 	}
 	checkErr(destroy())

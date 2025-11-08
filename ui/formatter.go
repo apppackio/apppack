@@ -24,11 +24,11 @@ func PrintError(text string) {
 }
 
 func PrintSuccess(text string) {
-	fmt.Println(aurora.Green(fmt.Sprintf("✔ %s", text)))
+	fmt.Println(aurora.Green("✔ " + text))
 }
 
 func PrintWarning(text string) {
-	fmt.Println(aurora.Yellow(fmt.Sprintf("⚠  %s", text)))
+	fmt.Println(aurora.Yellow("⚠  " + text))
 }
 
 func PrintHeaderln(text string) {

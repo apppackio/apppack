@@ -15,6 +15,7 @@ func StackExists(sess *session.Session, stackName string) (*bool, error) {
 	stack, err := GetStack(sess, stackName)
 
 	var exists bool
+
 	if err != nil {
 		var aerr awserr.Error
 		if errors.As(err, &aerr) {
@@ -27,6 +28,7 @@ func StackExists(sess *session.Session, stackName string) (*bool, error) {
 
 		return nil, err
 	}
+
 	exists = *stack.StackStatus != cloudformation.StackStatusDeleteComplete
 
 	return &exists, nil
@@ -38,6 +40,7 @@ func GetStackParameter(parameters []*cloudformation.Parameter, name string) (*st
 			return parameter.ParameterValue, nil
 		}
 	}
+
 	return nil, fmt.Errorf("no parameter named %s", name)
 }
 
@@ -47,11 +50,13 @@ func GetStackOutput(outputs []*cloudformation.Output, name string) (*string, err
 			return output.OutputValue, nil
 		}
 	}
+
 	return nil, fmt.Errorf("no output named %s", name)
 }
 
 func GetStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
 	cfnSvc := cloudformation.New(sess)
+
 	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: &name,
 	})

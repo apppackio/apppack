@@ -47,6 +47,7 @@ func Login() *auth.UserInfo {
 	checkErr(err)
 	fmt.Println("Your verification code is", deviceCode.UserCode)
 	fmt.Println("Finish authentication in your web browser...")
+
 	if !noBrowser {
 		err = browser.OpenURL(deviceCode.VerificationURIComplete)
 		if err != nil {
@@ -55,6 +56,7 @@ func Login() *auth.UserInfo {
 			noBrowser = true
 		}
 	}
+
 	if noBrowser {
 		fmt.Println("URL:", aurora.White(deviceCode.VerificationURIComplete).String())
 		fmt.Println()
@@ -69,6 +71,7 @@ func Login() *auth.UserInfo {
 	userInfo, err := tokens.GetUserInfo()
 	checkErr(err)
 	checkErr(userInfo.WriteToCache())
+
 	return userInfo
 }
 
@@ -172,6 +175,7 @@ var accountsCmd = &cobra.Command{
 		ui.Spinner.Stop()
 		if len(admins) == 0 {
 			printWarning("you are not an administrator on any accounts")
+
 			return
 		}
 		ui.PrintHeaderln("Accounts")

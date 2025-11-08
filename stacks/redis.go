@@ -28,6 +28,7 @@ func isPreviousElasticacheGeneration(instanceClass *string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -63,14 +64,18 @@ func listElasticacheInstanceClasses(sess *session.Session) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var instanceClasses []string
+
 	for _, opt := range out.ReservedCacheNodesOfferings {
 		if !isPreviousElasticacheGeneration(opt.CacheNodeType) {
 			instanceClasses = append(instanceClasses, *opt.CacheNodeType)
 		}
 	}
+
 	instanceClasses = dedupe(instanceClasses)
 	bridge.SortInstanceClasses(instanceClasses)
+
 	return instanceClasses, nil
 }
 
@@ -79,21 +84,26 @@ func (p *RedisStackParameters) SetInternalFields(sess *session.Session, name *st
 	if p.AuthTokenParameter == "" {
 		authToken := fmt.Sprintf(redisAuthTokenParameterTmpl, *name)
 		p.AuthTokenParameter = authToken
+
 		password, err := GeneratePassword()
 		if err != nil {
 			return err
 		}
+
 		ssmSvc := ssm.New(sess)
 		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 			Name:  &authToken,
 			Value: &password,
 			Type:  aws.String("SecureString"),
 		})
+
 		return err
 	}
+
 	if p.Name == "" {
 		p.Name = *name
 	}
+
 	return nil
 }
 
@@ -128,17 +138,21 @@ func (a *RedisStack) PostDelete(sess *session.Session, name *string) error {
 	// otherwise it can be looked up from the Stack.
 	if name == nil {
 		name = aws.String("")
+
 		_, err := fmt.Sscanf(*a.Stack.StackName, redisStackNameTmpl, name)
 		if err != nil {
 			return err
 		}
 	}
+
 	parameterName := fmt.Sprintf(redisAuthTokenParameterTmpl, *name)
 	logrus.WithFields(logrus.Fields{"name": parameterName}).Debug("deleting SSM parameter")
+
 	ssmSvc := ssm.New(sess)
 	_, err := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
 		Name: &parameterName,
 	})
+
 	return err
 }
 
@@ -152,6 +166,7 @@ func (a *RedisStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 
 func (a *RedisStack) AskQuestions(sess *session.Session) error {
 	var questions []*ui.QuestionExtra
+
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(
@@ -164,6 +179,7 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 			return err
 		}
 	}
+
 	if a.Parameters.InstanceClass == "" {
 		a.Parameters.InstanceClass = DefaultRedisStackParameters.InstanceClass
 	}
@@ -193,10 +209,12 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " retrieving instance classes"
+
 	instanceClasses, err := listElasticacheInstanceClasses(sess)
 	if err != nil {
 		return err
 	}
+
 	ui.Spinner.Stop()
 	ui.Spinner.Suffix = ""
 
@@ -216,6 +234,7 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 			},
 		},
 	}...)
+
 	return ui.AskQuestions(questions, a.Parameters)
 }
 
@@ -248,5 +267,6 @@ func (*RedisStack) TemplateURL(release *string) *string {
 	if release != nil && *release != "" {
 		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
+
 	return &url
 }

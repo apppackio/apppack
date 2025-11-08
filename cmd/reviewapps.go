@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -48,7 +49,7 @@ var reviewappsCmd = &cobra.Command{
 		reviewApps, err := a.GetReviewApps()
 		checkErr(err)
 		ui.Spinner.Stop()
-		ui.PrintHeaderln(fmt.Sprintf("%s review apps", a.Name))
+		ui.PrintHeaderln(a.Name + " review apps")
 		for _, r := range reviewApps {
 			if r.Status == "created" {
 				prNumber := strings.Split(r.PullRequest, "/")[1]
@@ -74,12 +75,12 @@ var reviewappsCreateCmd = &cobra.Command{
 		accountFlagIgnoredWarning()
 		name := args[0]
 		if len(strings.Split(name, ":")) != 2 {
-			checkErr(fmt.Errorf("invalid review app name -- must be in format <pipeline>:<pr-number>"))
+			checkErr(errors.New("invalid review app name -- must be in format <pipeline>:<pr-number>"))
 		}
 		a, err := app.Init(args[0], UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		if !a.IsReviewApp() { // TODO: validate
-			checkErr(fmt.Errorf("no pull request number set"))
+			checkErr(errors.New("no pull request number set"))
 		}
 
 		stack := stacks.ReviewAppStack{
@@ -136,7 +137,7 @@ var reviewappsDestroyCmd = &cobra.Command{
 		a, err := app.Init(args[0], UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if !a.IsReviewApp() { // TODO: validate
-			checkErr(fmt.Errorf("no pull request number set"))
+			checkErr(errors.New("no pull request number set"))
 		}
 		DestroyStackCmd(a.Session, &stacks.ReviewAppStack{Parameters: &stacks.ReviewAppStackParameters{}}, args[0])
 	},

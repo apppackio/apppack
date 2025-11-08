@@ -27,6 +27,7 @@ func Deduplicate(slice []string) ([]string, []string) {
 		}
 
 		seen[s] = true
+
 		result = append(result, s)
 	}
 

@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -76,7 +77,9 @@ func checkForUpdate(ctx context.Context, currentVersion string) (*version.Releas
 	if err != nil {
 		return nil, err
 	}
+
 	stateFilePath := filepath.Join(userCacheDir, "version.json")
+
 	return version.CheckForUpdate(ctx, http.DefaultClient, stateFilePath, repo, currentVersion)
 }
 
@@ -88,6 +91,7 @@ func Execute() {
 	updateCtx, updateCancel := context.WithCancel(ctx)
 
 	defer updateCancel()
+
 	updateMessageChan := make(chan *version.ReleaseInfo)
 
 	go func() {
@@ -105,6 +109,7 @@ func Execute() {
 	}
 
 	updateCancel() // if the update checker hasn't completed by now, abort it
+
 	newRelease := <-updateMessageChan
 	if newRelease != nil {
 		printUpdateMessage(newRelease)
@@ -119,54 +124,63 @@ func checkErr(err error) {
 	if err == nil {
 		return
 	}
+
 	ui.Spinner.Stop()
+
 	if strings.HasPrefix(err.Error(), auth.TokenRefreshErr) {
 		fmt.Println(
-			aurora.Yellow(fmt.Sprintf("⚠  %s", auth.TokenRefreshErr)),
-			aurora.Faint(strings.TrimPrefix(err.Error(), fmt.Sprintf("%s: ", auth.TokenRefreshErr))),
+			aurora.Yellow("⚠  "+auth.TokenRefreshErr),
+			aurora.Faint(strings.TrimPrefix(err.Error(), auth.TokenRefreshErr+": ")),
 		)
 		fmt.Printf("%s Reauthenticate this device by running: %s\n", aurora.Blue("ℹ"), aurora.White("apppack auth login"))
 	} else {
 		printError(err.Error())
 	}
+
 	os.Exit(1)
 }
 
 func printError(text string) {
-	fmt.Println(aurora.Red(fmt.Sprintf("✖ %s", text)))
+	fmt.Println(aurora.Red("✖ " + text))
 }
 
 func printSuccess(text string) {
-	fmt.Println(aurora.Green(fmt.Sprintf("✔ %s", text)))
+	fmt.Println(aurora.Green("✔ " + text))
 }
 
 func printWarning(text string) {
-	fmt.Println(aurora.Yellow(fmt.Sprintf("⚠  %s", text)))
+	fmt.Println(aurora.Yellow("⚠  " + text))
 }
 
 func printUpdateMessage(newRelease *version.ReleaseInfo) {
 	appPath, err := exec.LookPath(os.Args[0])
 	checkErr(err)
+
 	isHomebrew := isUnderHomebrew(appPath)
+
 	fmt.Fprintf(os.Stderr, "\n\n%s %s → %s\n",
 		aurora.Yellow("A new release of apppack is available:"),
 		aurora.Cyan(strings.TrimPrefix(version.Version, "v")),
 		aurora.Cyan(strings.TrimPrefix(newRelease.Version, "v")),
 	)
+
 	if isHomebrew {
 		fmt.Fprintf(os.Stderr, "To upgrade, run: %s\n", "brew upgrade apppack")
 	}
+
 	fmt.Fprintf(os.Stderr, "%s\n\n", aurora.Yellow(newRelease.URL))
 }
 
 func confirmAction(message, text string) {
-	printWarning(fmt.Sprintf("%s\n   Are you sure you want to continue?", message))
+	printWarning(message + "\n   Are you sure you want to continue?")
 	fmt.Printf("\nType %s to confirm.\n%s ", aurora.White(text), aurora.White(">"))
+
 	var confirm string
 
 	_, _ = fmt.Scanln(&confirm)
+
 	if confirm != text {
-		checkErr(fmt.Errorf("aborting due to user input"))
+		checkErr(errors.New("aborting due to user input"))
 	}
 }
 
@@ -176,11 +190,13 @@ func isUnderHomebrew(apppackBinary string) bool {
 	if err != nil {
 		return false
 	}
+
 	brewPrefixBytes, err := exec.Command(brewExe, "--prefix").Output()
 	if err != nil {
 		return false
 	}
 
 	brewBinPrefix := filepath.Join(strings.TrimSpace(string(brewPrefixBytes)), "bin") + string(filepath.Separator)
+
 	return strings.HasPrefix(apppackBinary, brewBinPrefix)
 }
