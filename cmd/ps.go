@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -36,12 +37,14 @@ func getTag(tags []*ecs.Tag, key string) (*string, error) {
 			return tag.Value, nil
 		}
 	}
+
 	return nil, fmt.Errorf("tag %s not found", key)
 }
 
 func printTask(t *ecs.Task, count *int) {
 	tag, err := getTag(t.Tags, "apppack:processType")
 	checkErr(err)
+
 	name := *tag
 	if count != nil {
 		name = fmt.Sprintf("%s.%d", name, count)
@@ -49,20 +52,25 @@ func printTask(t *ecs.Task, count *int) {
 
 	cpu, err := strconv.ParseFloat(*t.Cpu, 32)
 	checkErr(err)
+
 	cpu /= 1024.0
 	buildNumber, err := getTag(t.Tags, "apppack:buildNumber")
 	checkErr(err)
+
 	var startText string
 	if t.StartedAt == nil {
 		startText = ""
 	} else {
 		startText = fmt.Sprintf("%s (~ %s)", t.StartedAt.Local().Format("Jan 02, 2006 15:04:05 MST"), humanize.Time(*t.StartedAt))
 	}
-	fmt.Printf("%s: %s (%s) %s %s\n", name, strings.ToLower(*t.LastStatus), aurora.Bold(aurora.Cyan(fmt.Sprintf("%.2fcpu/%smem", cpu, *t.Memory))), aurora.Yellow(fmt.Sprintf("build #%s", *buildNumber)), aurora.Faint(startText))
+
+	fmt.Printf("%s: %s (%s) %s %s\n", name, strings.ToLower(*t.LastStatus), aurora.Bold(aurora.Cyan(fmt.Sprintf("%.2fcpu/%smem", cpu, *t.Memory))), aurora.Yellow("build #"+*buildNumber), aurora.Faint(startText))
+
 	indent := strings.Repeat(" ", len(name)+2)
 	if *tag == "shell" {
-		fmt.Printf("%s%s\n", indent, aurora.Faint(fmt.Sprintf("started by: %s", *t.StartedBy)))
+		fmt.Printf("%s%s\n", indent, aurora.Faint("started by: "+*t.StartedBy))
 	}
+
 	fmt.Printf("%s%s\n", indent, aurora.Faint(*t.TaskArn))
 }
 
@@ -72,12 +80,12 @@ var psCmd = &cobra.Command{
 	Short:                 "show running processes",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.Pipeline && !a.IsReviewApp() {
-			checkErr(fmt.Errorf("pipelines don't directly run processes"))
+			checkErr(errors.New("pipelines don't directly run processes"))
 		}
 		tasks, err := a.DescribeTasks()
 		ui.Spinner.Stop()
@@ -115,7 +123,7 @@ var psCmd = &cobra.Command{
 
 			fmt.Printf("%s %s %s ", aurora.Faint("==="), aurora.Green(proc), aurora.White(status.Command))
 			if status.MinProcesses == status.MaxProcesses {
-				fmt.Printf("(%s)\n", aurora.Yellow(fmt.Sprintf("%d", status.MinProcesses)))
+				fmt.Printf("(%s)\n", aurora.Yellow(strconv.Itoa(status.MinProcesses)))
 			} else {
 				fmt.Printf("(%s)\n", aurora.Yellow(fmt.Sprintf("%d - %d", status.MinProcesses, status.MaxProcesses)))
 			}
@@ -125,6 +133,7 @@ var psCmd = &cobra.Command{
 				} else if tasks[j].StartedAt == nil {
 					return true
 				}
+
 				return tasks[i].StartedAt.After(*tasks[j].StartedAt)
 			})
 			for i, t := range tasks {
@@ -140,7 +149,7 @@ var psCmd = &cobra.Command{
 				} else {
 					startText = fmt.Sprintf("%s (~ %s)", t.StartedAt.Local().Format("Jan 02, 2006 15:04:05 MST"), humanize.Time(*t.StartedAt))
 				}
-				fmt.Printf("%s: %s (%s) %s %s\n", name, strings.ToLower(*t.LastStatus), aurora.Bold(aurora.Cyan(fmt.Sprintf("%.2fcpu/%smem", cpu, *t.Memory))), aurora.Yellow(fmt.Sprintf("build #%s", *buildNumber)), aurora.Faint(startText))
+				fmt.Printf("%s: %s (%s) %s %s\n", name, strings.ToLower(*t.LastStatus), aurora.Bold(aurora.Cyan(fmt.Sprintf("%.2fcpu/%smem", cpu, *t.Memory))), aurora.Yellow("build #"+*buildNumber), aurora.Faint(startText))
 				indent := strings.Repeat(" ", len(name)+2)
 				fmt.Printf("%s%s\n", indent, aurora.Faint(*t.TaskArn))
 			}
@@ -162,11 +171,11 @@ var psResizeCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Example:               "apppack -a my-app ps resize web --cpu 2 --memory 4G",
 	Args:                  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		processType := args[0]
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
-		a.LoadDeployStatus()
+		checkErr(a.LoadDeployStatus())
 		if a.IsReviewApp() {
 			_, err = a.ReviewAppExists()
 			checkErr(err)
@@ -183,7 +192,7 @@ var psResizeCmd = &cobra.Command{
 		if a.Pipeline && !a.IsReviewApp() {
 			printSuccess(fmt.Sprintf("set default size for %s processes on review apps", processType))
 		} else {
-			printSuccess(fmt.Sprintf("resizing %s", processType))
+			printSuccess("resizing " + processType)
 		}
 	},
 }
@@ -200,7 +209,7 @@ a range is provided, the process will autoscale within that range based on CPU u
 apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 processes`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		processType := args[0]
 		var minProcesses int
 		var maxProcesses int
@@ -211,7 +220,7 @@ apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 pr
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
 		if a.IsReviewApp() {
-			checkErr(fmt.Errorf("scaling is not supported for review apps"))
+			checkErr(errors.New("scaling is not supported for review apps"))
 		}
 		if len(minMaxProcs) > 1 {
 			maxProcesses, err = strconv.Atoi(minMaxProcs[1])
@@ -236,7 +245,7 @@ var psExecCmd = &cobra.Command{
 	Short:                 "run an interactive command in the remote environment",
 	Long:                  `Run an interactive command in the remote environment`,
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
@@ -258,8 +267,8 @@ func init() {
 	psCmd.AddCommand(psResizeCmd)
 	psResizeCmd.Flags().Float64Var(&scaleCPU, "cpu", 0.5, "CPU cores available for process")
 	psResizeCmd.Flags().StringVar(&scaleMemory, "memory", "1G", "memory (e.g. '2G', '512M') available for process")
-	psResizeCmd.MarkFlagRequired("cpu")
-	psResizeCmd.MarkFlagRequired("memory")
+	_ = psResizeCmd.MarkFlagRequired("cpu")
+	_ = psResizeCmd.MarkFlagRequired("memory")
 
 	psCmd.AddCommand(psScaleCmd)
 	psCmd.AddCommand(psExecCmd)

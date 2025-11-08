@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const TokenRefreshErr = "unable to refresh auth token"
+const TokenRefreshErr = "unable to refresh auth token" // #nosec G101 -- Error message, not a credential
 
 type DeviceCodeResp struct {
 	DeviceCode              string `json:"device_code"`
@@ -48,22 +48,29 @@ func (o *OauthConfig) GetDeviceCode() (*DeviceCodeResp, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	logrus.WithFields(logrus.Fields{"url": deviceCodeURL}).Debug("fetching device code")
+
 	resp, err := http.Post(deviceCodeURL, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		text, _ := io.ReadAll(resp.Body)
 
 		return nil, fmt.Errorf("%s", text)
 	}
+
 	var data DeviceCodeResp
+
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil, err
 	}
+
 	return &data, nil
 }
 
@@ -74,6 +81,7 @@ func (o *OauthConfig) GetTokenWithDeviceCode(deviceCode string) (*Tokens, error)
 	if err != nil {
 		return nil, err
 	}
+
 	return o.TokenRequest(reqBody)
 }
 
@@ -84,27 +92,35 @@ func (o *OauthConfig) RefreshTokens(tokens *Tokens) (*Tokens, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return o.TokenRequest(reqBody)
 }
 
 func (o *OauthConfig) TokenRequest(jsonData []byte) (*Tokens, error) {
 	logrus.WithFields(logrus.Fields{"url": o.TokenURL}).Debug("fetching token")
+
 	resp, err := http.Post(o.TokenURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
+
 	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New(string(contents))
 	}
+
 	var tokens Tokens
+
 	if err = json.Unmarshal(contents, &tokens); err != nil {
 		return nil, err
 	}
+
 	return &tokens, nil
 }
 
@@ -124,12 +140,13 @@ func (o *OauthConfig) PollForToken(code *DeviceCodeResp) (*Tokens, error) {
 		if json.Unmarshal([]byte(err.Error()), &authError) != nil {
 			return nil, err
 		}
+
 		if authError.Error != "authorization_pending" {
 			return nil, err
 		}
 
 		if time.Now().After(expiresAt) {
-			return nil, fmt.Errorf("device code expired -- try logging in again")
+			return nil, errors.New("device code expired -- try logging in again")
 		}
 	}
 }
@@ -139,10 +156,13 @@ func TokensFromCache() (*Tokens, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var t Tokens
+
 	if err = json.Unmarshal(contents, &t); err != nil {
 		return nil, err
 	}
+
 	return &t, nil
 }
 
@@ -151,10 +171,13 @@ func UserInfoFromCache() (*UserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var u UserInfo
+
 	if err = json.Unmarshal(contents, &u); err != nil {
 		return nil, err
 	}
+
 	return &u, nil
 }
 
@@ -173,27 +196,34 @@ func GetTokens() (*Tokens, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	expired, err := tokens.IsExpired()
 	if err != nil {
 		return nil, err
 	}
+
 	if !*expired {
 		return tokens, nil
 	}
+
 	tokens, err = Oauth.RefreshTokens(tokens)
 	if err != nil {
 		if isNetworkError(err) {
 			return nil, fmt.Errorf("network issue: %w", err)
 		}
+
 		return nil, fmt.Errorf("%s: %w", TokenRefreshErr, err)
 	}
+
 	if err = tokens.WriteToCache(); err != nil {
 		return nil, err
 	}
+
 	return tokens, nil
 }
 
 func isNetworkError(err error) bool {
 	var netErr net.Error
+
 	return errors.As(err, &netErr)
 }

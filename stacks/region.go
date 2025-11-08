@@ -13,8 +13,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-type RegionStackParameters struct {
-}
+type RegionStackParameters struct{}
 
 func (p *RegionStackParameters) Import(parameters []*cloudformation.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
@@ -63,8 +62,10 @@ func (*RegionStack) PostDelete(sess *session.Session, _ *string) error {
 	// Ignore error if the parameter doesn't exist
 	if err != nil && strings.Contains(err.Error(), "ParameterNotFound") {
 		logrus.WithError(err).Debug("dockerhub-access-token parameter does not exist")
+
 		return nil
 	}
+
 	return err
 }
 
@@ -104,5 +105,6 @@ func (*RegionStack) TemplateURL(release *string) *string {
 	if release != nil && *release != "" {
 		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
+
 	return &url
 }

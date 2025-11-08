@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -34,6 +35,7 @@ var CurrentAccountRole *auth.AdminRole
 
 func validateEmail(email string) bool {
 	pattern := regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+
 	return pattern.MatchString(email)
 }
 
@@ -41,30 +43,37 @@ func validateEmail(email string) bool {
 // it returns both the new slice and a slice of items not found
 func removeFromSlice(slice, toRemove []string) ([]string, []string) {
 	var result []string
+
 	var notFound []string
+
 	for _, r := range toRemove {
 		if !stringslice.Contains(r, slice) {
 			notFound = append(notFound, r)
 		}
 	}
+
 	for _, s := range slice {
 		if !stringslice.Contains(s, toRemove) {
 			result = append(result, s)
 		}
 	}
+
 	return result, notFound
 }
 
 func appOrPipelineStack(sess *session.Session, name string) (*stacks.AppStack, error) {
 	stack := stacks.AppStack{Pipeline: false, Parameters: &stacks.AppStackParameters{}}
 	err := stacks.LoadStackFromCloudformation(sess, &stack, &name)
+
 	if err != nil {
 		stack.Pipeline = true
+
 		err = stacks.LoadStackFromCloudformation(sess, &stack, &name)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return &stack, nil
 }
 
@@ -73,32 +82,43 @@ func adminSession(sessionDuration int) (*session.Session, error) {
 		if region != "" {
 			return session.NewSession(&aws.Config{Region: &region})
 		}
+
 		sess, err := session.NewSession()
 		if err != nil {
 			return nil, err
 		}
+
 		if *sess.Config.Region == "" {
-			return nil, fmt.Errorf("no region provided. Use the `--region` flag or set the AWS_REGION environment")
+			return nil, errors.New("no region provided. Use the `--region` flag or set the AWS_REGION environment")
 		}
+
 		return sess, nil
 	}
+
 	var sess *session.Session
+
 	var err error
 	sess, CurrentAccountRole, err = auth.AdminAWSSession(AccountIDorAlias, sessionDuration, region)
+
 	return sess, err
 }
 
 func updateAllowedUsers(sess *session.Session, stack *stacks.AppStack, name *string) error {
 	ui.StartSpinner()
+
 	if err := stacks.ModifyStack(sess, stack, name); err != nil {
 		ui.Spinner.Stop()
+
 		return err
 	}
+
 	ui.Spinner.Stop()
-	printSuccess(fmt.Sprintf("allowed users updated for %s", AppName))
+	printSuccess("allowed users updated for " + AppName)
+
 	for _, u := range stack.Parameters.AllowedUsers {
 		fmt.Printf("  • %s\n", u)
 	}
+
 	return nil
 }
 

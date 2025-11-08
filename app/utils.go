@@ -19,6 +19,7 @@ func ddbItem(sess *session.Session, primaryID, secondaryID string) (*map[string]
 	ddbSvc := dynamodb.New(sess)
 
 	logrus.WithFields(logrus.Fields{"primaryID": primaryID, "secondaryID": secondaryID}).Debug("DynamoDB GetItem")
+
 	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("apppack"),
 		Key: map[string]*dynamodb.AttributeValue{
@@ -33,25 +34,32 @@ func ddbItem(sess *session.Session, primaryID, secondaryID string) (*map[string]
 	if err != nil {
 		return nil, err
 	}
+
 	if result.Item == nil {
 		return nil, fmt.Errorf("could not find DDB item %s %s", primaryID, secondaryID)
 	}
+
 	return &result.Item, nil
 }
 
 func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error) {
 	ssmSvc := ssm.New(sess)
+
 	var parameters []*ssm.Parameter
+
 	input := ssm.GetParametersByPathInput{
 		Path:           &path,
 		WithDecryption: aws.Bool(true),
 	}
+
 	err := ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
 		logrus.WithFields(logrus.Fields{"path": *input.Path}).Debug("loading parameter by path page")
+
 		for _, parameter := range resp.Parameters {
 			if parameter == nil {
 				continue
 			}
+
 			parameters = append(parameters, parameter)
 		}
 
@@ -60,6 +68,7 @@ func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error)
 	if err != nil {
 		return nil, err
 	}
+
 	return parameters, nil
 }
 
@@ -84,6 +93,7 @@ func S3FromURL(sess *session.Session, logURL string) (*strings.Builder, error) {
 	bucket := parts[0]
 	object := strings.Join(parts[1:], "/")
 	logrus.WithFields(logrus.Fields{"bucket": bucket, "key": object}).Debug("fetching object from S3")
+
 	out, err := s3Svc.GetObject(&s3.GetObjectInput{
 		Bucket: &bucket,
 		Key:    &object,
@@ -91,11 +101,14 @@ func S3FromURL(sess *session.Session, logURL string) (*strings.Builder, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	buf := new(strings.Builder)
+
 	_, err = io.Copy(buf, out.Body)
 	if err != nil {
 		return nil, err
 	}
+
 	return buf, nil
 }
 

@@ -14,6 +14,7 @@ func containsFlagByName(flagNames []string, flag *pflag.Flag) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -29,15 +30,20 @@ func parseTag(tag string) *fieldOptions {
 	f := fieldOptions{
 		Name: parts[0],
 	}
+
 	if len(parts) == 1 {
 		return &f
 	}
+
 	transformParts := strings.Split(parts[1], ":")
 	f.Transform = transformParts[0]
+
 	if len(transformParts) == 1 {
 		return &f
 	}
+
 	f.TransformArg = transformParts[1]
+
 	return &f
 }
 
@@ -74,6 +80,7 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 			if err != nil {
 				return err
 			}
+
 			if tag.Transform == "negate" {
 				val = !val
 			}
@@ -84,11 +91,13 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 			if err != nil {
 				return err
 			}
+
 			ref.Field(i).SetInt(int64(val))
 		case reflect.Slice:
 			if field.Type.Elem().Kind() != reflect.String {
 				return fmt.Errorf("unsupported slice type %s", field.Type.Elem().Kind())
 			}
+
 			val, err := flags.GetStringSlice(tag.Name)
 			if err != nil {
 				return err
@@ -99,5 +108,6 @@ func FlagsToStruct(s interface{}, flags *pflag.FlagSet) error {
 			return fmt.Errorf("unsupported type %s", field.Type.Kind())
 		}
 	}
+
 	return nil
 }

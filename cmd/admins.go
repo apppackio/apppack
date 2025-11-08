@@ -29,25 +29,32 @@ import (
 
 func accountStack(sess *session.Session) (*stacks.AccountStack, error) {
 	stack := &stacks.AccountStack{Parameters: &stacks.AccountStackParameters{}}
+
 	err := stacks.LoadStackFromCloudformation(sess, stack, new(string))
 	if err != nil {
 		return nil, err
 	}
+
 	return stack, nil
 }
 
 func updateAdministrators(sess *session.Session, stack *stacks.AccountStack, name *string) error {
 	sort.Strings(stack.Parameters.Administrators)
 	ui.StartSpinner()
+
 	if err := stacks.ModifyStack(sess, stack, name); err != nil {
 		ui.Spinner.Stop()
+
 		return err
 	}
+
 	ui.Spinner.Stop()
 	printSuccess("Account administrators updated")
+
 	for _, u := range stack.Parameters.Administrators {
 		fmt.Printf("  • %s\n", u)
 	}
+
 	return nil
 }
 
@@ -95,7 +102,7 @@ var adminsAddCmd = &cobra.Command{
 		stack.Parameters.Administrators, dupes = stringslice.Deduplicate(stack.Parameters.Administrators)
 		ui.Spinner.Stop()
 		for _, d := range dupes {
-			printWarning(fmt.Sprintf("%s is already an administrator", d))
+			printWarning(d + " is already an administrator")
 		}
 		checkErr(updateAdministrators(sess, stack, &AppName))
 	},
@@ -124,7 +131,7 @@ Updates the application Cloudformation stack to remove an administrators.`,
 		stack.Parameters.Administrators, notFound = removeFromSlice(stack.Parameters.Administrators, args)
 		ui.Spinner.Stop()
 		for _, n := range notFound {
-			printWarning(fmt.Sprintf("%s is not an administrator", n))
+			printWarning(n + " is not an administrator")
 		}
 		checkErr(updateAdministrators(sess, stack, &AppName))
 	},

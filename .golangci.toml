@@ -5,18 +5,6 @@ sort-results = true
 enable-all = true
 
 disable = [
-    # deprecated linters
-    "ifshort",
-    "deadcode",
-    "maligned",
-    "exhaustivestruct",
-    "interfacer",
-    "varcheck",
-    "golint",
-    "nosnakecase",
-    "scopelint",
-    "structcheck",
-
     # don't have control over serialized key names
     "tagliatelle",
     # It's a CLI. We use globals
@@ -27,11 +15,15 @@ disable = [
     "exhaustruct",
     # don't care
     "godot",
+    # deprecated, replaced by usetesting
+    "tenv",
+    # no configuration = blocks all imports (not useful)
+    "depguard",
 
     # assess later
     "wrapcheck",
     "varnamelen",
-    "gomnd",
+    "mnd",
     "lll",
     "cyclop",
     "prealloc",

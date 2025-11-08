@@ -64,7 +64,9 @@ func (a *AccountStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	if err != nil {
 		return err
 	}
+
 	sort.Strings(a.Parameters.Administrators)
+
 	return nil
 }
 
@@ -109,5 +111,6 @@ func (*AccountStack) TemplateURL(release *string) *string {
 	if release != nil && *release != "" {
 		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
+
 	return &url
 }

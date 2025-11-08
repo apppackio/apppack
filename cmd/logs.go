@@ -51,39 +51,47 @@ func newBlade(session *session.Session) *blade.Blade {
 	setField("cwl", cloudwatchlogs.New(session))
 	setField("config", &sawConfig)
 	setField("output", &sawOutputConfig)
+
 	return &b
 }
 
 // TimeValForSaw converts/validates an AppPack time flag to what Saw expects
 func TimeValForSaw(val string) (string, error) {
 	relativeTimeUnits := []string{"s", "m", "h"}
+
 	if val == "" || val == "now" {
 		return val, nil
 	}
 	// convert days to hours
 	if strings.HasSuffix(val, "d") {
 		val = strings.TrimSuffix(val, "d")
+
 		days, err := strconv.Atoi(val)
 		if err != nil {
 			return "", err
 		}
+
 		val = strconv.Itoa(days*24) + "h"
 	}
 	// add `-` to relative time like saw expects
 	for _, unit := range relativeTimeUnits {
 		if strings.HasSuffix(val, unit) {
 			val = strings.TrimSuffix(val, unit)
+
 			_, err := strconv.Atoi(val)
 			if err != nil {
 				return "", err
 			}
+
 			return fmt.Sprintf("-%s%s", val, unit), nil
 		}
 	}
+
 	_, err := time.Parse(time.RFC3339, val)
 	if err != nil {
 		return "", err
 	}
+
 	return val, nil
 }
 
@@ -94,7 +102,7 @@ var logsCmd = &cobra.Command{
 	Use:                   "logs",
 	Short:                 "access application logs from Cloudwatch Logs",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		var duration int
 		if followLogs {
@@ -138,7 +146,7 @@ var logsOpenCmd = &cobra.Command{
 	Short:                 "open logs in the AWS web console",
 	Long:                  `Generates a presigned URL and opens a web browser to Cloudwatch Insights in the AWS web console`,
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		checkErr(a.LoadSettings())

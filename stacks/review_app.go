@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
@@ -48,57 +47,75 @@ func (p *ReviewAppStackParameters) SetParametersFromPipeline(stack *cloudformati
 	if err != nil {
 		return err
 	}
+
 	p.DatabaseAddon = *databaseLambda != "~"
+
 	redisUserGroupAssociationLambdaArn, err := bridge.GetStackOutput(stack.Outputs, "RedisUserGroupAssociationLambdaArn")
 	if err != nil {
 		return err
 	}
+
 	p.RedisAddon = *redisUserGroupAssociationLambdaArn != "~"
+
 	privateS3Bucket, err := bridge.GetStackOutput(stack.Outputs, "PrivateS3Bucket")
 	if err != nil {
 		return err
 	}
+
 	p.PrivateS3BucketEnabled = *privateS3Bucket != "~"
+
 	publicS3Bucket, err := bridge.GetStackOutput(stack.Outputs, "PublicS3Bucket")
 	if err != nil {
 		return err
 	}
+
 	p.PublicS3BucketEnabled = *publicS3Bucket != "~"
+
 	ses, err := bridge.GetStackOutput(stack.Outputs, "SesDomain")
 	if err != nil {
 		return err
 	}
+
 	p.SesDomain = *ses != "~"
+
 	sqs, err := bridge.GetStackOutput(stack.Outputs, "SQSQueueEnabled")
 	if err != nil {
 		return err
 	}
+
 	p.SQSQueueEnabled = *sqs == Enabled
 
 	customTaskPolicyArn, err := bridge.GetStackOutput(stack.Outputs, "CustomTaskPolicyArn")
 	if err != nil {
 		return err
 	}
+
 	p.CustomTaskPolicy = *customTaskPolicyArn != "~"
+
 	return nil
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
 func (p *ReviewAppStackParameters) SetInternalFields(sess *session.Session, name *string) error {
 	ui.StartSpinner()
+
 	pipeline, pr := splitReviewAppName(name)
+
 	pipelineStack, err := bridge.GetStack(sess, fmt.Sprintf(PipelineStackNameTmpl, pipeline))
 	if err != nil {
 		return err
 	}
+
 	p.PipelineStackName = *pipelineStack.StackName
 	if err := p.SetParametersFromPipeline(pipelineStack); err != nil {
 		return err
 	}
-	rand.Seed(time.Now().UnixNano())                        // skipcq: GO-S1033
-	p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // skipcq: GSC-G404
+
+	p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // #nosec G404 -- Non-crypto random for LB priority assignment
 	p.Name = pr
+
 	ui.Spinner.Stop()
+
 	return nil
 }
 
@@ -141,6 +158,7 @@ func (*ReviewAppStack) AskQuestions(_ *session.Session) error {
 
 func (*ReviewAppStack) StackName(name *string) *string {
 	stackName := fmt.Sprintf(reviewAppStackNameTmpl, strings.ReplaceAll(*name, ":", ""))
+
 	return &stackName
 }
 
@@ -150,9 +168,10 @@ func (*ReviewAppStack) StackType() string {
 
 func (*ReviewAppStack) Tags(name *string) []*cloudformation.Tag {
 	pipeline, pr := splitReviewAppName(name)
+
 	return []*cloudformation.Tag{
 		{Key: aws.String("apppack:appName"), Value: &pipeline},
-		{Key: aws.String("apppack:reviewApp"), Value: aws.String(fmt.Sprintf("pr%s", pr))},
+		{Key: aws.String("apppack:reviewApp"), Value: aws.String("pr" + pr)},
 		// {Key: aws.String("apppack:cluster"), Value: aws.String("...")},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}
@@ -169,6 +188,7 @@ func (a *ReviewAppStack) CfnRole(sess *session.Session) (*string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return bridge.GetStackOutput(stack.Outputs, "ReviewAppCfnRoleArn")
 }
 
@@ -177,5 +197,6 @@ func (*ReviewAppStack) TemplateURL(release *string) *string {
 	if release != nil && *release != "" {
 		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
+
 	return &url
 }

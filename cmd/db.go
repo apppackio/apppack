@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,25 +40,30 @@ import (
 var dbOutputFile string
 
 func downloadFile(sess *session.Session, objInput *s3.GetObjectInput, outputFile string) error {
-	ui.Spinner.Suffix = fmt.Sprintf(" downloading %s", outputFile)
+	ui.Spinner.Suffix = " downloading " + outputFile
 	downloader := s3manager.NewDownloader(sess)
+
 	file, err := os.Create(outputFile)
 	if err != nil {
 		return err
 	}
+
 	_, err = downloader.Download(file, objInput)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func uploadFile(sess *session.Session, uploadInput *s3manager.UploadInput) error {
 	uploader := s3manager.NewUploader(sess)
+
 	_, err := uploader.Upload(uploadInput)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -73,13 +79,13 @@ var dbShellCmd = &cobra.Command{
 	Use:                   "shell",
 	Short:                 "open an interactive shell prompt to the app database",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		family, exec, err := a.DBShellTaskInfo()
 		checkErr(err)
-		StartInteractiveShell(a, family, aws.String(fmt.Sprintf("entrypoint.sh %s", *exec)), []string{"/bin/sh", "-c"}, &ecs.TaskOverride{})
+		StartInteractiveShell(a, family, aws.String("entrypoint.sh "+*exec), []string{"/bin/sh", "-c"}, &ecs.TaskOverride{})
 	},
 }
 
@@ -89,7 +95,7 @@ var dbDumpCmd = &cobra.Command{
 	Short:                 "dump the database to a local file",
 	Long:                  "Dump the database to `<app-name>.dump` in the current directory",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		// db dump load can be really slow, let people open longer sessions to wait for it to finish
 		app, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
@@ -105,38 +111,41 @@ var dbDumpCmd = &cobra.Command{
 		task, getObjectInput, err := app.DBDump()
 		checkErr(err)
 		ui.Spinner.Stop()
-		fmt.Println(aurora.Faint(fmt.Sprintf("starting task %s", *task.TaskArn)))
+		fmt.Println(aurora.Faint("starting task " + *task.TaskArn))
 		ui.StartSpinner()
 		ui.Spinner.Suffix = " dumping database"
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
 		if *exitCode != 0 {
-			taskLogs(app.Session, task)
+			_ = taskLogs(app.Session, task)
 			printError("database dump failed")
+
 			return
 		}
 		if dbOutputFile == "" {
 			if strings.HasSuffix(*getObjectInput.Key, ".sql.gz") {
-				dbOutputFile = fmt.Sprintf("%s.sql.gz", app.Name)
+				dbOutputFile = app.Name + ".sql.gz"
 			} else {
-				dbOutputFile = fmt.Sprintf("%s.dump", app.Name)
+				dbOutputFile = app.Name + ".dump"
 			}
 		}
 		err = downloadFile(app.Session, getObjectInput, dbOutputFile)
 		checkErr(err)
 		ui.Spinner.Stop()
-		printSuccess(fmt.Sprintf("Dumped database to %s", dbOutputFile))
+		printSuccess("Dumped database to " + dbOutputFile)
 	},
 }
 
 func taskLogs(sess *session.Session, task *ecs.Task) error {
 	ecsSvc := ecs.New(sess)
+
 	taskDefn, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: task.TaskDefinitionArn,
 	})
 	if err != nil {
 		return err
 	}
+
 	updatedTaskResp, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
 		Cluster: task.ClusterArn,
 		Tasks:   []*string{task.TaskArn},
@@ -144,6 +153,7 @@ func taskLogs(sess *session.Session, task *ecs.Task) error {
 	if err != nil {
 		return err
 	}
+
 	task = updatedTaskResp.Tasks[0]
 
 	containerDefn := taskDefn.TaskDefinition.ContainerDefinitions[0]
@@ -160,7 +170,9 @@ func taskLogs(sess *session.Session, task *ecs.Task) error {
 				taskID),
 		),
 	}}
+
 	newBlade(sess).GetEvents()
+
 	return nil
 }
 
@@ -168,11 +180,13 @@ var postgresLoadJobs int
 
 func flagIsSet(flags *pflag.FlagSet, name string) bool {
 	found := false
+
 	flags.Visit(func(flag *pflag.Flag) {
 		if flag.Name == name {
 			found = true
 		}
 	})
+
 	return found
 }
 
@@ -196,10 +210,10 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		isPostgres := strings.Contains(app.Settings.DBUtils.Engine, "postgres")
 		// exit if we're not using postgres and --jobs is set
 		if !isPostgres && flagIsSet(cmd.Flags(), "jobs") {
-			checkErr(fmt.Errorf("the --jobs/-j flag is only supported for Postgres databases"))
+			checkErr(errors.New("the --jobs/-j flag is only supported for Postgres databases"))
 		}
 		if postgresLoadJobs < 1 {
-			checkErr(fmt.Errorf("the --jobs/-j flag must be set to a positive integer"))
+			checkErr(errors.New("the --jobs/-j flag must be set to a positive integer"))
 		}
 		family, err := app.DBDumpLoadFamily()
 		checkErr(err)
@@ -214,7 +228,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			getObjectInput, err := app.DBDumpLocation("uploads/")
 			checkErr(err)
 			remoteFile = fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)
-			ui.Spinner.Suffix = fmt.Sprintf(" uploading %s", args[0])
+			ui.Spinner.Suffix = " uploading " + args[0]
 			err = uploadFile(app.Session, &s3manager.UploadInput{
 				Bucket: getObjectInput.Bucket,
 				Key:    getObjectInput.Key,
@@ -240,7 +254,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			true,
 		)
 		ui.Spinner.Stop()
-		fmt.Println(aurora.Faint(fmt.Sprintf("starting task %s", *task.TaskArn)))
+		fmt.Println(aurora.Faint("starting task " + *task.TaskArn))
 		ui.StartSpinner()
 		ui.Spinner.Suffix = " loading database"
 		checkErr(err)
@@ -249,13 +263,13 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		ui.Spinner.Stop()
 		// pg_restore can have inconsequential errors... don't assume failure, but notify user
 		if *exitCode != 0 && isPostgres {
-			taskLogs(app.Session, task)
+			_ = taskLogs(app.Session, task)
 			printWarning("check pg_restore output")
 		} else if *exitCode != 0 {
-			taskLogs(app.Session, task)
+			_ = taskLogs(app.Session, task)
 			printError("database load failed")
 		} else {
-			printSuccess(fmt.Sprintf("loaded database dump from %s", args[0]))
+			printSuccess("loaded database dump from " + args[0])
 		}
 	},
 }

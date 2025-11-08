@@ -30,23 +30,30 @@ import (
 func UpgradeStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 	ui.StartSpinner()
 	checkErr(stacks.LoadStackFromCloudformation(sess, stack, &name))
+
 	var prefix string
 	if createChangeSet {
 		prefix = "Creating change set for"
 	} else {
 		prefix = "Upgrading"
 	}
+
 	ui.Spinner.Stop()
 	fmt.Print(aurora.Green(fmt.Sprintf("🔆 %s %s", prefix, stack.StackType())).String())
+
 	if name != "" {
 		fmt.Print(aurora.Green(fmt.Sprintf(" `%s`", name)).String())
 	}
-	fmt.Print(aurora.Green(fmt.Sprintf(" in %s", *sess.Config.Region)).String())
+
+	fmt.Print(aurora.Green(" in " + *sess.Config.Region).String())
+
 	if CurrentAccountRole != nil {
-		fmt.Print(aurora.Green(fmt.Sprintf(" on account %s", CurrentAccountRole.GetAccountName())).String())
+		fmt.Print(aurora.Green(" on account " + CurrentAccountRole.GetAccountName()).String())
 	}
+
 	fmt.Println()
 	ui.StartSpinner()
+
 	if createChangeSet {
 		url, err := stacks.UpdateStackChangeset(sess, stack, &name, &release)
 		checkErr(err)
@@ -55,10 +62,12 @@ func UpgradeStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 	} else {
 		checkErr(stacks.UpdateStack(sess, stack, &name, &release))
 		ui.Spinner.Stop()
+
 		var nameSuccessMsg string
 		if name != "" {
-			nameSuccessMsg = fmt.Sprintf(" for %s", name)
+			nameSuccessMsg = " for " + name
 		}
+
 		ui.PrintSuccess(fmt.Sprintf("updated %s stack%s", stack.StackType(), nameSuccessMsg))
 	}
 }

@@ -27,7 +27,7 @@ var versionCmd = &cobra.Command{
 	Use:                   "version",
 	Short:                 "show the version of the apppack command",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		if version.Environment != "production" {
 			fmt.Println(version.Environment)
 		} else {

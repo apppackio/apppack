@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -39,6 +40,7 @@ func dedupe(s []string) []string {
 			}
 		}
 	}
+
 	return s
 }
 
@@ -48,6 +50,7 @@ func isPreviousRDSGeneration(instanceClass *string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -55,21 +58,25 @@ func auroraEngineName(engine *string) (string, error) {
 	if *engine == "mysql" {
 		return "aurora-mysql", nil
 	}
+
 	if *engine == "postgres" {
 		return "aurora-postgresql", nil
 	}
-	return "", fmt.Errorf("unrecognized databae engine. valid options are 'mysql' or 'postgres'")
+
+	return "", errors.New("unrecognized databae engine. valid options are 'mysql' or 'postgres'")
 }
 
 func standardEngineName(engine *string) (string, error) {
 	if *engine == "mysql" || *engine == "postgres" {
 		return *engine, nil
 	}
-	return "", fmt.Errorf("unrecognized databae engine. valid options are 'mysql' or 'postgres'")
+
+	return "", errors.New("unrecognized databae engine. valid options are 'mysql' or 'postgres'")
 }
 
 func getLatestRdsVersion(sess *session.Session, engine *string) (string, error) {
 	rdsSvc := rds.New(sess)
+
 	resp, err := rdsSvc.DescribeDBEngineVersions(&rds.DescribeDBEngineVersionsInput{Engine: engine})
 	if err != nil {
 		return "", err
@@ -80,11 +87,13 @@ func getLatestRdsVersion(sess *session.Session, engine *string) (string, error) 
 			return version, nil
 		}
 	}
+
 	return "", fmt.Errorf("no compatible version found for engine %s", *engine)
 }
 
 func listRDSInstanceClasses(sess *session.Session, engine, version *string) ([]string, error) {
 	rdsSvc := rds.New(sess)
+
 	var instanceClassResults []*rds.OrderableDBInstanceOption
 
 	err := rdsSvc.DescribeOrderableDBInstanceOptionsPages(&rds.DescribeOrderableDBInstanceOptionsInput{
@@ -104,14 +113,18 @@ func listRDSInstanceClasses(sess *session.Session, engine, version *string) ([]s
 	if err != nil {
 		return nil, err
 	}
+
 	var instanceClasses []string
+
 	for _, opt := range instanceClassResults {
 		if !isPreviousRDSGeneration(opt.DBInstanceClass) && *opt.DBInstanceClass != "db.serverless" {
 			instanceClasses = append(instanceClasses, *opt.DBInstanceClass)
 		}
 	}
+
 	instanceClasses = dedupe(instanceClasses)
 	bridge.SortInstanceClasses(instanceClasses)
+
 	return instanceClasses, nil
 }
 
@@ -122,7 +135,7 @@ type DatabaseStackParameters struct {
 	Version             string
 	OneTimePassword     string
 	InstanceClass       string `flag:"instance-class"`
-	MultiAZ             bool   `flag:"multi-az" cfnbool:"yesno"`
+	MultiAZ             bool   `cfnbool:"yesno"              flag:"multi-az"`
 	AllocatedStorage    int    `flag:"allocated-storage"`
 	MaxAllocatedStorage int    `flag:"max-allocated-storage"`
 }
@@ -144,13 +157,16 @@ func (p *DatabaseStackParameters) SetInternalFields(sess *session.Session, name 
 			return err
 		}
 	}
+
 	p.OneTimePassword, err = GeneratePassword()
 	if err != nil {
 		return err
 	}
+
 	if p.Name == "" {
 		p.Name = *name
 	}
+
 	return nil
 }
 
@@ -193,19 +209,23 @@ func (a *DatabaseStack) SetDeletionProtection(sess *session.Session, value bool)
 		}
 
 		logrus.WithFields(logrus.Fields{"identifier": DBID, "value": value}).Debug("setting RDS deletion protection")
+
 		if *DBType == "instance" {
 			_, err := rdsSvc.ModifyDBInstance(&input)
 
 			return err
 		}
+
 		if *DBType == "cluster" {
 			_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
 				DBClusterIdentifier: input.DBInstanceIdentifier,
 				DeletionProtection:  input.DeletionProtection,
 				ApplyImmediately:    input.ApplyImmediately,
 			})
+
 			return err
 		}
+
 		return fmt.Errorf("unexpected DB type %s", *DBType)
 	}
 	// if we get an error trying to set deletion protection, return it
@@ -215,18 +235,22 @@ func (a *DatabaseStack) SetDeletionProtection(sess *session.Session, value bool)
 		logrus.WithFields(
 			logrus.Fields{"error": err1},
 		).Debug("unable to lookup Cloudformation outputs to set RDS deletion protection")
+
 		if value {
 			return err1
 		}
 	}
+
 	if err2 != nil {
 		logrus.WithFields(
 			logrus.Fields{"error": err2},
 		).Debug("unable to lookup Cloudformation outputs to set RDS deletion protection")
+
 		if value {
 			return err2
 		}
 	}
+
 	return nil
 }
 
@@ -253,8 +277,11 @@ func (a *DatabaseStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 
 func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 	var questions []*ui.QuestionExtra
+
 	var err error
+
 	var aurora bool
+
 	if a.Stack == nil {
 		err = AskForCluster(
 			sess,
@@ -299,27 +326,35 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 		if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 			return err
 		}
+
 		ui.StartSpinner()
+
 		if aurora {
 			a.Parameters.Engine, err = auroraEngineName(&a.Parameters.Engine)
 		} else {
 			a.Parameters.Engine, err = standardEngineName(&a.Parameters.Engine)
 		}
+
 		if err != nil {
 			return err
 		}
+
 		a.Parameters.Version, err = getLatestRdsVersion(sess, &a.Parameters.Engine)
 		if err != nil {
 			return err
 		}
+
 		questions = []*ui.QuestionExtra{}
 	}
+
 	ui.StartSpinner()
-	ui.Spinner.Suffix = fmt.Sprintf(" retrieving instance classes for %s", a.Parameters.Engine)
+	ui.Spinner.Suffix = " retrieving instance classes for " + a.Parameters.Engine
+
 	instanceClasses, err := listRDSInstanceClasses(sess, &a.Parameters.Engine, &a.Parameters.Version)
 	if err != nil {
 		return err
 	}
+
 	ui.Spinner.Stop()
 	ui.Spinner.Suffix = ""
 	questions = append(questions, []*ui.QuestionExtra{
@@ -354,6 +389,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 			},
 		},
 	}...)
+
 	return ui.AskQuestions(questions, a.Parameters)
 }
 
@@ -386,5 +422,6 @@ func (*DatabaseStack) TemplateURL(release *string) *string {
 	if release != nil && *release != "" {
 		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
+
 	return &url
 }

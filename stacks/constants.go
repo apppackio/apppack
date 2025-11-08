@@ -14,7 +14,7 @@ const (
 	PipelineStackNameTmpl       = "apppack-pipeline-%s"
 	redisFormationURL           = "https://s3.amazonaws.com/apppack-cloudformations/latest/redis.json"
 	redisStackNameTmpl          = "apppack-redis-%s"
-	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token"
+	redisAuthTokenParameterTmpl = "/apppack/redis/%s/auth-token" // #nosec G101 -- Parameter path template, not a credential
 	regionFormationURL          = "https://s3.amazonaws.com/apppack-cloudformations/latest/region.json"
 	regionStackNameTmpl         = "apppack-region-%s"
 	reviewAppFormationURL       = "https://s3.amazonaws.com/apppack-cloudformations/latest/review-app.json"

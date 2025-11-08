@@ -42,6 +42,7 @@ func TestConfigVariablesToJSONUnmanaged(t *testing.T) {
 		{Name: "FOO", Value: "bar", Managed: false},
 		{Name: "BAZ", Value: "qux", Managed: true},
 	})
+
 	js, err := c.ToJSONUnmanaged()
 	if err != nil {
 		t.Error(err)

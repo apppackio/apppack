@@ -23,8 +23,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
-
 	sessionManagerPluginSession "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
+	// Imported for side effects: registers port and shell session types with session manager plugin
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/portsession"
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/shellsession"
 	"github.com/sirupsen/logrus"
@@ -39,9 +39,9 @@ var (
 
 var ShellBackgroundCommand = []string{
 	strings.Join([]string{
-		"STOP=$(($(date +%s)+" + fmt.Sprintf("%d", maxLifetime) + "))",
+		"STOP=$(($(date +%s)+" + strconv.Itoa(maxLifetime) + "))",
 		// Give user time to connect
-		"sleep " + fmt.Sprintf("%d", waitForConnect),
+		"sleep " + strconv.Itoa(waitForConnect),
 		// As long as a user has a shell open, this task will keep running
 		"while true",
 		"do test -z \"$(pgrep -f ssm-session-worker\\ ecs-execute-command)\" && exit",
@@ -62,7 +62,7 @@ type App struct {
 	ECSConfig             *ECSConfig
 	DeployStatus          *DeployStatus
 	PendingDeployStatuses []*DeployStatus
-	AWS                   apppackaws.AWSInterface
+	AWS                   apppackaws.Interface
 }
 
 // ReviewApp is a representation of a AppPack review app
@@ -132,11 +132,13 @@ func (d *DeployStatus) FindProcess(name string) (*Process, error) {
 	if d == nil {
 		return nil, fmt.Errorf("process '%s' not found", name)
 	}
+
 	for _, p := range d.Processes {
 		if p.Name == name {
 			return &p, nil
 		}
 	}
+
 	return nil, fmt.Errorf("process '%s' not found", name)
 }
 
@@ -267,6 +269,7 @@ func (a *App) IsFargate() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return *a.ECSConfig.RunTaskArgs.LaunchType == "FARGATE", nil
 }
 
@@ -275,6 +278,7 @@ func (a *App) ValidateECSTaskSize(size ECSSizeConfiguration) error {
 	if err != nil {
 		return err
 	}
+
 	if fargate {
 		logrus.Debug("fargate task detected")
 
@@ -286,24 +290,27 @@ func (a *App) ValidateECSTaskSize(size ECSSizeConfiguration) error {
 	} else if size.CPU >= 128 && size.CPU <= 10240 {
 		return nil
 	}
-	return fmt.Errorf("unsupported cpu/memory configuration -- see https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html")
+
+	return errors.New("unsupported cpu/memory configuration -- see https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html")
 }
 
 func (a *App) ReviewAppSettings() (*Settings, error) {
 	if !a.IsReviewApp() {
-		return nil, fmt.Errorf("only review apps have review app settings")
+		return nil, errors.New("only review apps have review app settings")
 	}
 
 	Item, err := ddbItem(a.Session, fmt.Sprintf("APP#%s:%s", a.Name, *a.ReviewApp), "settings")
 	if err != nil {
 		return nil, err
 	}
+
 	i := settingsItem{}
 
 	err = dynamodbattribute.UnmarshalMap(*Item, &i)
 	if err != nil {
 		return nil, err
 	}
+
 	return &i.Settings, nil
 }
 
@@ -312,6 +319,7 @@ func (a *App) ServiceName(service string) string {
 	if a.IsReviewApp() {
 		return fmt.Sprintf("%s-pr%s-%s", a.Name, *a.ReviewApp, service)
 	}
+
 	return fmt.Sprintf("%s-%s", a.Name, service)
 }
 
@@ -327,6 +335,7 @@ func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, []*ecs.Tag, erro
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return task.TaskDefinition, task.Tags, nil
 }
 
@@ -336,15 +345,19 @@ func buildSystemFromTaskTags(tags []*ecs.Tag) *string {
 			return tag.Value
 		}
 	}
+
 	return aws.String("")
 }
 
 func (a *App) ShellTaskFamily() (*string, *string, error) {
 	taskDefn, tags, err := a.TaskDefinition("shell")
+
 	buildSystem := buildSystemFromTaskTags(tags)
+
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return taskDefn.Family, buildSystem, nil
 }
 
@@ -352,15 +365,18 @@ func (a *App) ShellTaskFamily() (*string, *string, error) {
 // pipelines need to do this for their review apps so it is passed in as an argument
 func (a *App) URL(reviewApp *string) (*string, error) {
 	var settings *Settings
+
 	var err error
 
 	switch {
 	case reviewApp != nil:
 		a.ReviewApp = reviewApp
+
 		settings, err = a.ReviewAppSettings()
 		if err != nil {
 			return nil, err
 		}
+
 		a.ReviewApp = nil
 	case a.IsReviewApp():
 		settings, err = a.ReviewAppSettings()
@@ -372,23 +388,28 @@ func (a *App) URL(reviewApp *string) (*string, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		settings = a.Settings
 	}
 
-	return aws.String(fmt.Sprintf("https://%s", settings.Domains[0])), nil
+	return aws.String("https://" + settings.Domains[0]), nil
 }
 
 func (a *App) GetReviewApps() ([]*ReviewApp, error) {
 	if !a.Pipeline {
 		return nil, fmt.Errorf("%s is not a pipeline and cannot have review apps", a.Name)
 	}
+
 	parameters, err := SsmParameters(a.Session, fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/", a.Name))
 	if err != nil {
 		return nil, err
 	}
+
 	var reviewApps []*ReviewApp
+
 	for _, parameter := range parameters {
 		r := ReviewApp{}
+
 		err = json.Unmarshal([]byte(*parameter.Value), &r)
 		if err != nil {
 			return nil, err
@@ -396,6 +417,7 @@ func (a *App) GetReviewApps() ([]*ReviewApp, error) {
 
 		reviewApps = append(reviewApps, &r)
 	}
+
 	return reviewApps, nil
 }
 
@@ -403,28 +425,33 @@ func (a *App) ReviewAppExists() (bool, error) {
 	if !a.Pipeline {
 		return false, fmt.Errorf("%s is not a pipeline and cannot have review apps", a.Name)
 	}
+
 	parameter, err := SsmParameter(a.Session, fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s", a.Name, *a.ReviewApp))
 	if err != nil {
 		return false, fmt.Errorf("ReviewApp named %s:%s does not exist", a.Name, *a.ReviewApp)
 	}
+
 	r := ReviewApp{}
+
 	err = json.Unmarshal([]byte(*parameter.Value), &r)
 	if err != nil {
 		return false, err
 	}
+
 	if r.Status != "created" {
-		return false, fmt.Errorf("ReviewApp isn't created")
+		return false, errors.New("ReviewApp isn't created")
 	}
+
 	return true, nil
 }
 
 func (a *App) ddbItem(key string) (*map[string]*dynamodb.AttributeValue, error) {
 	if !a.IsReviewApp() {
-		return ddbItem(a.Session, fmt.Sprintf("APP#%s", a.Name), key)
+		return ddbItem(a.Session, "APP#"+a.Name, key)
 	}
 	// TODO: move DEPLOYSTATUS to standard review app location
 	if strings.HasPrefix(key, "CONFIG") || key == "settings" || strings.HasPrefix(key, "DEPLOYSTATUS") {
-		return ddbItem(a.Session, fmt.Sprintf("APP#%s", a.Name), key)
+		return ddbItem(a.Session, "APP#"+a.Name, key)
 	}
 	// review apps are at APP#{appname}:{pr}
 	return ddbItem(a.Session, fmt.Sprintf("APP#%s:%s", a.Name, *a.ReviewApp), key)
@@ -435,18 +462,23 @@ func (a *App) LoadECSConfig() error {
 	if a.ECSConfig != nil {
 		return nil
 	}
+
 	Item, err := a.ddbItem("CONFIG#ecs")
 	if err != nil {
 		return err
 	}
+
 	i := ecsConfigItem{}
+
 	err = dynamodbattribute.NewDecoder(func(d *dynamodbattribute.Decoder) {
 		d.TagKey = "locationName"
 	}).Decode(&dynamodb.AttributeValue{M: *Item}, &i)
 	if err != nil {
 		return err
 	}
+
 	a.ECSConfig = &i.ECSConfig
+
 	return nil
 }
 
@@ -456,19 +488,23 @@ func (a *App) GetDeployStatus(buildARN string) (*DeployStatus, error) {
 	if a.IsReviewApp() {
 		key = key + "#" + *a.ReviewApp
 	}
+
 	if buildARN != "" {
 		key = key + "#" + buildARN
 	}
+
 	Item, err := a.ddbItem(key)
 	if err != nil {
 		return nil, err
 	}
+
 	i := deployStatusItem{}
 
 	err = dynamodbattribute.UnmarshalMap(*Item, &i)
 	if err != nil {
 		return nil, err
 	}
+
 	return &i.DeployStatus, nil
 }
 
@@ -478,10 +514,13 @@ func (a *App) GetServices() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var services []string
+
 	for _, process := range a.DeployStatus.Processes {
 		services = append(services, process.Name)
 	}
+
 	return services, nil
 }
 
@@ -490,11 +529,14 @@ func (a *App) LoadDeployStatus() error {
 	if a.DeployStatus != nil {
 		return nil
 	}
+
 	deployStatus, err := a.GetDeployStatus("")
 	if err != nil {
 		return err
 	}
+
 	a.DeployStatus = deployStatus
+
 	return nil
 }
 
@@ -503,37 +545,45 @@ func (a *App) LoadSettings() error {
 	if a.Settings != nil {
 		return nil
 	}
+
 	Item, err := a.ddbItem("settings")
 	if err != nil {
 		return err
 	}
+
 	i := settingsItem{}
 
 	err = dynamodbattribute.UnmarshalMap(*Item, &i)
 	if err != nil {
 		return err
 	}
+
 	a.Settings = &i.Settings
+
 	return nil
 }
 
 // StartTask start a new task on ECS
 func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.TaskOverride, fargate bool) (*ecs.Task, error) {
 	ecsSvc := ecs.New(a.Session)
+
 	err := a.LoadSettings()
 	if err != nil {
 		return nil, err
 	}
+
 	err = a.LoadECSConfig()
 	if err != nil {
 		return nil, err
 	}
+
 	taskDefn, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: taskFamily,
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	var runTaskArgs ecs.RunTaskInput
 	if fargate {
 		runTaskArgs = a.ECSConfig.RunTaskArgsFargate
@@ -545,13 +595,16 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 	for i := range command {
 		cmd = append(cmd, &command[i])
 	}
+
 	email, err := auth.WhoAmI()
 	if err != nil {
 		return nil, err
 	}
-	startedBy := fmt.Sprintf("apppack-cli/shell/%s", *email)
+
+	startedBy := "apppack-cli/shell/" + *email
 	runTaskArgs.TaskDefinition = taskDefn.TaskDefinition.TaskDefinitionArn
 	runTaskArgs.StartedBy = &startedBy
+
 	memory := 0
 	if taskOverride.Memory != nil {
 		memory, err = strconv.Atoi(*taskOverride.Memory)
@@ -559,22 +612,29 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 			return nil, err
 		}
 	}
+
 	if len(taskOverride.ContainerOverrides) == 0 {
 		taskOverride.ContainerOverrides = []*ecs.ContainerOverride{{}}
 	}
+
 	taskOverride.ContainerOverrides[0].Name = taskDefn.TaskDefinition.ContainerDefinitions[0].Name
 	taskOverride.ContainerOverrides[0].Command = cmd
+
 	if memory > 0 {
 		taskOverride.ContainerOverrides[0].Memory = aws.Int64(int64(memory))
 	}
+
 	runTaskArgs.Overrides = taskOverride
+
 	ecsTaskOutput, err := ecsSvc.RunTask(&runTaskArgs)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(ecsTaskOutput.Failures) > 0 {
 		return nil, fmt.Errorf("RunTask failure: %v", ecsTaskOutput.Failures)
 	}
+
 	return ecsTaskOutput.Tasks[0], nil
 }
 
@@ -595,23 +655,28 @@ func (a *App) WaitForTaskStopped(task *ecs.Task) (*int64, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	taskDesc, err := ecsSvc.DescribeTasks(&input)
 	if err != nil {
 		return nil, err
 	}
+
 	task = taskDesc.Tasks[0]
 	if *task.StopCode != "EssentialContainerExited" {
 		return nil, fmt.Errorf("task %s failed %s: %s", *task.TaskArn, *task.StopCode, *task.StoppedReason)
 	}
+
 	return task.Containers[0].ExitCode, nil
 }
 
 func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, error) {
 	ecsSvc := ecs.New(a.Session)
+
 	err := a.LoadSettings()
 	if err != nil {
 		return nil, err
 	}
+
 	execCmdInput := ecs.ExecuteCommandInput{
 		Cluster:     task.ClusterArn,
 		Command:     &shellCmd,
@@ -624,8 +689,11 @@ func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, e
 	// poll for availability
 	for retries > 0 {
 		time.Sleep(2 * time.Second)
+
 		out, err := ecsSvc.ExecuteCommand(&execCmdInput)
+
 		var aerr awserr.Error
+
 		if err == nil {
 			return out.Session, nil
 		} else if errors.As(err, &aerr) {
@@ -635,14 +703,17 @@ func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, e
 		} else {
 			return nil, err
 		}
+
 		retries--
 	}
-	return nil, fmt.Errorf("timeout attempting to connect to SSM Agent")
+
+	return nil, errors.New("timeout attempting to connect to SSM Agent")
 }
 
 // ConnectToEcsSession open a SSM Session to the Docker host and exec into container
 func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
 	region := a.Session.Config.Region
+
 	arg1, err := json.Marshal(ecsSession)
 	if err != nil {
 		return err
@@ -660,21 +731,24 @@ func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
 	signal.Ignore(syscall.SIGINT)
 	defer signal.Reset(syscall.SIGINT)
 	sessionManagerPluginSession.ValidateInputAndStartSession(args, os.Stdout)
+
 	return nil
 }
 
 // StartBuild starts a new CodeBuild run
 func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 	codebuildSvc := codebuild.New(a.Session)
+
 	err := a.LoadSettings()
 	if err != nil {
 		return nil, err
 	}
+
 	buildInput := codebuild.StartBuildInput{
 		ProjectName: &a.Settings.CodebuildProject.Name,
 	}
 	if a.IsReviewApp() {
-		buildInput.SourceVersion = aws.String(fmt.Sprintf("pr/%s", *a.ReviewApp))
+		buildInput.SourceVersion = aws.String("pr/" + *a.ReviewApp)
 		if createReviewApp {
 			buildInput.EnvironmentVariablesOverride = []*codebuild.EnvironmentVariable{
 				{
@@ -685,18 +759,23 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 			}
 		}
 	}
+
 	build, err := codebuildSvc.StartBuild(&buildInput)
+
 	return build.Build, err
 }
 
 // ListBuilds lists recent CodeBuild runs
 func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 	ddbSvc := dynamodb.New(a.Session)
-	primaryID := fmt.Sprintf("APP#%s", a.Name)
+
+	primaryID := "APP#" + a.Name
 	if a.IsReviewApp() {
 		primaryID = fmt.Sprintf("%s:%s", primaryID, *a.ReviewApp)
 	}
+
 	logrus.WithFields(logrus.Fields{"count": count}).Debug("fetching build list from DDB")
+
 	ddbResp, err := ddbSvc.Query(&dynamodb.QueryInput{
 		TableName:              aws.String("apppack"),
 		KeyConditionExpression: aws.String("primary_id = :id1  AND begins_with(secondary_id,:id2)"),
@@ -711,17 +790,22 @@ func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if ddbResp.Items == nil {
-		return nil, fmt.Errorf("could not find any builds")
+		return nil, errors.New("could not find any builds")
 	}
+
 	var i []BuildStatus
+
 	err = dynamodbattribute.UnmarshalListOfMaps(ddbResp.Items, &i)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(i) == 0 {
-		return nil, fmt.Errorf("could not find any builds")
+		return nil, errors.New("could not find any builds")
 	}
+
 	return i, nil
 }
 
@@ -729,25 +813,30 @@ func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 // if buildNumber is -1, the most recent build will be retrieved
 func (a *App) GetBuildStatus(buildNumber int) (*BuildStatus, error) {
 	var build BuildStatus
+
 	if buildNumber == -1 {
 		builds, err := a.RecentBuilds(1)
 		if err != nil {
 			return nil, err
 		}
+
 		build = builds[0]
 	} else {
 		item, err := a.ddbItem(fmt.Sprintf("BUILD#%010d", buildNumber))
 		if err != nil {
 			return nil, err
 		}
+
 		err = dynamodbattribute.UnmarshalMap(*item, &build)
 		if err != nil {
 			return nil, err
 		}
+
 		if len(build.Build.Arns) == 0 {
-			return nil, fmt.Errorf("build has not started yet -- try again in a few seconds")
+			return nil, errors.New("build has not started yet -- try again in a few seconds")
 		}
 	}
+
 	return &build, nil
 }
 
@@ -758,16 +847,19 @@ func (a *App) ConfigPrefix() string {
 	} else if a.Pipeline {
 		return fmt.Sprintf("/apppack/pipelines/%s/config/", a.Name)
 	}
+
 	return fmt.Sprintf("/apppack/apps/%s/config/", a.Name)
 }
 
 // GetConfig returns a list of config parameters for the app
 func (a *App) GetConfig() (ConfigVariables, error) {
 	prefix := a.ConfigPrefix()
+
 	parameters, err := SsmParameters(a.Session, prefix)
 	if err != nil {
 		return nil, err
 	}
+
 	return NewConfigVariables(parameters), nil
 }
 
@@ -779,6 +871,7 @@ func (a *App) GetConfigWithManaged() (ConfigVariables, error) {
 	}
 
 	ssmSvc := ssm.New(a.Session)
+
 	err = configVars.Transform(func(v *ConfigVariable) error {
 		return v.LoadManaged(ssmSvc.ListTagsForResource)
 	})
@@ -799,6 +892,7 @@ func (a *App) SetConfig(key, value string, overwrite bool) error {
 		Overwrite: &overwrite,
 		Value:     &value,
 	})
+
 	return err
 }
 
@@ -813,11 +907,13 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ecsSvc := ecs.New(a.Session)
 	chunkedTaskARNs := [][]*string{{}}
 	input := ecs.ListTasksInput{
 		Cluster: &a.Settings.Cluster.ARN,
 	}
+
 	logrus.WithFields(logrus.Fields{"cluster": a.Settings.Cluster.ARN}).Debug("fetching task list")
 
 	// handle chunking logic
@@ -825,6 +921,7 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 		if len(chunkedTaskARNs[len(chunkedTaskARNs)-1]) >= maxEcsDescribeTaskCount {
 			chunkedTaskARNs = append(chunkedTaskARNs, []*string{})
 		}
+
 		chunkedTaskARNs[len(chunkedTaskARNs)-1] = append(chunkedTaskARNs[len(chunkedTaskARNs)-1], taskARN)
 	}
 
@@ -833,6 +930,7 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 			if taskARN == nil {
 				continue
 			}
+
 			addTaskARNToChunk(taskARN)
 		}
 
@@ -841,9 +939,12 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var describedTasks []*ecs.Task
+
 	for i := range chunkedTaskARNs {
 		logrus.WithFields(logrus.Fields{"count": len(chunkedTaskARNs[i])}).Debug("fetching task descriptions")
+
 		describeTasksOutput, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
 			Tasks:   chunkedTaskARNs[i],
 			Cluster: &a.Settings.Cluster.ARN,
@@ -852,22 +953,28 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		describedTasks = append(describedTasks, describeTasksOutput.Tasks...)
 	}
+
 	var appTasks []*ecs.Task
+
 	for _, task := range describedTasks {
 		isApp := false
 		isReviewApp := false
+
 		for _, t := range task.Tags {
 			if *t.Key == "apppack:appName" && *t.Value == a.Name {
 				isApp = true
 			}
+
 			if a.IsReviewApp() {
-				if *t.Key == "apppack:reviewApp" && *t.Value == fmt.Sprintf("pr/%s", *a.ReviewApp) {
+				if *t.Key == "apppack:reviewApp" && *t.Value == "pr/"+*a.ReviewApp {
 					isReviewApp = true
 				}
 			}
 		}
+
 		if isApp {
 			if a.IsReviewApp() {
 				if isReviewApp {
@@ -878,6 +985,7 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 			}
 		}
 	}
+
 	return appTasks, nil
 }
 
@@ -887,7 +995,9 @@ func (a *App) GetECSEvents(service string) ([]*ecs.ServiceEvent, error) {
 	if err := a.LoadSettings(); err != nil {
 		return nil, err
 	}
+
 	logrus.WithFields(logrus.Fields{"service": service}).Debug("fetching service events")
+
 	serviceStatus, err := ecsSvc.DescribeServices(&ecs.DescribeServicesInput{
 		Cluster:  &a.Settings.Cluster.ARN,
 		Services: aws.StringSlice([]string{a.ServiceName(service)}),
@@ -895,29 +1005,36 @@ func (a *App) GetECSEvents(service string) ([]*ecs.ServiceEvent, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(serviceStatus.Services) == 0 {
 		return nil, fmt.Errorf("could not find service %s", service)
 	}
+
 	events := serviceStatus.Services[0].Events
 	// reverse events so the oldest is first
 	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
 		events[i], events[j] = events[j], events[i]
 	}
+
 	return events, nil
 }
 
 func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 	currentTime := time.Now()
+
 	username, err := auth.WhoAmI()
 	if err != nil {
 		return nil, err
 	}
+
 	if err = a.LoadSettings(); err != nil {
 		return nil, err
 	}
+
 	if a.IsReviewApp() {
 		prefix = fmt.Sprintf("%spr%s/", prefix, *a.ReviewApp)
 	}
+
 	var extension string
 	if strings.Contains(a.Settings.DBUtils.Engine, "mysql") {
 		extension = "sql.gz"
@@ -926,10 +1043,12 @@ func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 	} else {
 		return nil, fmt.Errorf("unknown database engine %s", a.Settings.DBUtils.Engine)
 	}
+
 	input := s3.GetObjectInput{
 		Key:    aws.String(fmt.Sprintf("%s%s-%s.%s", prefix, currentTime.Format("20060102150405"), *username, extension)),
 		Bucket: &a.Settings.DBUtils.S3Bucket,
 	}
+
 	return &input, nil
 }
 
@@ -938,6 +1057,7 @@ func (a *App) DBDumpLoadFamily() (*string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return taskDefn.Family, nil
 }
 
@@ -946,10 +1066,12 @@ func (a *App) DBDump() (*ecs.Task, *s3.GetObjectInput, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
 	family, err := a.DBDumpLoadFamily()
 	if err != nil {
 		return nil, nil, err
 	}
+
 	task, err := a.StartTask(
 		family,
 		[]string{"dump-to-s3.sh", fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)},
@@ -959,6 +1081,7 @@ func (a *App) DBDump() (*ecs.Task, *s3.GetObjectInput, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return task, getObjectInput, nil
 }
 
@@ -970,12 +1093,14 @@ func (a *App) DBShellTaskInfo() (*string, *string, error) {
 	}
 
 	var exec string
+
 	if strings.Contains(a.Settings.DBUtils.Engine, "mysql") {
 		database := a.Name
 		if a.IsReviewApp() {
 			database = fmt.Sprintf("%s-pr%s", database, *a.ReviewApp)
 		}
-		exec = fmt.Sprintf("mysql --database=%s", database)
+
+		exec = "mysql --database=" + database
 	} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
 		exec = "psql"
 	} else {
@@ -990,6 +1115,7 @@ func (a *App) DBShellTaskInfo() (*string, *string, error) {
 	} else {
 		family = a.Settings.DBUtils.ShellTaskFamily
 	}
+
 	return &family, &exec, nil
 }
 
@@ -1012,6 +1138,7 @@ func (a *App) ScaleProcess(processType string, minProcessCount, maxProcessCount 
 // if it is not yet set, the defaults from ECSConfig will be used
 func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessCount, cpu, memory *int) error {
 	ssmSvc := ssm.New(a.Session)
+
 	var parameterName string
 	if a.IsReviewApp() {
 		parameterName = fmt.Sprintf("/apppack/pipelines/%s/review-apps/pr/%s/scaling", a.Name, *a.ReviewApp)
@@ -1020,31 +1147,39 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 	} else {
 		parameterName = fmt.Sprintf("/apppack/apps/%s/scaling", a.Name)
 	}
+
 	if a.Pipeline && maxProcessCount != nil && minProcessCount != nil && *maxProcessCount != *minProcessCount {
-		return fmt.Errorf("auto-scaling is not supported on pipelines")
+		return errors.New("auto-scaling is not supported on pipelines")
 	}
+
 	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
 		Name: &parameterName,
 	})
+
 	var scaling map[string]*Scaling
+
 	if err != nil {
 		scaling = map[string]*Scaling{}
 	} else if err = json.Unmarshal([]byte(*parameterOutput.Parameter.Value), &scaling); err != nil {
 		return err
 	}
+
 	_, ok := scaling[processType]
 	if !ok {
 		if err = a.LoadECSConfig(); err != nil {
 			return err
 		}
+
 		cpu, err := strconv.Atoi(*a.ECSConfig.TaskDefinitionArgs.Cpu)
 		if err != nil {
 			return err
 		}
+
 		mem, err := strconv.Atoi(*a.ECSConfig.TaskDefinitionArgs.Memory)
 		if err != nil {
 			return err
 		}
+
 		scaling[processType] = &Scaling{
 			CPU:          cpu,
 			Memory:       mem,
@@ -1052,22 +1187,28 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 			MaxProcesses: 1,
 		}
 	}
+
 	if minProcessCount != nil {
 		scaling[processType].MinProcesses = *minProcessCount
 	}
+
 	if maxProcessCount != nil {
 		scaling[processType].MaxProcesses = *maxProcessCount
 	}
+
 	if cpu != nil {
 		scaling[processType].CPU = *cpu
 	}
+
 	if memory != nil {
 		scaling[processType].Memory = *memory
 	}
+
 	scalingJSON, err := json.Marshal(scaling)
 	if err != nil {
 		return err
 	}
+
 	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Type:      aws.String("String"),
@@ -1077,6 +1218,7 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -1091,7 +1233,9 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	} else {
 		reviewApp = nil
 	}
+
 	var sess *session.Session
+
 	app := App{
 		Name:      name,
 		ReviewApp: reviewApp,
@@ -1101,6 +1245,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 		sess = session.Must(session.NewSession())
 		app.Session = sess
 		app.AWS = apppackaws.New(sess)
+
 		err := app.LoadSettings()
 		if err != nil {
 			return nil, err
@@ -1112,12 +1257,15 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		app.Pipeline = appRole.Pipeline
 		app.Session = sess
 		app.AWS = apppackaws.New(sess)
 	}
+
 	if !app.Pipeline && app.ReviewApp != nil {
 		return nil, fmt.Errorf("%s is a standard app and can't have review apps", name)
 	}
+
 	return &app, nil
 }

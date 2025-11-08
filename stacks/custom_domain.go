@@ -24,6 +24,7 @@ var (
 // appList gets a list of app names from DynamoDB
 func appList(sess *session.Session) ([]string, error) {
 	ddbSvc := dynamodb.New(sess)
+
 	result, err := ddbSvc.Query(&dynamodb.QueryInput{
 		TableName:              aws.String("apppack"),
 		KeyConditionExpression: aws.String("primary_id = :id1"),
@@ -34,20 +35,26 @@ func appList(sess *session.Session) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	type clusterItem struct {
 		SecondaryID string `json:"secondary_id"`
 	}
+
 	var clusterItems []clusterItem
+
 	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &clusterItems)
 	if err != nil {
 		return nil, err
 	}
+
 	var appNames []string
+
 	for _, item := range clusterItems {
 		if strings.Contains(item.SecondaryID, "#APP#") {
 			appNames = append(appNames, strings.Split(item.SecondaryID, "#")[2])
 		}
 	}
+
 	return appNames, nil
 }
 
@@ -57,6 +64,7 @@ func appForDomain(sess *session.Session, domain string) (*string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	for _, appName := range appNames {
 		a := app.App{
 			Name:    appName,
@@ -65,6 +73,7 @@ func appForDomain(sess *session.Session, domain string) (*string, error) {
 		if err = a.LoadSettings(); err != nil {
 			return nil, err
 		}
+
 		for _, appDomain := range a.Settings.Domains {
 			if appDomain == domain {
 				return &appName, nil
@@ -77,17 +86,20 @@ func appForDomain(sess *session.Session, domain string) (*string, error) {
 
 func clusterStackForApp(sess *session.Session, appName string) (*string, error) {
 	cfnSvc := cloudformation.New(sess)
+
 	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: aws.String(fmt.Sprintf(AppStackNameTmpl, appName)),
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	for _, parameter := range stacks.Stacks[0].Parameters {
 		if *parameter.ParameterKey == "ClusterStackName" {
 			return parameter.ParameterValue, nil
 		}
 	}
+
 	return nil, fmt.Errorf("app stack %s missing ClusterStackName parameter", appName)
 }
 
@@ -114,43 +126,54 @@ func (p *CustomDomainStackParameters) ToCloudFormationParameters() ([]*cloudform
 // SetInternalFields updates fields that aren't exposed to the user
 func (p *CustomDomainStackParameters) SetInternalFields(sess *session.Session, name *string) error {
 	ui.StartSpinner()
+
 	p.PrimaryDomain = *name
 	ui.Spinner.Suffix = " looking up app details"
+
 	appName, err := appForDomain(sess, *name)
 	if err != nil {
 		return err
 	}
+
 	clusterStackName, err := clusterStackForApp(sess, *appName)
 	if err != nil {
 		return err
 	}
+
 	p.ClusterStackName = *clusterStackName
 	ui.Spinner.Suffix = " verifying hosted zone"
+
 	zone, err := bridge.HostedZoneForDomain(sess, *name)
 	if err != nil {
 		return err
 	}
+
 	if err = checkHostedZone(sess, zone); err != nil {
 		return err
 	}
+
 	altDomainParams := []*string{&p.AltDomain1, &p.AltDomain2, &p.AltDomain3, &p.AltDomain4, &p.AltDomain5}
 	for _, altDomain := range altDomainParams {
 		if *altDomain == "" {
 			continue
 		}
+
 		altZone, err := bridge.HostedZoneForDomain(sess, *altDomain)
 		if err != nil {
 			return err
 		}
+
 		if altZone.Id != zone.Id {
 			return ErrAltDomainNotInSameHostedZone
 		}
 	}
+
 	p.HostedZone = strings.Split(*zone.Id, "/")[2]
 
 	ui.Spinner.Stop()
 	// `*` is not allowed in certificate names
 	p.CertificateName = strings.ReplaceAll(*name, "*", "wildcard")
+
 	return nil
 }
 
@@ -195,6 +218,7 @@ func (*CustomDomainStack) StackName(name *string) *string {
 	slug := strings.ReplaceAll(strings.TrimSuffix(*name, "."), ".", "-")
 	slug = strings.ReplaceAll(slug, "*", "wildcard")
 	stackName := fmt.Sprintf(customDomainStackNameTmpl, slug)
+
 	return &stackName
 }
 
@@ -222,5 +246,6 @@ func (*CustomDomainStack) TemplateURL(release *string) *string {
 	if release != nil && *release != "" {
 		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
+
 	return &url
 }

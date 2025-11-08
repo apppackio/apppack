@@ -47,6 +47,7 @@ func Login() *auth.UserInfo {
 	checkErr(err)
 	fmt.Println("Your verification code is", deviceCode.UserCode)
 	fmt.Println("Finish authentication in your web browser...")
+
 	if !noBrowser {
 		err = browser.OpenURL(deviceCode.VerificationURIComplete)
 		if err != nil {
@@ -55,6 +56,7 @@ func Login() *auth.UserInfo {
 			noBrowser = true
 		}
 	}
+
 	if noBrowser {
 		fmt.Println("URL:", aurora.White(deviceCode.VerificationURIComplete).String())
 		fmt.Println()
@@ -69,6 +71,7 @@ func Login() *auth.UserInfo {
 	userInfo, err := tokens.GetUserInfo()
 	checkErr(err)
 	checkErr(userInfo.WriteToCache())
+
 	return userInfo
 }
 
@@ -77,7 +80,7 @@ var loginCmd = &cobra.Command{
 	Use:                   "login",
 	Short:                 "login to AppPack.io on this device",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		userInfo := Login()
 		printSuccess(fmt.Sprintf("Logged in as %s", aurora.Bold(userInfo.Email)))
 	},
@@ -88,7 +91,7 @@ var logoutCmd = &cobra.Command{
 	Use:                   "logout",
 	Short:                 "logout of AppPack.io on this device",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		err := auth.Logout()
 		checkErr(err)
 		printSuccess("Logged out.")
@@ -100,7 +103,7 @@ var whoAmICmd = &cobra.Command{
 	Use:                   "whoami",
 	Short:                 "show login information for the current user",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		email, err := auth.WhoAmI()
 		checkErr(err)
 		printSuccess(fmt.Sprintf("You are currently logged in as %s", aurora.Bold(*email)))
@@ -112,7 +115,7 @@ var appsCmd = &cobra.Command{
 	Use:                   "apps",
 	Short:                 "list the apps you have access to",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		apps, err := auth.AppList()
 		checkErr(err)
@@ -165,13 +168,14 @@ var accountsCmd = &cobra.Command{
 	Use:                   "accounts",
 	Short:                 "list the accounts you have administrator access to",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		admins, err := auth.AdminList()
 		checkErr(err)
 		ui.Spinner.Stop()
 		if len(admins) == 0 {
 			printWarning("you are not an administrator on any accounts")
+
 			return
 		}
 		ui.PrintHeaderln("Accounts")

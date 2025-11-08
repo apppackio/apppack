@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -40,6 +41,7 @@ func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
 	status := ""
 	for status != "RUNNING" {
 		time.Sleep(2 * time.Second)
+
 		out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
 			Cluster: &a.Settings.Cluster.ARN,
 			Tasks:   []*string{task.TaskArn},
@@ -47,14 +49,18 @@ func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
 		if err != nil {
 			return err
 		}
+
 		status = *out.Tasks[0].LastStatus
 		if status == "DEACTIVATING" || status == "STOPPING" || status == "DEPROVISIONING" || status == "STOPPED" {
 			return fmt.Errorf("task is not running -- last status: %s", status)
 		}
+
 		caser := cases.Title(language.English)
-		ui.Spinner.Suffix = fmt.Sprintf(" ECS task status: %s", caser.String(strings.ToLower(status)))
+		ui.Spinner.Suffix = " ECS task status: " + caser.String(strings.ToLower(status))
 	}
+
 	ui.Spinner.Suffix = ""
+
 	return nil
 }
 
@@ -67,15 +73,17 @@ func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskCommand
 	)
 	checkErr(err)
 	ui.Spinner.Stop()
-	fmt.Println(aurora.Faint(fmt.Sprintf("starting %s", *task.TaskArn)))
+	fmt.Println(aurora.Faint("starting " + *task.TaskArn))
 	ui.StartSpinner()
 	checkErr(WaitForTaskRunning(a, task))
 	ui.Spinner.Stop()
 	fmt.Println(aurora.Faint("waiting for SSM Agent to startup"))
 	ui.StartSpinner()
+
 	ecsSession, err := a.CreateEcsSession(task, *shellCmd)
 	checkErr(err)
 	ui.Spinner.Stop()
+
 	err = a.ConnectToEcsSession(ecsSession)
 	checkErr(err)
 }
@@ -89,36 +97,44 @@ var (
 
 func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfiguration, error) {
 	var memoryInMB int
+
 	var memoryInGB int
+
 	var err error
+
 	fargateCPU := int(math.RoundToEven(cpu * 1024))
+
 	if strings.HasSuffix(memory, "G") {
 		memoryInGB, err = strconv.Atoi(memory[:len(memory)-1])
 		if err != nil {
 			return nil, err
 		}
+
 		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInGB * 1024}, nil
 	} else if strings.HasSuffix(memory, "GB") {
 		memoryInGB, err = strconv.Atoi(memory[:len(memory)-2])
 		if err != nil {
 			return nil, err
 		}
+
 		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInGB * 1024}, nil
 	} else if strings.HasSuffix(memory, "M") {
 		memoryInMB, err = strconv.Atoi(memory[:len(memory)-1])
 		if err != nil {
 			return nil, err
 		}
+
 		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInMB}, nil
 	} else if strings.HasSuffix(memory, "MB") {
 		memoryInMB, err = strconv.Atoi(memory[:len(memory)-2])
 		if err != nil {
 			return nil, err
 		}
+
 		return &app.ECSSizeConfiguration{CPU: fargateCPU, Memory: memoryInMB}, nil
-	} else {
-		return nil, fmt.Errorf("unexpected memory format -- it must end in 'M' (for MB) or 'G' (for GB)")
 	}
+
+	return nil, errors.New("unexpected memory format -- it must end in 'M' (for MB) or 'G' (for GB)")
 }
 
 func interactiveCmd(a *app.App, cmd string) {
@@ -127,26 +143,32 @@ func interactiveCmd(a *app.App, cmd string) {
 	size, err := humanToECSSizeConfiguration(shellCPU, shellMem)
 	checkErr(err)
 	checkErr(a.ValidateECSTaskSize(*size))
+
 	isBuildpack := *buildSystem == "buildpacks" || *buildSystem == ""
 	exec := cmd
+
 	if isBuildpack && !shellRoot {
 		exec = fmt.Sprintf("su --preserve-environment --pty --command 'export HOME=$(getent passwd heroku | cut -d: -f6); exec /cnb/lifecycle/launcher %s' heroku", cmd)
 	} else if !isBuildpack && shellRoot {
-		checkErr(fmt.Errorf("--root is only supported on the buildpack build system"))
+		checkErr(errors.New("--root is only supported on the buildpack build system"))
 	}
 
 	if shellLive {
 		tasks, err := a.DescribeTasks()
 		checkErr(err)
+
 		var taskList []string
+
 		for _, t := range tasks {
 			tag, err := getTag(t.Tags, "apppack:processType")
 			if err != nil {
 				continue
 			}
+
 			arnParts := strings.Split(*t.TaskArn, "/")
 			taskList = append(taskList, fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1]))
 		}
+
 		answers := make(map[string]interface{})
 		questions := []*survey.Question{
 			{
@@ -157,28 +179,35 @@ func interactiveCmd(a *app.App, cmd string) {
 				},
 			},
 		}
+
 		ui.Spinner.Stop()
+
 		if err := survey.Ask(questions, &answers); err != nil {
 			checkErr(err)
 		}
+
 		ui.StartSpinner()
+
 		ecsSession, err := a.CreateEcsSession(
 			tasks[answers["task"].(survey.OptionAnswer).Index],
 			exec,
 		)
 		checkErr(err)
 		ui.Spinner.Stop()
+
 		err = a.ConnectToEcsSession(ecsSession)
 		checkErr(err)
 	}
+
 	var taskCommandPrefix []string
 	if !isBuildpack {
 		// buildpacks already wrap commands in `bash -c`
 		taskCommandPrefix = []string{"/bin/sh", "-c"}
 	}
+
 	StartInteractiveShell(a, taskFamily, &exec, taskCommandPrefix, &ecs.TaskOverride{
-		Cpu:    aws.String(fmt.Sprintf("%d", size.CPU)),
-		Memory: aws.String(fmt.Sprintf("%d", size.Memory)),
+		Cpu:    aws.String(strconv.Itoa(size.CPU)),
+		Memory: aws.String(strconv.Itoa(size.Memory)),
 	})
 }
 
@@ -188,7 +217,7 @@ var shellCmd = &cobra.Command{
 	Short:                 "open an interactive shell in the remote environment",
 	Long:                  `Open an interactive shell in the remote environment`,
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)

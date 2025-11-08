@@ -22,6 +22,7 @@ type ConfigVariable struct {
 // LoadManaged loads the Managed value for the ConfigVariable from SSM tags
 func (v *ConfigVariable) LoadManaged(ssmListTagsForResource func(*ssm.ListTagsForResourceInput) (*ssm.ListTagsForResourceOutput, error)) error {
 	logrus.WithFields(logrus.Fields{"parameter": v.parameterName}).Debug("loading parameter tag")
+
 	resp, err := ssmListTagsForResource(&ssm.ListTagsForResourceInput{
 		ResourceId:   &v.parameterName,
 		ResourceType: aws.String(ssm.ResourceTypeForTaggingParameter),

@@ -12,12 +12,13 @@ import (
 // ValidateEventbridgeCron validates a cron schedule rule
 func (a *AWS) ValidateEventbridgeCron(rule string) error {
 	eventSvc := eventbridge.New(a.session)
-	ruleName := fmt.Sprintf("apppack-validate-%s", uuid.New().String())
+	ruleName := "apppack-validate-" + uuid.New().String()
 	_, err := eventSvc.PutRule(&eventbridge.PutRuleInput{
 		Name:               &ruleName,
 		ScheduleExpression: aws.String(fmt.Sprintf("cron(%s)", rule)),
 		State:              aws.String("DISABLED"),
 	})
+
 	if err == nil {
 		_, err2 := eventSvc.DeleteRule(&eventbridge.DeleteRuleInput{
 			Name: &ruleName,
@@ -26,5 +27,6 @@ func (a *AWS) ValidateEventbridgeCron(rule string) error {
 			logrus.WithError(err2).Debug("failed to delete temporary validation rule")
 		}
 	}
+
 	return err
 }

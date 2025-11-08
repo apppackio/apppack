@@ -43,6 +43,7 @@ func stackName(stack *cloudformation.Stack) (*stackHumanize, error) {
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("invalid stack name %s", *stack.StackName)
 	}
+
 	humanStack := stackHumanize{
 		Name: strings.Join(parts[2:], "-"),
 		Type: parts[1],
@@ -52,12 +53,15 @@ func stackName(stack *cloudformation.Stack) (*stackHumanize, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		stackParts := strings.Split(*clusterStack, "-")
 		if len(stackParts) < 3 {
 			return nil, fmt.Errorf("invalid cluster stack name %s", *clusterStack)
 		}
+
 		humanStack.Cluster = strings.Join(stackParts[2:], "-")
 	}
+
 	return &humanStack, nil
 }
 
@@ -93,7 +97,7 @@ var stacksCmd = &cobra.Command{
 				currentGroup = humanStack.Type
 				fmt.Println()
 				caser := cases.Title(language.English)
-				ui.PrintHeaderln(caser.String(fmt.Sprintf("%s Stacks", currentGroup)))
+				ui.PrintHeaderln(caser.String(currentGroup + " Stacks"))
 				if humanStack.Cluster != "" {
 					fmt.Fprintf(w, "%s\t%s\t\n", aurora.Faint("Name"), aurora.Faint("Cluster"))
 				} else {

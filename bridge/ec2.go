@@ -25,8 +25,11 @@ var classOrder = []struct {
 // instanceNameWeight creates a sortable string for instance classes
 func instanceNameWeight(name string) string {
 	parts := strings.Split(name, ".")
+
 	var class string
+
 	var size string
+
 	// remove db. or cache. prefix
 	if len(parts) == 3 {
 		class = parts[1]
@@ -38,6 +41,7 @@ func instanceNameWeight(name string) string {
 	// extract multiplier (8xlarge) from size
 	re := regexp.MustCompile(`\d+`)
 	multiplier := re.FindString(size)
+
 	if multiplier != "" {
 		num, err := strconv.Atoi(multiplier)
 		if err != nil {
@@ -52,6 +56,7 @@ func instanceNameWeight(name string) string {
 			return fmt.Sprintf("%s.%05d", class, o.Weight)
 		}
 	}
+
 	return name
 }
 

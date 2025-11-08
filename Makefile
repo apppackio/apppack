@@ -2,6 +2,7 @@
 fmt:
 	gofumpt -w .
 	gci write . --skip-generated
+	golangci-lint run --fix
 
 .PHONY: test
 test:

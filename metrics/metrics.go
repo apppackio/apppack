@@ -71,11 +71,11 @@ func (m *ServiceUtilizationMetrics) GetOptions() *MetricOptions { return m.Optio
 func (m *ServiceUtilizationMetrics) GetService() string { return m.Service }
 
 func (m *ServiceUtilizationMetrics) Title() string {
-	return fmt.Sprintf("%s utilization (%%)", m.Service)
+	return m.Service + " utilization (%%)"
 }
 
 func (m *ServiceUtilizationMetrics) ShortName() string {
-	return fmt.Sprintf("%s util", m.Service)
+	return m.Service + " util"
 }
 
 func (*ServiceUtilizationMetrics) MetricColor(name *string) cell.Color {
@@ -160,8 +160,9 @@ func (*ResponseTimeMetrics) Title() string { return "response time (seconds)" }
 func (m *ResponseTimeMetrics) ShortName() string {
 	name := "resp time"
 	if m.Stat == "Average" {
-		return fmt.Sprintf("%s (avg)", name)
+		return name + " (avg)"
 	}
+
 	return fmt.Sprintf("%s (%s)", name, m.Stat)
 }
 
@@ -212,9 +213,9 @@ func (m *StatusCodeMetrics) GetOptions() *MetricOptions { return m.Options }
 
 func (*StatusCodeMetrics) GetService() string { return "web" }
 
-func (m *StatusCodeMetrics) Title() string { return fmt.Sprintf("%s responses (count)", m.Code) }
+func (m *StatusCodeMetrics) Title() string { return m.Code + " responses (count)" }
 
-func (m *StatusCodeMetrics) ShortName() string { return fmt.Sprintf("%s responses", m.Code) }
+func (m *StatusCodeMetrics) ShortName() string { return m.Code + " responses" }
 
 func (*StatusCodeMetrics) MetricColor(name *string) cell.Color {
 	switch *name {
@@ -238,7 +239,7 @@ func (*StatusCodeMetrics) LineChartOptions() []linechart.Option {
 func (m *StatusCodeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
 	metricDataQueries := []*cloudwatch.MetricDataQuery{
 		{
-			Id: aws.String(fmt.Sprintf("mm%s", m.Code)),
+			Id: aws.String("mm" + m.Code),
 			MetricStat: &cloudwatch.MetricStat{
 				Metric: &cloudwatch.Metric{
 					Namespace:  aws.String("AWS/ApplicationELB"),
@@ -259,6 +260,7 @@ func (m *StatusCodeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
 			},
 		},
 	}
+
 	return metricDataQueries
 }
 
@@ -266,6 +268,7 @@ func FetchMetrics(metrics AppMetrics) (*cloudwatch.GetMetricDataOutput, error) {
 	app := metrics.GetApp()
 	options := metrics.GetOptions()
 	cloudwatchSvc := cloudwatch.New(app.Session)
+
 	return cloudwatchSvc.GetMetricData(&cloudwatch.GetMetricDataInput{
 		StartTime:         aws.Time(options.TimeframeStart()),
 		EndTime:           aws.Time(time.Now()),

@@ -1,19 +1,21 @@
 package cmd_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/apppackio/apppack/cmd"
 )
 
 func TestLogFlagConversionForSaw(t *testing.T) {
+	t.Parallel()
+
 	// valid, just need the "-" prefix
 	for _, v := range []string{"1h", "50m", "3600s"} {
 		val, err := cmd.TimeValForSaw(v)
-		if val != fmt.Sprintf("-%s", v) {
+		if val != "-"+v {
 			t.Errorf("Expected -%s, got %s", v, val)
 		}
+
 		if err != nil {
 			t.Errorf("Expected no error, got %s", err)
 		}
@@ -24,6 +26,7 @@ func TestLogFlagConversionForSaw(t *testing.T) {
 	if val != "-48h" {
 		t.Errorf("Expected -48h, got %s", val)
 	}
+
 	if err != nil {
 		t.Errorf("Expected no error, got %s", err)
 	}
@@ -42,6 +45,7 @@ func TestLogFlagConversionForSaw(t *testing.T) {
 		if val != v {
 			t.Errorf("Expected %s, got %s", v, val)
 		}
+
 		if err != nil {
 			t.Errorf("Expected no error, got %s", err)
 		}
