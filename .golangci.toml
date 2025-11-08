@@ -1,4 +1,5 @@
-go = "1.22"
+version = "2"
+go = "1.25.4"
 sort-results = true
 
 [linters]
@@ -15,8 +16,6 @@ disable = [
     "exhaustruct",
     # don't care
     "godot",
-    # deprecated, replaced by usetesting
-    "tenv",
     # no configuration = blocks all imports (not useful)
     "depguard",
 
