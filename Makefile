@@ -1,8 +1,6 @@
 .PHONY: fmt
 fmt:
-	gofumpt -w .
-	gci write . --skip-generated
-	golangci-lint run --fix
+	golangci-lint fmt
 
 .PHONY: test
 test:

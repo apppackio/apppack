@@ -28,6 +28,9 @@ disable = [
     "prealloc",
 ]
 
+[formatters]
+enable = ["gofumpt", "gci"]
+
 
 [issues]
 exclude = [
