@@ -768,8 +768,10 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuildetypes.Build, error) {
 	}
 
 	build, err := codebuildSvc.StartBuild(context.Background(), &buildInput)
-
-	return build.Build, err
+	if err != nil {
+		return nil, err
+	}
+	return build.Build, nil
 }
 
 // ListBuilds lists recent CodeBuild runs
