@@ -5,8 +5,8 @@ import (
 
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/stacks"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 )
 
 func TestStructToCloudformationParameters(t *testing.T) {
@@ -64,7 +64,7 @@ func TestStructToCloudformationParameters(t *testing.T) {
 func TestCloudformationParametersToStruct(t *testing.T) {
 	t.Parallel()
 
-	cfnParams := []*cloudformation.Parameter{
+	cfnParams := []types.Parameter{
 		{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test")},
 		{ParameterKey: aws.String("SQSQueueEnabled"), ParameterValue: aws.String(stacks.Enabled)},
 		{ParameterKey: aws.String("LoadBalancerRulePriority"), ParameterValue: aws.String("20")},

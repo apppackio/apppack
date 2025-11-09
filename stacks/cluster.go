@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sort"
@@ -11,11 +12,12 @@ import (
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/elbv2"
-	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
+	"github.com/aws/aws-sdk-go-v2/service/route53"
+	route53types "github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -60,8 +62,8 @@ func splitSubnet(cidrStr string) ([]string, []string, error) {
 }
 
 // checkHostedZone prompts the user if the NS records for the domain don't match what AWS expects
-func checkHostedZone(sess *session.Session, zone *route53.HostedZone) error {
-	r53svc := route53.New(sess)
+func checkHostedZone(cfg aws.Config, zone *route53types.HostedZone) error {
+	r53svc := route53.NewFromConfig(cfg)
 
 	results, err := net.LookupNS(*zone.Name)
 	if err != nil {
@@ -75,13 +77,13 @@ func checkHostedZone(sess *session.Session, zone *route53.HostedZone) error {
 
 	var expectedServers []string
 
-	resp, err := r53svc.GetHostedZone(&route53.GetHostedZoneInput{Id: zone.Id})
+	resp, err := r53svc.GetHostedZone(context.Background(), &route53.GetHostedZoneInput{Id: zone.Id})
 	if err != nil {
 		return err
 	}
 
 	for _, ns := range resp.DelegationSet.NameServers {
-		expectedServers = append(expectedServers, strings.TrimSuffix(*ns, "."))
+		expectedServers = append(expectedServers, strings.TrimSuffix(ns, "."))
 	}
 
 	if hasSameItems(actualServers, expectedServers) {
@@ -129,27 +131,27 @@ type ClusterStackParameters struct {
 
 var DefaultClusterStackParameters = ClusterStackParameters{Cidr: "10.100.0.0/16"}
 
-func (p *ClusterStackParameters) Import(parameters []*cloudformation.Parameter) error {
+func (p *ClusterStackParameters) Import(parameters []types.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
 
-func (p *ClusterStackParameters) ToCloudFormationParameters() ([]*cloudformation.Parameter, error) {
+func (p *ClusterStackParameters) ToCloudFormationParameters() ([]types.Parameter, error) {
 	return StructToCloudformationParameters(p)
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (p *ClusterStackParameters) SetInternalFields(sess *session.Session, _ *string) error {
+func (p *ClusterStackParameters) SetInternalFields(cfg aws.Config, _ *string) error {
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " looking up hosted zone"
 
-	zone, err := bridge.HostedZoneForDomain(sess, p.Domain)
+	zone, err := bridge.HostedZoneForDomain(cfg, p.Domain)
 	if err != nil {
 		return err
 	}
 
 	ui.Spinner.Suffix = " verifying DNS"
 
-	if err = checkHostedZone(sess, zone); err != nil {
+	if err = checkHostedZone(cfg, zone); err != nil {
 		return err
 	}
 
@@ -170,9 +172,9 @@ func (p *ClusterStackParameters) SetInternalFields(sess *session.Session, _ *str
 	}
 
 	p.AvailabilityZones = []string{
-		*sess.Config.Region + "a",
-		*sess.Config.Region + "b",
-		*sess.Config.Region + "c",
+		cfg.Region + "a",
+		cfg.Region + "b",
+		cfg.Region + "c",
 	}
 
 	ui.Spinner.Stop()
@@ -181,7 +183,7 @@ func (p *ClusterStackParameters) SetInternalFields(sess *session.Session, _ *str
 }
 
 type ClusterStack struct {
-	Stack      *cloudformation.Stack
+	Stack      *types.Stack
 	Parameters *ClusterStackParameters
 }
 
@@ -189,24 +191,24 @@ func (a *ClusterStack) GetParameters() Parameters {
 	return a.Parameters
 }
 
-func (a *ClusterStack) GetStack() *cloudformation.Stack {
+func (a *ClusterStack) GetStack() *types.Stack {
 	return a.Stack
 }
 
-func (a *ClusterStack) SetStack(stack *cloudformation.Stack) {
+func (a *ClusterStack) SetStack(stack *types.Stack) {
 	a.Stack = stack
 }
 
 // SetDeletionProtection toggles the deletion protection flag on the load balancer
-func (a *ClusterStack) SetDeletionProtection(sess *session.Session, value bool) error {
-	elbSvc := elbv2.New(sess)
+func (a *ClusterStack) SetDeletionProtection(cfg aws.Config, value bool) error {
+	elbSvc := elasticloadbalancingv2.NewFromConfig(cfg)
 
 	lbARN, err := bridge.GetStackOutput(a.Stack.Outputs, "LoadBalancerArn")
 	if lbARN != nil {
 		logrus.WithFields(logrus.Fields{"value": value}).Debug("setting load balancer deletion protection")
-		_, err = elbSvc.ModifyLoadBalancerAttributes(&elbv2.ModifyLoadBalancerAttributesInput{
+		_, err = elbSvc.ModifyLoadBalancerAttributes(context.Background(), &elasticloadbalancingv2.ModifyLoadBalancerAttributesInput{
 			LoadBalancerArn: lbARN,
-			Attributes: []*elbv2.LoadBalancerAttribute{
+			Attributes: []elbv2types.LoadBalancerAttribute{
 				{
 					Key:   aws.String("deletion_protection.enabled"),
 					Value: aws.String(strconv.FormatBool(value)),
@@ -230,15 +232,15 @@ func (a *ClusterStack) SetDeletionProtection(sess *session.Session, value bool) 
 	return nil
 }
 
-func (a *ClusterStack) PostCreate(sess *session.Session) error {
-	return a.SetDeletionProtection(sess, true)
+func (a *ClusterStack) PostCreate(cfg aws.Config) error {
+	return a.SetDeletionProtection(cfg, true)
 }
 
-func (a *ClusterStack) PreDelete(sess *session.Session) error {
-	return a.SetDeletionProtection(sess, false)
+func (a *ClusterStack) PreDelete(cfg aws.Config) error {
+	return a.SetDeletionProtection(cfg, false)
 }
 
-func (*ClusterStack) PostDelete(_ *session.Session, _ *string) error {
+func (*ClusterStack) PostDelete(_ aws.Config, _ *string) error {
 	return nil
 }
 
@@ -246,7 +248,7 @@ func (a *ClusterStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return ui.FlagsToStruct(a.Parameters, flags)
 }
 
-func (a *ClusterStack) AskQuestions(_ *session.Session) error {
+func (a *ClusterStack) AskQuestions(_ aws.Config) error {
 	var questions []*ui.QuestionExtra
 
 	var err error
@@ -281,16 +283,16 @@ func (*ClusterStack) StackType() string {
 	return "cluster"
 }
 
-func (*ClusterStack) Tags(name *string) []*cloudformation.Tag {
-	return []*cloudformation.Tag{
+func (*ClusterStack) Tags(name *string) []types.Tag {
+	return []types.Tag{
 		{Key: aws.String("apppack:cluster"), Value: name},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}
 }
 
-func (*ClusterStack) Capabilities() []*string {
-	return []*string{
-		aws.String("CAPABILITY_IAM"),
+func (*ClusterStack) Capabilities() []types.Capability {
+	return []types.Capability{
+		types.CapabilityCapabilityIam,
 	}
 }
 

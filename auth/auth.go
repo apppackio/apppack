@@ -1,15 +1,15 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
 
 	"github.com/apppackio/apppack/state"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	awsconsoleurl "github.com/jkueh/go-aws-console-url"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/sirupsen/logrus"
 )
 
@@ -28,74 +28,74 @@ func Logout() error {
 	return state.ClearCache()
 }
 
-func AppAWSSession(appName string, sessionDuration int) (*session.Session, *AppRole, error) {
+func AppAWSSession(appName string, sessionDuration int) (aws.Config, *AppRole, error) {
 	tokens, err := GetTokens()
 	if err != nil {
-		return nil, nil, err
+		return aws.Config{}, nil, err
 	}
 
 	appRole, err := tokens.GetAppRole(appName)
 	if err != nil {
-		return nil, nil, err
+		return aws.Config{}, nil, err
 	}
 
 	creds, err := tokens.GetCredentials(appRole, sessionDuration)
 	if err != nil {
-		return nil, nil, err
+		return aws.Config{}, nil, err
 	}
 
-	logrus.WithFields(logrus.Fields{"access key": *creds.AccessKeyId}).Debug("creating AWS session")
+	logrus.WithFields(logrus.Fields{"access key": *creds.AccessKeyId}).Debug("creating AWS config")
 
-	return session.Must(
-		session.NewSessionWithOptions(
-			session.Options{
-				Config: *aws.NewConfig().WithCredentials(
-					credentials.NewStaticCredentials(
-						*creds.AccessKeyId,
-						*creds.SecretAccessKey,
-						*creds.SessionToken,
-					),
-				).WithRegion(appRole.Region),
-			},
-		),
-	), appRole, nil
+	cfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			*creds.AccessKeyId,
+			*creds.SecretAccessKey,
+			*creds.SessionToken,
+		)),
+		config.WithRegion(appRole.Region),
+	)
+	if err != nil {
+		return aws.Config{}, nil, err
+	}
+
+	return cfg, appRole, nil
 }
 
-func AdminAWSSession(idOrAlias string, sessionDuration int, region string) (*session.Session, *AdminRole, error) {
+func AdminAWSSession(idOrAlias string, sessionDuration int, region string) (aws.Config, *AdminRole, error) {
 	tokens, err := GetTokens()
 	if err != nil {
-		return nil, nil, err
+		return aws.Config{}, nil, err
 	}
 
 	adminRole, err := tokens.GetAdminRole(idOrAlias)
 	if err != nil {
-		return nil, nil, err
+		return aws.Config{}, nil, err
 	}
 
 	creds, err := tokens.GetCredentials(adminRole, sessionDuration)
 	if err != nil {
-		return nil, nil, err
+		return aws.Config{}, nil, err
 	}
 
-	logrus.WithFields(logrus.Fields{"access_key": *creds.AccessKeyId}).Debug("creating AWS session")
+	logrus.WithFields(logrus.Fields{"access_key": *creds.AccessKeyId}).Debug("creating AWS config")
 
 	if region == "" {
 		region = adminRole.Region
 	}
 
-	return session.Must(
-		session.NewSessionWithOptions(
-			session.Options{
-				Config: *aws.NewConfig().WithCredentials(
-					credentials.NewStaticCredentials(
-						*creds.AccessKeyId,
-						*creds.SecretAccessKey,
-						*creds.SessionToken,
-					),
-				).WithRegion(region),
-			},
-		),
-	), adminRole, nil
+	cfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			*creds.AccessKeyId,
+			*creds.SecretAccessKey,
+			*creds.SessionToken,
+		)),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return aws.Config{}, nil, err
+	}
+
+	return cfg, adminRole, nil
 }
 
 func AppList() ([]*AppRole, error) {
@@ -126,8 +126,8 @@ func WhoAmI() (*string, error) {
 }
 
 // GetConsoleURL - Returns the sign-in URL
-func GetConsoleURL(sess *session.Session, destinationURL string) (*string, error) {
-	creds, err := sess.Config.Credentials.Get()
+func GetConsoleURL(cfg aws.Config, destinationURL string) (*string, error) {
+	creds, err := cfg.Credentials.Retrieve(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -136,11 +136,16 @@ func GetConsoleURL(sess *session.Session, destinationURL string) (*string, error
 		return nil, errors.New("can't generate a signin token without a session token")
 	}
 
-	token, err := awsconsoleurl.GetSignInToken(&creds)
+	token, err := getSignInToken(context.Background(), creds)
+	if err != nil {
+		return nil, err
+	}
 
-	return aws.String(fmt.Sprintf(
+	consoleURL := fmt.Sprintf(
 		"https://signin.aws.amazon.com/federation?Action=login&Destination=%s&SigninToken=%s",
 		url.QueryEscape(destinationURL),
 		token.Token,
-	)), err
+	)
+
+	return &consoleURL, nil
 }

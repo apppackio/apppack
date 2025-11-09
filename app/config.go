@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/juju/ansiterm"
 	"github.com/sirupsen/logrus"
 )
@@ -23,9 +23,10 @@ type ConfigVariable struct {
 func (v *ConfigVariable) LoadManaged(ssmListTagsForResource func(*ssm.ListTagsForResourceInput) (*ssm.ListTagsForResourceOutput, error)) error {
 	logrus.WithFields(logrus.Fields{"parameter": v.parameterName}).Debug("loading parameter tag")
 
+	resourceType := ssmtypes.ResourceTypeForTaggingParameter
 	resp, err := ssmListTagsForResource(&ssm.ListTagsForResourceInput{
 		ResourceId:   &v.parameterName,
-		ResourceType: aws.String(ssm.ResourceTypeForTaggingParameter),
+		ResourceType: resourceType,
 	})
 	if err != nil {
 		return err
@@ -47,7 +48,7 @@ func (v *ConfigVariable) LoadManaged(ssmListTagsForResource func(*ssm.ListTagsFo
 type ConfigVariables []*ConfigVariable
 
 // NewConfigVariables creates a new AppConfigVariables from the provided SSM parameters
-func NewConfigVariables(parameters []*ssm.Parameter) ConfigVariables {
+func NewConfigVariables(parameters []ssmtypes.Parameter) ConfigVariables {
 	var configVars ConfigVariables
 
 	for _, parameter := range parameters {

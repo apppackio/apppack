@@ -2,32 +2,35 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/sirupsen/logrus"
 )
 
-func ddbItem(sess *session.Session, primaryID, secondaryID string) (*map[string]*dynamodb.AttributeValue, error) {
-	ddbSvc := dynamodb.New(sess)
+func ddbItem(cfg aws.Config, primaryID, secondaryID string) (*map[string]types.AttributeValue, error) {
+	ddbSvc := dynamodb.NewFromConfig(cfg)
 
 	logrus.WithFields(logrus.Fields{"primaryID": primaryID, "secondaryID": secondaryID}).Debug("DynamoDB GetItem")
 
-	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id": {
-				S: aws.String(primaryID),
+	tableName := "apppack"
+	result, err := ddbSvc.GetItem(context.Background(), &dynamodb.GetItemInput{
+		TableName: &tableName,
+		Key: map[string]types.AttributeValue{
+			"primary_id": &types.AttributeValueMemberS{
+				Value: primaryID,
 			},
-			"secondary_id": {
-				S: aws.String(secondaryID),
+			"secondary_id": &types.AttributeValueMemberS{
+				Value: secondaryID,
 			},
 		},
 	})
@@ -42,44 +45,39 @@ func ddbItem(sess *session.Session, primaryID, secondaryID string) (*map[string]
 	return &result.Item, nil
 }
 
-func SsmParameters(sess *session.Session, path string) ([]*ssm.Parameter, error) {
-	ssmSvc := ssm.New(sess)
+func SsmParameters(cfg aws.Config, path string) ([]ssmtypes.Parameter, error) {
+	ssmSvc := ssm.NewFromConfig(cfg)
 
-	var parameters []*ssm.Parameter
+	var parameters []ssmtypes.Parameter
 
-	input := ssm.GetParametersByPathInput{
+	withDecryption := true
+	paginator := ssm.NewGetParametersByPathPaginator(ssmSvc, &ssm.GetParametersByPathInput{
 		Path:           &path,
-		WithDecryption: aws.Bool(true),
-	}
+		WithDecryption: &withDecryption,
+	})
 
-	err := ssmSvc.GetParametersByPathPages(&input, func(resp *ssm.GetParametersByPathOutput, lastPage bool) bool {
-		logrus.WithFields(logrus.Fields{"path": *input.Path}).Debug("loading parameter by path page")
-
-		for _, parameter := range resp.Parameters {
-			if parameter == nil {
-				continue
-			}
-
-			parameters = append(parameters, parameter)
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(context.Background())
+		if err != nil {
+			return nil, err
 		}
 
-		return !lastPage
-	})
-	if err != nil {
-		return nil, err
+		logrus.WithFields(logrus.Fields{"path": path}).Debug("loading parameter by path page")
+		parameters = append(parameters, resp.Parameters...)
 	}
 
 	return parameters, nil
 }
 
-func SsmParameter(sess *session.Session, name string) (*ssm.Parameter, error) {
-	ssmSvc := ssm.New(sess)
+func SsmParameter(cfg aws.Config, name string) (*ssmtypes.Parameter, error) {
+	ssmSvc := ssm.NewFromConfig(cfg)
+	withDecryption := true
 	input := &ssm.GetParameterInput{
-		Name:           aws.String(name),
-		WithDecryption: aws.Bool(true),
+		Name:           &name,
+		WithDecryption: &withDecryption,
 	}
 
-	result, err := ssmSvc.GetParameter(input)
+	result, err := ssmSvc.GetParameter(context.Background(), input)
 	if err != nil {
 		return nil, err
 	}
@@ -87,14 +85,14 @@ func SsmParameter(sess *session.Session, name string) (*ssm.Parameter, error) {
 	return result.Parameter, nil
 }
 
-func S3FromURL(sess *session.Session, logURL string) (*strings.Builder, error) {
-	s3Svc := s3.New(sess)
+func S3FromURL(cfg aws.Config, logURL string) (*strings.Builder, error) {
+	s3Svc := s3.NewFromConfig(cfg)
 	parts := strings.Split(strings.TrimPrefix(logURL, "s3://"), "/")
 	bucket := parts[0]
 	object := strings.Join(parts[1:], "/")
 	logrus.WithFields(logrus.Fields{"bucket": bucket, "key": object}).Debug("fetching object from S3")
 
-	out, err := s3Svc.GetObject(&s3.GetObjectInput{
+	out, err := s3Svc.GetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: &bucket,
 		Key:    &object,
 	})

@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/apppackio/apppack/app"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -78,12 +79,13 @@ func TestScheduledTasksCreate(t *testing.T) {
 	).Return(nil)
 
 	command := "echo hello"
+	parameterType := ssmtypes.ParameterTypeString
 	a.AWS.(*MockAWS).On(
 		"PutParameter",
 		&ssm.PutParameterInput{
 			Name:      &parameterName,
 			Value:     aws.String(fmt.Sprintf("[{\"schedule\":%q,\"command\":%q}]", schedule, command)),
-			Type:      aws.String("String"),
+			Type:      parameterType,
 			Overwrite: aws.Bool(true),
 		},
 	).Return(nil)
@@ -116,12 +118,13 @@ func TestScheduledTasksDelete(t *testing.T) {
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
 	).Return(aws.String(fmt.Sprintf("[{\"schedule\":%q,\"command\":%q}]", schedule, command)), nil)
+	parameterType := ssmtypes.ParameterTypeString
 	a.AWS.(*MockAWS).On(
 		"PutParameter",
 		&ssm.PutParameterInput{
 			Name:      &parameterName,
 			Value:     aws.String("[]"),
-			Type:      aws.String("String"),
+			Type:      parameterType,
 			Overwrite: aws.Bool(true),
 		},
 	).Return(nil)

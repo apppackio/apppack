@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/apppackio/apppack/stacks"
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 func TestCustomDomainStackName(t *testing.T) {

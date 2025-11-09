@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,20 +14,23 @@ import (
 
 	"github.com/apppackio/apppack/auth"
 	apppackaws "github.com/apppackio/apppack/aws"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/codebuild"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/codebuild"
+	codebuildetypes "github.com/aws/aws-sdk-go-v2/service/codebuild/types"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	sessionManagerPluginSession "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
 	// Imported for side effects: registers port and shell session types with session manager plugin
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/portsession"
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/shellsession"
+	"github.com/aws/smithy-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -57,7 +61,7 @@ type App struct {
 	Name                  string
 	Pipeline              bool
 	ReviewApp             *string
-	Session               *session.Session
+	Session               aws.Config
 	Settings              *Settings
 	ECSConfig             *ECSConfig
 	DeployStatus          *DeployStatus
@@ -74,58 +78,58 @@ type ReviewApp struct {
 	URL         string `json:"url"`
 }
 type settingsItem struct {
-	PrimaryID   string   `json:"primary_id"`
-	SecondaryID string   `json:"secondary_id"`
-	Settings    Settings `json:"value"`
+	PrimaryID   string   `dynamodbav:"primary_id"   json:"primary_id"`
+	SecondaryID string   `dynamodbav:"secondary_id" json:"secondary_id"`
+	Settings    Settings `dynamodbav:"value"        json:"value"`
 }
 
 type Settings struct {
 	Cluster struct {
-		ARN  string `json:"arn"`
-		Name string `json:"name"`
-	} `json:"cluster"`
+		ARN  string `dynamodbav:"arn"  json:"arn"`
+		Name string `dynamodbav:"name" json:"name"`
+	} `dynamodbav:"cluster" json:"cluster"`
 	LoadBalancer struct {
-		ARN    string `json:"arn"`
-		Suffix string `json:"suffix"`
-	} `json:"load_balancer"`
+		ARN    string `dynamodbav:"arn"    json:"arn"`
+		Suffix string `dynamodbav:"suffix" json:"suffix"`
+	} `dynamodbav:"load_balancer" json:"load_balancer"`
 	TargetGroup struct {
-		ARN    string `json:"arn"`
-		Suffix string `json:"suffix"`
-	} `json:"target_group"`
-	Domains []string `json:"domains"`
+		ARN    string `dynamodbav:"arn"    json:"arn"`
+		Suffix string `dynamodbav:"suffix" json:"suffix"`
+	} `dynamodbav:"target_group" json:"target_group"`
+	Domains []string `dynamodbav:"domains" json:"domains"`
 	Shell   struct {
-		Command    string `json:"command"`
-		TaskFamily string `json:"task_family"`
-	} `json:"shell"`
+		Command    string `dynamodbav:"command"     json:"command"`
+		TaskFamily string `dynamodbav:"task_family" json:"task_family"`
+	} `dynamodbav:"shell" json:"shell"`
 	DBUtils struct {
-		ShellTaskFamily    string `json:"shell_task_family"`
-		S3Bucket           string `json:"s3_bucket"`
-		DumpLoadTaskFamily string `json:"dumpload_task_family"`
-		Engine             string `json:"engine"`
-	} `json:"dbutils"`
+		ShellTaskFamily    string `dynamodbav:"shell_task_family"    json:"shell_task_family"`
+		S3Bucket           string `dynamodbav:"s3_bucket"            json:"s3_bucket"`
+		DumpLoadTaskFamily string `dynamodbav:"dumpload_task_family" json:"dumpload_task_family"`
+		Engine             string `dynamodbav:"engine"               json:"engine"`
+	} `dynamodbav:"dbutils" json:"dbutils"`
 	CodebuildProject struct {
-		Name string `json:"name"`
-	} `json:"codebuild_project"`
+		Name string `dynamodbav:"name" json:"name"`
+	} `dynamodbav:"codebuild_project" json:"codebuild_project"`
 	LogGroup struct {
-		Name string `json:"name"`
-	} `json:"log_group"`
-	StackID string `json:"stack_id"`
+		Name string `dynamodbav:"name" json:"name"`
+	} `dynamodbav:"log_group" json:"log_group"`
+	StackID string `dynamodbav:"stack_id" json:"stack_id"`
 }
 
 type deployStatusItem struct {
-	PrimaryID    string       `json:"primary_id"`
-	SecondaryID  string       `json:"secondary_id"`
-	DeployStatus DeployStatus `json:"value"`
+	PrimaryID    string       `dynamodbav:"primary_id"   json:"primary_id"`
+	SecondaryID  string       `dynamodbav:"secondary_id" json:"secondary_id"`
+	DeployStatus DeployStatus `dynamodbav:"value"        json:"value"`
 }
 
 type DeployStatus struct {
-	Phase       string    `json:"phase"`
-	Processes   []Process `json:"processes"`
-	BuildID     string    `json:"build_id"`
-	LastUpdate  int64     `json:"last_update"`
-	Commit      string    `json:"commit"`
-	BuildNumber int       `json:"build_number"`
-	Failed      bool      `json:"failed"`
+	Phase       string    `dynamodbav:"phase"        json:"phase"`
+	Processes   []Process `dynamodbav:"processes"    json:"processes"`
+	BuildID     string    `dynamodbav:"build_id"     json:"build_id"`
+	LastUpdate  int64     `dynamodbav:"last_update"  json:"last_update"`
+	Commit      string    `dynamodbav:"commit"       json:"commit"`
+	BuildNumber int       `dynamodbav:"build_number" json:"build_number"`
+	Failed      bool      `dynamodbav:"failed"       json:"failed"`
 }
 
 func (d *DeployStatus) FindProcess(name string) (*Process, error) {
@@ -143,13 +147,13 @@ func (d *DeployStatus) FindProcess(name string) (*Process, error) {
 }
 
 type Process struct {
-	Name         string `json:"name"`
-	CPU          string `json:"cpu"`
-	Memory       string `json:"memory"`
-	MinProcesses int    `json:"min_processes"`
-	MaxProcesses int    `json:"max_processes"`
-	State        string `json:"state"`
-	Command      string `json:"command"`
+	Name         string `dynamodbav:"name"          json:"name"`
+	CPU          string `dynamodbav:"cpu"           json:"cpu"`
+	Memory       string `dynamodbav:"memory"        json:"memory"`
+	MinProcesses int    `dynamodbav:"min_processes" json:"min_processes"`
+	MaxProcesses int    `dynamodbav:"max_processes" json:"max_processes"`
+	State        string `dynamodbav:"state"         json:"state"`
+	Command      string `dynamodbav:"command"       json:"command"`
 }
 
 // locationName is the tag used by aws-sdk internally
@@ -270,7 +274,7 @@ func (a *App) IsFargate() (bool, error) {
 		return false, err
 	}
 
-	return *a.ECSConfig.RunTaskArgs.LaunchType == "FARGATE", nil
+	return a.ECSConfig.RunTaskArgs.LaunchType == "FARGATE", nil
 }
 
 func (a *App) ValidateECSTaskSize(size ECSSizeConfiguration) error {
@@ -306,7 +310,7 @@ func (a *App) ReviewAppSettings() (*Settings, error) {
 
 	i := settingsItem{}
 
-	err = dynamodbattribute.UnmarshalMap(*Item, &i)
+	err = attributevalue.UnmarshalMap(*Item, &i)
 	if err != nil {
 		return nil, err
 	}
@@ -324,13 +328,13 @@ func (a *App) ServiceName(service string) string {
 }
 
 // TaskDefinition gets the Task Definition for a specific task type
-func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, []*ecs.Tag, error) {
+func (a *App) TaskDefinition(name string) (*ecstypes.TaskDefinition, []ecstypes.Tag, error) {
 	family := a.ServiceName(name)
-	ecsSvc := ecs.New(a.Session)
+	ecsSvc := ecs.NewFromConfig(a.Session)
 	// verify task exists
-	task, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
+	task, err := ecsSvc.DescribeTaskDefinition(context.Background(), &ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: &family,
-		Include:        []*string{aws.String("TAGS")},
+		Include:        []ecstypes.TaskDefinitionField{ecstypes.TaskDefinitionFieldTags},
 	})
 	if err != nil {
 		return nil, nil, err
@@ -339,14 +343,15 @@ func (a *App) TaskDefinition(name string) (*ecs.TaskDefinition, []*ecs.Tag, erro
 	return task.TaskDefinition, task.Tags, nil
 }
 
-func buildSystemFromTaskTags(tags []*ecs.Tag) *string {
+func buildSystemFromTaskTags(tags []ecstypes.Tag) *string {
 	for _, tag := range tags {
 		if *tag.Key == "apppack:buildSystem" {
 			return tag.Value
 		}
 	}
 
-	return aws.String("")
+	emptyString := ""
+	return &emptyString
 }
 
 func (a *App) ShellTaskFamily() (*string, *string, error) {
@@ -445,7 +450,7 @@ func (a *App) ReviewAppExists() (bool, error) {
 	return true, nil
 }
 
-func (a *App) ddbItem(key string) (*map[string]*dynamodb.AttributeValue, error) {
+func (a *App) ddbItem(key string) (*map[string]dynamodbtypes.AttributeValue, error) {
 	if !a.IsReviewApp() {
 		return ddbItem(a.Session, "APP#"+a.Name, key)
 	}
@@ -470,9 +475,11 @@ func (a *App) LoadECSConfig() error {
 
 	i := ecsConfigItem{}
 
-	err = dynamodbattribute.NewDecoder(func(d *dynamodbattribute.Decoder) {
+	decoder := attributevalue.NewDecoder(func(d *attributevalue.DecoderOptions) {
 		d.TagKey = "locationName"
-	}).Decode(&dynamodb.AttributeValue{M: *Item}, &i)
+	})
+
+	err = decoder.Decode(&dynamodbtypes.AttributeValueMemberM{Value: *Item}, &i)
 	if err != nil {
 		return err
 	}
@@ -500,7 +507,7 @@ func (a *App) GetDeployStatus(buildARN string) (*DeployStatus, error) {
 
 	i := deployStatusItem{}
 
-	err = dynamodbattribute.UnmarshalMap(*Item, &i)
+	err = attributevalue.UnmarshalMap(*Item, &i)
 	if err != nil {
 		return nil, err
 	}
@@ -553,7 +560,7 @@ func (a *App) LoadSettings() error {
 
 	i := settingsItem{}
 
-	err = dynamodbattribute.UnmarshalMap(*Item, &i)
+	err = attributevalue.UnmarshalMap(*Item, &i)
 	if err != nil {
 		return err
 	}
@@ -564,8 +571,8 @@ func (a *App) LoadSettings() error {
 }
 
 // StartTask start a new task on ECS
-func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.TaskOverride, fargate bool) (*ecs.Task, error) {
-	ecsSvc := ecs.New(a.Session)
+func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecstypes.TaskOverride, fargate bool) (*ecstypes.Task, error) {
+	ecsSvc := ecs.NewFromConfig(a.Session)
 
 	err := a.LoadSettings()
 	if err != nil {
@@ -577,7 +584,7 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 		return nil, err
 	}
 
-	taskDefn, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
+	taskDefn, err := ecsSvc.DescribeTaskDefinition(context.Background(), &ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: taskFamily,
 	})
 	if err != nil {
@@ -591,9 +598,9 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 		runTaskArgs = a.ECSConfig.RunTaskArgs
 	}
 
-	var cmd []*string
+	var cmd []string
 	for i := range command {
-		cmd = append(cmd, &command[i])
+		cmd = append(cmd, command[i])
 	}
 
 	email, err := auth.WhoAmI()
@@ -605,28 +612,29 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 	runTaskArgs.TaskDefinition = taskDefn.TaskDefinition.TaskDefinitionArn
 	runTaskArgs.StartedBy = &startedBy
 
-	memory := 0
+	memory := int32(0)
 	if taskOverride.Memory != nil {
-		memory, err = strconv.Atoi(*taskOverride.Memory)
+		memoryInt64, err := strconv.ParseInt(*taskOverride.Memory, 10, 32)
 		if err != nil {
 			return nil, err
 		}
+		memory = int32(memoryInt64)
 	}
 
 	if len(taskOverride.ContainerOverrides) == 0 {
-		taskOverride.ContainerOverrides = []*ecs.ContainerOverride{{}}
+		taskOverride.ContainerOverrides = []ecstypes.ContainerOverride{{}}
 	}
 
 	taskOverride.ContainerOverrides[0].Name = taskDefn.TaskDefinition.ContainerDefinitions[0].Name
 	taskOverride.ContainerOverrides[0].Command = cmd
 
 	if memory > 0 {
-		taskOverride.ContainerOverrides[0].Memory = aws.Int64(int64(memory))
+		taskOverride.ContainerOverrides[0].Memory = aws.Int32(memory)
 	}
 
 	runTaskArgs.Overrides = taskOverride
 
-	ecsTaskOutput, err := ecsSvc.RunTask(&runTaskArgs)
+	ecsTaskOutput, err := ecsSvc.RunTask(context.Background(), &runTaskArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -635,42 +643,41 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecs.
 		return nil, fmt.Errorf("RunTask failure: %v", ecsTaskOutput.Failures)
 	}
 
-	return ecsTaskOutput.Tasks[0], nil
+	return &ecsTaskOutput.Tasks[0], nil
 }
 
-// WaitForTaskStopped waits for a task to be running or complete
-func (a *App) WaitForTaskStopped(task *ecs.Task) (*int64, error) {
-	ecsSvc := ecs.New(a.Session)
+// WaitForTaskStopped waits for a task to be stopped
+func (a *App) WaitForTaskStopped(task *ecstypes.Task) (*int32, error) {
+	ecsSvc := ecs.NewFromConfig(a.Session)
 	input := ecs.DescribeTasksInput{
 		Cluster: task.ClusterArn,
-		Tasks:   []*string{task.TaskArn},
+		Tasks:   []string{*task.TaskArn},
 	}
 	// MaxSessionDurationSeconds is 3600. This will wait _almost_ that long
-	err := ecsSvc.WaitUntilTasksStoppedWithContext(
-		aws.BackgroundContext(),
-		&input,
-		request.WithWaiterMaxAttempts(595),
-		request.WithWaiterDelay(request.ConstantWaiterDelay(6*time.Second)),
-	)
+	waiter := ecs.NewTasksStoppedWaiter(ecsSvc, func(o *ecs.TasksStoppedWaiterOptions) {
+		o.MaxDelay = 6 * time.Second
+		o.MinDelay = 6 * time.Second
+	})
+	err := waiter.Wait(context.Background(), &input, 3570*time.Second)
 	if err != nil {
 		return nil, err
 	}
 
-	taskDesc, err := ecsSvc.DescribeTasks(&input)
+	taskDesc, err := ecsSvc.DescribeTasks(context.Background(), &input)
 	if err != nil {
 		return nil, err
 	}
 
-	task = taskDesc.Tasks[0]
-	if *task.StopCode != "EssentialContainerExited" {
-		return nil, fmt.Errorf("task %s failed %s: %s", *task.TaskArn, *task.StopCode, *task.StoppedReason)
+	stoppedTask := taskDesc.Tasks[0]
+	if stoppedTask.StopCode != "EssentialContainerExited" {
+		return nil, fmt.Errorf("task %s failed %s: %s", *stoppedTask.TaskArn, string(stoppedTask.StopCode), *stoppedTask.StoppedReason)
 	}
 
-	return task.Containers[0].ExitCode, nil
+	return stoppedTask.Containers[0].ExitCode, nil
 }
 
-func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, error) {
-	ecsSvc := ecs.New(a.Session)
+func (a *App) CreateEcsSession(task *ecstypes.Task, shellCmd string) (*ecstypes.Session, error) {
+	ecsSvc := ecs.NewFromConfig(a.Session)
 
 	err := a.LoadSettings()
 	if err != nil {
@@ -681,7 +688,7 @@ func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, e
 		Cluster:     task.ClusterArn,
 		Command:     &shellCmd,
 		Container:   task.Containers[0].Name,
-		Interactive: aws.Bool(true),
+		Interactive: true,
 		Task:        task.TaskArn,
 	}
 	retries := 20
@@ -690,14 +697,14 @@ func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, e
 	for retries > 0 {
 		time.Sleep(2 * time.Second)
 
-		out, err := ecsSvc.ExecuteCommand(&execCmdInput)
+		out, err := ecsSvc.ExecuteCommand(context.Background(), &execCmdInput)
 
-		var aerr awserr.Error
+		var apiErr smithy.APIError
 
 		if err == nil {
 			return out.Session, nil
-		} else if errors.As(err, &aerr) {
-			if aerr.Code() != ecs.ErrCodeInvalidParameterException {
+		} else if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() != "InvalidParameterException" {
 				return nil, err
 			}
 		} else {
@@ -711,8 +718,8 @@ func (a *App) CreateEcsSession(task *ecs.Task, shellCmd string) (*ecs.Session, e
 }
 
 // ConnectToEcsSession open a SSM Session to the Docker host and exec into container
-func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
-	region := a.Session.Config.Region
+func (a *App) ConnectToEcsSession(ecsSession *ecstypes.Session) error {
+	region := a.Session.Region
 
 	arg1, err := json.Marshal(ecsSession)
 	if err != nil {
@@ -722,7 +729,7 @@ func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
 	args := []string{
 		"session-manager-plugin",
 		string(arg1),
-		*region,
+		region,
 		"StartSession",
 	}
 	// Ignore Ctrl+C to keep the session active;
@@ -736,8 +743,8 @@ func (a *App) ConnectToEcsSession(ecsSession *ecs.Session) error {
 }
 
 // StartBuild starts a new CodeBuild run
-func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
-	codebuildSvc := codebuild.New(a.Session)
+func (a *App) StartBuild(createReviewApp bool) (*codebuildetypes.Build, error) {
+	codebuildSvc := codebuild.NewFromConfig(a.Session)
 
 	err := a.LoadSettings()
 	if err != nil {
@@ -750,24 +757,24 @@ func (a *App) StartBuild(createReviewApp bool) (*codebuild.Build, error) {
 	if a.IsReviewApp() {
 		buildInput.SourceVersion = aws.String("pr/" + *a.ReviewApp)
 		if createReviewApp {
-			buildInput.EnvironmentVariablesOverride = []*codebuild.EnvironmentVariable{
+			buildInput.EnvironmentVariablesOverride = []codebuildetypes.EnvironmentVariable{
 				{
 					Name:  aws.String("REVIEW_APP_STATUS"),
 					Value: aws.String("created"),
-					Type:  aws.String("PLAINTEXT"),
+					Type:  codebuildetypes.EnvironmentVariableTypePlaintext,
 				},
 			}
 		}
 	}
 
-	build, err := codebuildSvc.StartBuild(&buildInput)
+	build, err := codebuildSvc.StartBuild(context.Background(), &buildInput)
 
 	return build.Build, err
 }
 
 // ListBuilds lists recent CodeBuild runs
 func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
-	ddbSvc := dynamodb.New(a.Session)
+	ddbSvc := dynamodb.NewFromConfig(a.Session)
 
 	primaryID := "APP#" + a.Name
 	if a.IsReviewApp() {
@@ -776,15 +783,15 @@ func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 
 	logrus.WithFields(logrus.Fields{"count": count}).Debug("fetching build list from DDB")
 
-	ddbResp, err := ddbSvc.Query(&dynamodb.QueryInput{
+	ddbResp, err := ddbSvc.Query(context.Background(), &dynamodb.QueryInput{
 		TableName:              aws.String("apppack"),
 		KeyConditionExpression: aws.String("primary_id = :id1  AND begins_with(secondary_id,:id2)"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":id1": {S: &primaryID},
-			":id2": {S: aws.String("BUILD#")},
+		ExpressionAttributeValues: map[string]dynamodbtypes.AttributeValue{
+			":id1": &dynamodbtypes.AttributeValueMemberS{Value: primaryID},
+			":id2": &dynamodbtypes.AttributeValueMemberS{Value: "BUILD#"},
 		},
 
-		Limit:            aws.Int64(int64(count)),
+		Limit:            aws.Int32(int32(count)),
 		ScanIndexForward: aws.Bool(false),
 	})
 	if err != nil {
@@ -797,7 +804,7 @@ func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 
 	var i []BuildStatus
 
-	err = dynamodbattribute.UnmarshalListOfMaps(ddbResp.Items, &i)
+	err = attributevalue.UnmarshalListOfMaps(ddbResp.Items, &i)
 	if err != nil {
 		return nil, err
 	}
@@ -827,7 +834,7 @@ func (a *App) GetBuildStatus(buildNumber int) (*BuildStatus, error) {
 			return nil, err
 		}
 
-		err = dynamodbattribute.UnmarshalMap(*item, &build)
+		err = attributevalue.UnmarshalMap(*item, &build)
 		if err != nil {
 			return nil, err
 		}
@@ -870,10 +877,12 @@ func (a *App) GetConfigWithManaged() (ConfigVariables, error) {
 		return nil, err
 	}
 
-	ssmSvc := ssm.New(a.Session)
+	ssmSvc := ssm.NewFromConfig(a.Session)
 
 	err = configVars.Transform(func(v *ConfigVariable) error {
-		return v.LoadManaged(ssmSvc.ListTagsForResource)
+		return v.LoadManaged(func(input *ssm.ListTagsForResourceInput) (*ssm.ListTagsForResourceOutput, error) {
+			return ssmSvc.ListTagsForResource(context.Background(), input)
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -885,10 +894,11 @@ func (a *App) GetConfigWithManaged() (ConfigVariables, error) {
 // SetConfig sets a config value for the app
 func (a *App) SetConfig(key, value string, overwrite bool) error {
 	parameterName := fmt.Sprintf("%s%s", a.ConfigPrefix(), key)
-	ssmSvc := ssm.New(a.Session)
-	_, err := ssmSvc.PutParameter(&ssm.PutParameterInput{
+	ssmSvc := ssm.NewFromConfig(a.Session)
+	parameterType := ssmtypes.ParameterTypeSecureString
+	_, err := ssmSvc.PutParameter(context.Background(), &ssm.PutParameterInput{
 		Name:      &parameterName,
-		Type:      aws.String("SecureString"),
+		Type:      parameterType,
 		Overwrite: &overwrite,
 		Value:     &value,
 	})
@@ -902,14 +912,14 @@ func (a *App) GetConsoleURL(destinationURL string) (*string, error) {
 }
 
 // DescribeTasks generate a URL which will sign the user in to the AWS console and redirect to the desinationURL
-func (a *App) DescribeTasks() ([]*ecs.Task, error) {
+func (a *App) DescribeTasks() ([]ecstypes.Task, error) {
 	err := a.LoadSettings()
 	if err != nil {
 		return nil, err
 	}
 
-	ecsSvc := ecs.New(a.Session)
-	chunkedTaskARNs := [][]*string{{}}
+	ecsSvc := ecs.NewFromConfig(a.Session)
+	chunkedTaskARNs := [][]string{{}}
 	input := ecs.ListTasksInput{
 		Cluster: &a.Settings.Cluster.ARN,
 	}
@@ -917,38 +927,35 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	logrus.WithFields(logrus.Fields{"cluster": a.Settings.Cluster.ARN}).Debug("fetching task list")
 
 	// handle chunking logic
-	addTaskARNToChunk := func(taskARN *string) {
+	addTaskARNToChunk := func(taskARN string) {
 		if len(chunkedTaskARNs[len(chunkedTaskARNs)-1]) >= maxEcsDescribeTaskCount {
-			chunkedTaskARNs = append(chunkedTaskARNs, []*string{})
+			chunkedTaskARNs = append(chunkedTaskARNs, []string{})
 		}
 
 		chunkedTaskARNs[len(chunkedTaskARNs)-1] = append(chunkedTaskARNs[len(chunkedTaskARNs)-1], taskARN)
 	}
 
-	err = ecsSvc.ListTasksPages(&input, func(resp *ecs.ListTasksOutput, lastPage bool) bool {
-		for _, taskARN := range resp.TaskArns {
-			if taskARN == nil {
-				continue
-			}
-
-			addTaskARNToChunk(taskARN)
+	paginator := ecs.NewListTasksPaginator(ecsSvc, &input)
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(context.Background())
+		if err != nil {
+			return nil, err
 		}
 
-		return !lastPage
-	})
-	if err != nil {
-		return nil, err
+		for _, taskARN := range resp.TaskArns {
+			addTaskARNToChunk(taskARN)
+		}
 	}
 
-	var describedTasks []*ecs.Task
+	var describedTasks []ecstypes.Task
 
 	for i := range chunkedTaskARNs {
 		logrus.WithFields(logrus.Fields{"count": len(chunkedTaskARNs[i])}).Debug("fetching task descriptions")
 
-		describeTasksOutput, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+		describeTasksOutput, err := ecsSvc.DescribeTasks(context.Background(), &ecs.DescribeTasksInput{
 			Tasks:   chunkedTaskARNs[i],
 			Cluster: &a.Settings.Cluster.ARN,
-			Include: []*string{aws.String("TAGS")},
+			Include: []ecstypes.TaskField{ecstypes.TaskFieldTags},
 		})
 		if err != nil {
 			return nil, err
@@ -957,7 +964,7 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 		describedTasks = append(describedTasks, describeTasksOutput.Tasks...)
 	}
 
-	var appTasks []*ecs.Task
+	var appTasks []ecstypes.Task
 
 	for _, task := range describedTasks {
 		isApp := false
@@ -989,8 +996,8 @@ func (a *App) DescribeTasks() ([]*ecs.Task, error) {
 	return appTasks, nil
 }
 
-func (a *App) GetECSEvents(service string) ([]*ecs.ServiceEvent, error) {
-	ecsSvc := ecs.New(a.Session)
+func (a *App) GetECSEvents(service string) ([]ecstypes.ServiceEvent, error) {
+	ecsSvc := ecs.NewFromConfig(a.Session)
 
 	if err := a.LoadSettings(); err != nil {
 		return nil, err
@@ -998,9 +1005,9 @@ func (a *App) GetECSEvents(service string) ([]*ecs.ServiceEvent, error) {
 
 	logrus.WithFields(logrus.Fields{"service": service}).Debug("fetching service events")
 
-	serviceStatus, err := ecsSvc.DescribeServices(&ecs.DescribeServicesInput{
+	serviceStatus, err := ecsSvc.DescribeServices(context.Background(), &ecs.DescribeServicesInput{
 		Cluster:  &a.Settings.Cluster.ARN,
-		Services: aws.StringSlice([]string{a.ServiceName(service)}),
+		Services: []string{a.ServiceName(service)},
 	})
 	if err != nil {
 		return nil, err
@@ -1061,7 +1068,7 @@ func (a *App) DBDumpLoadFamily() (*string, error) {
 	return taskDefn.Family, nil
 }
 
-func (a *App) DBDump() (*ecs.Task, *s3.GetObjectInput, error) {
+func (a *App) DBDump() (*ecstypes.Task, *s3.GetObjectInput, error) {
 	getObjectInput, err := a.DBDumpLocation("dumps/")
 	if err != nil {
 		return nil, nil, err
@@ -1075,7 +1082,7 @@ func (a *App) DBDump() (*ecs.Task, *s3.GetObjectInput, error) {
 	task, err := a.StartTask(
 		family,
 		[]string{"dump-to-s3.sh", fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)},
-		&ecs.TaskOverride{},
+		&ecstypes.TaskOverride{},
 		true,
 	)
 	if err != nil {
@@ -1137,7 +1144,7 @@ func (a *App) ScaleProcess(processType string, minProcessCount, maxProcessCount 
 // SetScaleParameter updates process count and cpu/ram with any non-nil values provided
 // if it is not yet set, the defaults from ECSConfig will be used
 func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessCount, cpu, memory *int) error {
-	ssmSvc := ssm.New(a.Session)
+	ssmSvc := ssm.NewFromConfig(a.Session)
 
 	var parameterName string
 	if a.IsReviewApp() {
@@ -1152,7 +1159,7 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 		return errors.New("auto-scaling is not supported on pipelines")
 	}
 
-	parameterOutput, err := ssmSvc.GetParameter(&ssm.GetParameterInput{
+	parameterOutput, err := ssmSvc.GetParameter(context.Background(), &ssm.GetParameterInput{
 		Name: &parameterName,
 	})
 
@@ -1209,9 +1216,10 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 		return err
 	}
 
-	_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
+	parameterType := ssmtypes.ParameterTypeString
+	_, err = ssmSvc.PutParameter(context.Background(), &ssm.PutParameterInput{
 		Name:      &parameterName,
-		Type:      aws.String("String"),
+		Type:      parameterType,
 		Value:     aws.String(string(scalingJSON)),
 		Overwrite: aws.Bool(true),
 	})
@@ -1234,33 +1242,34 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 		reviewApp = nil
 	}
 
-	var sess *session.Session
-
 	app := App{
 		Name:      name,
 		ReviewApp: reviewApp,
 	}
 
 	if awsCredentials {
-		sess = session.Must(session.NewSession())
-		app.Session = sess
-		app.AWS = apppackaws.New(sess)
+		cfg, err := config.LoadDefaultConfig(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		app.Session = cfg
+		app.AWS = apppackaws.New(cfg)
 
-		err := app.LoadSettings()
+		err = app.LoadSettings()
 		if err != nil {
 			return nil, err
 		}
 		// this is a horribly hacky way to figure out if the app is a pipeline, but it works
 		app.Pipeline = strings.Contains(app.Settings.StackID, fmt.Sprintf("/apppack-pipeline-%s/", app.Name))
 	} else {
-		sess, appRole, err := auth.AppAWSSession(name, sessionDuration)
+		cfg, appRole, err := auth.AppAWSSession(name, sessionDuration)
 		if err != nil {
 			return nil, err
 		}
 
 		app.Pipeline = appRole.Pipeline
-		app.Session = sess
-		app.AWS = apppackaws.New(sess)
+		app.Session = cfg
+		app.AWS = apppackaws.New(cfg)
 	}
 
 	if !app.Pipeline && app.ReviewApp != nil {

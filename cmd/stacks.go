@@ -24,7 +24,7 @@ import (
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
 	"github.com/apppackio/apppack/utils"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/juju/ansiterm/tabwriter"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
@@ -38,7 +38,7 @@ type stackHumanize struct {
 	Cluster string
 }
 
-func stackName(stack *cloudformation.Stack) (*stackHumanize, error) {
+func stackName(stack *types.Stack) (*stackHumanize, error) {
 	parts := strings.Split(*stack.StackName, "-")
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("invalid stack name %s", *stack.StackName)
@@ -74,9 +74,9 @@ var stacksCmd = &cobra.Command{
 	Args:                  cobra.NoArgs,
 	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		stacks, err := bridge.ApppackStacks(sess)
+		stacks, err := bridge.ApppackStacks(cfg)
 		checkErr(err)
 		sort.Slice(stacks, func(i, j int) bool {
 			return *stacks[i].StackName < *stacks[j].StackName
@@ -90,7 +90,7 @@ var stacksCmd = &cobra.Command{
 			if *stack.StackName == "apppack-account" || strings.HasPrefix(*stack.StackName, "apppack-region-") {
 				continue
 			}
-			humanStack, err := stackName(stack)
+			humanStack, err := stackName(&stack)
 			checkErr(err)
 			if currentGroup != humanStack.Type {
 				w.Flush()

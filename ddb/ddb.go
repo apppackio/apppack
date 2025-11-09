@@ -1,15 +1,17 @@
 package ddb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 type stackItem struct {
@@ -25,18 +27,18 @@ type Stack struct {
 	DatabaseEngine string `json:"engine"`
 }
 
-func GetClusterItem(sess *session.Session, cluster *string, addon string, name *string) (*Stack, error) {
-	ddbSvc := dynamodb.New(sess)
+func GetClusterItem(cfg aws.Config, cluster *string, addon string, name *string) (*Stack, error) {
+	ddbSvc := dynamodb.NewFromConfig(cfg)
 	secondaryID := fmt.Sprintf("%s#%s#%s", *cluster, addon, *name)
 
-	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
+	result, err := ddbSvc.GetItem(context.Background(), &dynamodb.GetItemInput{
 		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id": {
-				S: aws.String("CLUSTERS"),
+		Key: map[string]dynamodbtypes.AttributeValue{
+			"primary_id": &dynamodbtypes.AttributeValueMemberS{
+				Value: "CLUSTERS",
 			},
-			"secondary_id": {
-				S: aws.String(secondaryID),
+			"secondary_id": &dynamodbtypes.AttributeValueMemberS{
+				Value: secondaryID,
 			},
 		},
 	})
@@ -50,7 +52,7 @@ func GetClusterItem(sess *session.Session, cluster *string, addon string, name *
 
 	i := stackItem{}
 
-	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
+	err = attributevalue.UnmarshalMap(result.Item, &i)
 	if err != nil {
 		return nil, err
 	}
@@ -58,15 +60,15 @@ func GetClusterItem(sess *session.Session, cluster *string, addon string, name *
 	return &i.Stack, nil
 }
 
-func ClusterQuery(sess *session.Session, cluster, addon *string) (*[]map[string]*dynamodb.AttributeValue, error) {
-	ddbSvc := dynamodb.New(sess)
+func ClusterQuery(cfg aws.Config, cluster, addon *string) (*[]map[string]dynamodbtypes.AttributeValue, error) {
+	ddbSvc := dynamodb.NewFromConfig(cfg)
 
-	result, err := ddbSvc.Query(&dynamodb.QueryInput{
+	result, err := ddbSvc.Query(context.Background(), &dynamodb.QueryInput{
 		TableName:              aws.String("apppack"),
 		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":id1": {S: aws.String("CLUSTERS")},
-			":id2": {S: aws.String(fmt.Sprintf("%s#%s#", *cluster, *addon))},
+		ExpressionAttributeValues: map[string]dynamodbtypes.AttributeValue{
+			":id1": &dynamodbtypes.AttributeValueMemberS{Value: "CLUSTERS"},
+			":id2": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("%s#%s#", *cluster, *addon)},
 		},
 	})
 	if err != nil {
@@ -80,15 +82,15 @@ func ClusterQuery(sess *session.Session, cluster, addon *string) (*[]map[string]
 	return &result.Items, nil
 }
 
-func ListStacks(sess *session.Session, cluster *string, addon string) ([]string, error) {
-	items, err := ClusterQuery(sess, cluster, &addon)
+func ListStacks(cfg aws.Config, cluster *string, addon string) ([]string, error) {
+	items, err := ClusterQuery(cfg, cluster, &addon)
 	if err != nil {
 		return nil, err
 	}
 
 	var i []stackItem
 
-	err = dynamodbattribute.UnmarshalListOfMaps(*items, &i)
+	err = attributevalue.UnmarshalListOfMaps(*items, &i)
 	if err != nil {
 		return nil, err
 	}
@@ -110,15 +112,15 @@ func ListStacks(sess *session.Session, cluster *string, addon string) ([]string,
 	return stacks, nil
 }
 
-func ListClusters(sess *session.Session) ([]string, error) {
-	ddbSvc := dynamodb.New(sess)
+func ListClusters(cfg aws.Config) ([]string, error) {
+	ddbSvc := dynamodb.NewFromConfig(cfg)
 
-	result, err := ddbSvc.Query(&dynamodb.QueryInput{
+	result, err := ddbSvc.Query(context.Background(), &dynamodb.QueryInput{
 		TableName:              aws.String("apppack"),
 		KeyConditionExpression: aws.String("primary_id = :id1 AND begins_with(secondary_id,:id2)"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":id1": {S: aws.String("CLUSTERS")},
-			":id2": {S: aws.String("CLUSTER#")},
+		ExpressionAttributeValues: map[string]dynamodbtypes.AttributeValue{
+			":id1": &dynamodbtypes.AttributeValueMemberS{Value: "CLUSTERS"},
+			":id2": &dynamodbtypes.AttributeValueMemberS{Value: "CLUSTER#"},
 		},
 	})
 	if err != nil {
@@ -131,7 +133,7 @@ func ListClusters(sess *session.Session) ([]string, error) {
 
 	var i []stackItem
 
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &i)
+	err = attributevalue.UnmarshalListOfMaps(result.Items, &i)
 	if err != nil {
 		return nil, err
 	}
@@ -145,17 +147,17 @@ func ListClusters(sess *session.Session) ([]string, error) {
 	return clusters, nil
 }
 
-func StackFromItem(sess *session.Session, secondaryID string) (*cloudformation.Stack, error) {
-	ddbSvc := dynamodb.New(sess)
+func StackFromItem(cfg aws.Config, secondaryID string) (*types.Stack, error) {
+	ddbSvc := dynamodb.NewFromConfig(cfg)
 
-	result, err := ddbSvc.GetItem(&dynamodb.GetItemInput{
+	result, err := ddbSvc.GetItem(context.Background(), &dynamodb.GetItemInput{
 		TableName: aws.String("apppack"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"primary_id": {
-				S: aws.String("CLUSTERS"),
+		Key: map[string]dynamodbtypes.AttributeValue{
+			"primary_id": &dynamodbtypes.AttributeValueMemberS{
+				Value: "CLUSTERS",
 			},
-			"secondary_id": {
-				S: aws.String(secondaryID),
+			"secondary_id": &dynamodbtypes.AttributeValueMemberS{
+				Value: secondaryID,
 			},
 		},
 	})
@@ -169,14 +171,14 @@ func StackFromItem(sess *session.Session, secondaryID string) (*cloudformation.S
 
 	i := stackItem{}
 
-	err = dynamodbattribute.UnmarshalMap(result.Item, &i)
+	err = attributevalue.UnmarshalMap(result.Item, &i)
 	if err != nil {
 		return nil, err
 	}
 
-	cfnSvc := cloudformation.New(sess)
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
-	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+	stacks, err := cfnSvc.DescribeStacks(context.Background(), &cloudformation.DescribeStacksInput{
 		StackName: &i.Stack.StackID,
 	})
 	if err != nil {
@@ -187,5 +189,5 @@ func StackFromItem(sess *session.Session, secondaryID string) (*cloudformation.S
 		return nil, fmt.Errorf("no stacks found with ID %s", i.Stack.StackID)
 	}
 
-	return stacks.Stacks[0], nil
+	return &stacks.Stacks[0], nil
 }

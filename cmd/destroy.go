@@ -21,7 +21,7 @@ import (
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
 	"github.com/apppackio/apppack/utils"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
@@ -29,13 +29,13 @@ import (
 )
 
 // DestroyStackCmd destroys the given stack after user confirmation
-func DestroyStackCmd(sess *session.Session, stack stacks.Stack, name string) {
+func DestroyStackCmd(cfg aws.Config, stack stacks.Stack, name string) {
 	ui.StartSpinner()
 
-	if err := stacks.LoadStackFromCloudformation(sess, stack, &name); err != nil {
+	if err := stacks.LoadStackFromCloudformation(cfg, stack, &name); err != nil {
 		// if the stack doesn't exist, try to do the post-cleanup
 		// to make sure we don't leave orphaned resources
-		if err1 := stack.PostDelete(sess, &name); err1 != nil {
+		if err1 := stack.PostDelete(cfg, &name); err1 != nil {
 			logrus.WithFields(logrus.Fields{"err": err1}).Warning("post-delete failed")
 		}
 
@@ -54,14 +54,14 @@ func DestroyStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 
 	var destroy func() error
 	destroy = func() error {
-		stack, err := stacks.DeleteStackAndWait(sess, stack)
+		stack, err := stacks.DeleteStackAndWait(cfg, stack)
 		if err != nil {
 			return err
 		}
 
 		ui.Spinner.Stop()
 
-		if *stack.StackStatus != stacks.DeleteComplete {
+		if stack.StackStatus != stacks.DeleteComplete {
 			if retry {
 				ui.PrintWarning("deletion did not complete successfully, retrying...")
 
@@ -95,9 +95,9 @@ var destroyAccountCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		DestroyStackCmd(sess, &stacks.AccountStack{Parameters: &stacks.AccountStackParameters{}}, "")
+		DestroyStackCmd(cfg, &stacks.AccountStack{Parameters: &stacks.AccountStackParameters{}}, "")
 	},
 }
 
@@ -109,9 +109,9 @@ var destroyRegionCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		DestroyStackCmd(sess, &stacks.RegionStack{Parameters: &stacks.RegionStackParameters{}}, *sess.Config.Region)
+		DestroyStackCmd(cfg, &stacks.RegionStack{Parameters: &stacks.RegionStackParameters{}}, cfg.Region)
 	},
 }
 
@@ -124,9 +124,9 @@ var destroyRedisCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		DestroyStackCmd(sess, &stacks.RedisStack{Parameters: &stacks.RedisStackParameters{}}, args[0])
+		DestroyStackCmd(cfg, &stacks.RedisStack{Parameters: &stacks.RedisStackParameters{}}, args[0])
 	},
 }
 
@@ -139,9 +139,9 @@ var destroyDatabaseCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		DestroyStackCmd(sess, &stacks.DatabaseStack{Parameters: &stacks.DefaultDatabaseStackParameters}, args[0])
+		DestroyStackCmd(cfg, &stacks.DatabaseStack{Parameters: &stacks.DefaultDatabaseStackParameters}, args[0])
 	},
 }
 
@@ -154,9 +154,9 @@ var destroyClusterCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		DestroyStackCmd(sess, &stacks.ClusterStack{Parameters: &stacks.ClusterStackParameters{}}, args[0])
+		DestroyStackCmd(cfg, &stacks.ClusterStack{Parameters: &stacks.ClusterStackParameters{}}, args[0])
 	},
 }
 
@@ -169,9 +169,9 @@ var destroyAppCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		DestroyStackCmd(sess, &stacks.AppStack{Pipeline: false, Parameters: &stacks.AppStackParameters{}}, args[0])
+		DestroyStackCmd(cfg, &stacks.AppStack{Pipeline: false, Parameters: &stacks.AppStackParameters{}}, args[0])
 	},
 }
 
@@ -184,9 +184,9 @@ var destroyPipelineCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		DestroyStackCmd(sess, &stacks.AppStack{Pipeline: true, Parameters: &stacks.AppStackParameters{}}, args[0])
+		DestroyStackCmd(cfg, &stacks.AppStack{Pipeline: true, Parameters: &stacks.AppStackParameters{}}, args[0])
 	},
 }
 
@@ -199,9 +199,9 @@ var destroyCustomDomainCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		DestroyStackCmd(sess, &stacks.CustomDomainStack{Parameters: &stacks.CustomDomainStackParameters{}}, args[0])
+		DestroyStackCmd(cfg, &stacks.CustomDomainStack{Parameters: &stacks.CustomDomainStackParameters{}}, args[0])
 	},
 }
 

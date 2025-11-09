@@ -1,8 +1,10 @@
 package aws
 
 import (
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"context"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
 type Interface interface {
@@ -12,19 +14,19 @@ type Interface interface {
 }
 
 type AWS struct {
-	session *session.Session
+	cfg aws.Config
 }
 
-func New(sess *session.Session) *AWS {
+func New(cfg aws.Config) *AWS {
 	return &AWS{
-		session: sess,
+		cfg: cfg,
 	}
 }
 
 func (a *AWS) GetParameter(input *ssm.GetParameterInput) (*string, error) {
-	ssmSvc := ssm.New(a.session)
+	ssmSvc := ssm.NewFromConfig(a.cfg)
 
-	parameterOutput, err := ssmSvc.GetParameter(input)
+	parameterOutput, err := ssmSvc.GetParameter(context.Background(), input)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +35,8 @@ func (a *AWS) GetParameter(input *ssm.GetParameterInput) (*string, error) {
 }
 
 func (a *AWS) PutParameter(input *ssm.PutParameterInput) error {
-	ssmSvc := ssm.New(a.session)
-	_, err := ssmSvc.PutParameter(input)
+	ssmSvc := ssm.NewFromConfig(a.cfg)
+	_, err := ssmSvc.PutParameter(context.Background(), input)
 
 	return err
 }

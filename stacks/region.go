@@ -1,35 +1,35 @@
 package stacks
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
 type RegionStackParameters struct{}
 
-func (p *RegionStackParameters) Import(parameters []*cloudformation.Parameter) error {
+func (p *RegionStackParameters) Import(parameters []types.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
 
-func (p *RegionStackParameters) ToCloudFormationParameters() ([]*cloudformation.Parameter, error) {
+func (p *RegionStackParameters) ToCloudFormationParameters() ([]types.Parameter, error) {
 	return StructToCloudformationParameters(p)
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (*RegionStackParameters) SetInternalFields(_ *session.Session, _ *string) error {
+func (*RegionStackParameters) SetInternalFields(_ aws.Config, _ *string) error {
 	return nil
 }
 
 type RegionStack struct {
-	Stack      *cloudformation.Stack
+	Stack      *types.Stack
 	Parameters *RegionStackParameters
 }
 
@@ -37,26 +37,26 @@ func (a *RegionStack) GetParameters() Parameters {
 	return a.Parameters
 }
 
-func (a *RegionStack) GetStack() *cloudformation.Stack {
+func (a *RegionStack) GetStack() *types.Stack {
 	return a.Stack
 }
 
-func (a *RegionStack) SetStack(stack *cloudformation.Stack) {
+func (a *RegionStack) SetStack(stack *types.Stack) {
 	a.Stack = stack
 }
 
-func (*RegionStack) PostCreate(_ *session.Session) error {
+func (*RegionStack) PostCreate(_ aws.Config) error {
 	return nil
 }
 
-func (*RegionStack) PreDelete(_ *session.Session) error {
+func (*RegionStack) PreDelete(_ aws.Config) error {
 	return nil
 }
 
-func (*RegionStack) PostDelete(sess *session.Session, _ *string) error {
+func (*RegionStack) PostDelete(cfg aws.Config, _ *string) error {
 	// Stacks before `formations/5.8.0` used this parameter
-	ssmSvc := ssm.New(sess)
-	_, err := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
+	ssmSvc := ssm.NewFromConfig(cfg)
+	_, err := ssmSvc.DeleteParameter(context.Background(), &ssm.DeleteParameterInput{
 		Name: aws.String("/apppack/account/dockerhub-access-token"),
 	})
 	// Ignore error if the parameter doesn't exist
@@ -73,7 +73,7 @@ func (a *RegionStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return ui.FlagsToStruct(a.Parameters, flags)
 }
 
-func (*RegionStack) AskQuestions(_ *session.Session) error {
+func (*RegionStack) AskQuestions(_ aws.Config) error {
 	return nil
 }
 
@@ -87,16 +87,16 @@ func (*RegionStack) StackType() string {
 	return "region"
 }
 
-func (*RegionStack) Tags(name *string) []*cloudformation.Tag {
-	return []*cloudformation.Tag{
+func (*RegionStack) Tags(name *string) []types.Tag {
+	return []types.Tag{
 		{Key: aws.String("apppack:region"), Value: name},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}
 }
 
-func (*RegionStack) Capabilities() []*string {
-	return []*string{
-		aws.String("CAPABILITY_IAM"),
+func (*RegionStack) Capabilities() []types.Capability {
+	return []types.Capability{
+		types.CapabilityCapabilityIam,
 	}
 }
 

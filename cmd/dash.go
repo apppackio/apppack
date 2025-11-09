@@ -166,7 +166,7 @@ func serviceEventsText(ctx context.Context, a *app.App, options *metrics.MetricO
 	return textWidget, nil
 }
 
-func labelsFromTimestamps(timestamps []*time.Time, utc bool) map[int]string {
+func labelsFromTimestamps(timestamps []time.Time, utc bool) map[int]string {
 	labels := map[int]string{}
 	format := "15:04"
 
@@ -207,7 +207,7 @@ func populateLineChart(appMetrics metrics.AppMetrics, lc *linechart.LineChart) (
 
 		var values []float64
 		for _, v := range metric.Values {
-			values = append(values, *v)
+			values = append(values, v)
 		}
 
 		labels := labelsFromTimestamps(metric.Timestamps, appMetrics.GetOptions().UTC)

@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -28,6 +29,9 @@ import (
 	sawconfig "github.com/TylerBrock/saw/config"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsv1 "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/pkg/browser"
@@ -42,13 +46,32 @@ var (
 )
 
 // newBlade is a hack to get a Blade instance with our AWS session
-func newBlade(session *session.Session) *blade.Blade {
+func newBlade(cfg aws.Config) *blade.Blade {
+	// Convert v2 credentials to v1 session for saw library
+	creds, err := cfg.Credentials.Retrieve(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	// Create v1 session with credentials from v2 config
+	sess, err := session.NewSession(&awsv1.Config{
+		Region: awsv1.String(cfg.Region),
+		Credentials: credentials.NewStaticCredentials(
+			creds.AccessKeyID,
+			creds.SecretAccessKey,
+			creds.SessionToken,
+		),
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	b := blade.Blade{}
 	setField := func(name string, value interface{}) {
 		field := reflect.ValueOf(&b).Elem().FieldByName(name)
 		reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(value))
 	}
-	setField("cwl", cloudwatchlogs.New(session))
+	setField("cwl", cloudwatchlogs.New(sess))
 	setField("config", &sawConfig)
 	setField("output", &sawOutputConfig)
 
@@ -158,7 +181,7 @@ var logsOpenCmd = &cobra.Command{
 			query = "fields @timestamp, @message\n| sort @timestamp desc\n| limit 200"
 		}
 		queryParam := strings.ReplaceAll(url.QueryEscape(query), "%", "*")
-		region := *a.Session.Config.Region
+		region := a.Session.Region
 		destinationURL := fmt.Sprintf("https://%s.console.aws.amazon.com/cloudwatch/home#logsV2:logs-insights$3FqueryDetail$3D~(editorString~'%s~source~(~'%s))", region, queryParam, logGroupParam)
 		signinURL, err := a.GetConsoleURL(destinationURL)
 		checkErr(err)

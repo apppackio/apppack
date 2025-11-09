@@ -24,7 +24,7 @@ import (
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
@@ -108,8 +108,8 @@ var reviewappsCreateCmd = &cobra.Command{
 			TemplateURL:  stack.TemplateURL(&release),
 		})
 		checkErr(err)
-		if *cfnStack.StackStatus != "CREATE_COMPLETE" {
-			checkErr(fmt.Errorf("stack creation failed: %s", *cfnStack.StackStatus))
+		if cfnStack.StackStatus != "CREATE_COMPLETE" {
+			checkErr(fmt.Errorf("stack creation failed: %s", cfnStack.StackStatus))
 		}
 		ui.Spinner.Stop()
 		ui.PrintSuccess("review app stack created")
