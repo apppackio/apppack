@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+* `build start` command now accepts optional `--ref` flag to build from specific git references (branches, tags, or commit hashes).
+* `modify app` command to update some parameters of application/pipeline stacks.
+
+### Changed
+
+* Updated to Go 1.25.4 and refreshed dependencies.
+
+### Fixed
+
+* Fixed issue where a stack update could revert unexpected parameters to template defaults.
+
 ## [4.6.7] - 2025-08-14
 
 ### Fixed

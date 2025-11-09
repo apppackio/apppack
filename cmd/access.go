@@ -62,11 +62,15 @@ func removeFromSlice(slice, toRemove []string) ([]string, []string) {
 }
 
 func appOrPipelineStack(sess *session.Session, name string) (*stacks.AppStack, error) {
-	stack := stacks.AppStack{Pipeline: false, Parameters: &stacks.AppStackParameters{}}
+	// Initialize with default parameters so fields have default values before Import
+	appParams := stacks.DefaultAppStackParameters
+	stack := stacks.AppStack{Pipeline: false, Parameters: &appParams}
 	err := stacks.LoadStackFromCloudformation(sess, &stack, &name)
-
 	if err != nil {
+		// Try as pipeline
+		pipelineParams := stacks.DefaultPipelineStackParameters
 		stack.Pipeline = true
+		stack.Parameters = &pipelineParams
 
 		err = stacks.LoadStackFromCloudformation(sess, &stack, &name)
 		if err != nil {
