@@ -472,7 +472,7 @@ func (a *AppStack) AskForSESDomain() error {
 			Verbose:  verbose,
 			HelpText: "Only allow outbound email via SES from a specific domain (e.g., example.com). Use `*` to allow sending on any domain approved for sending in SES.",
 			Question: &survey.Question{
-				Name:     "SesDomain",
+				Name:     "SESDomain",
 				Prompt:   &survey.Input{Message: "SES Approved Domain", Default: a.Parameters.SESDomain},
 				Validate: survey.Required,
 			},

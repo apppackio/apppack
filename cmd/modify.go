@@ -52,11 +52,11 @@ func modifyAppStack(sess *session.Session, stack *stacks.AppStack, name string, 
 				return err
 			}
 		}
-		if providedFlags["branch"] {
+		if providedFlags["branch"] && !stack.Pipeline {
 			branch, _ := flags.GetString("branch")
 			stack.Parameters.Branch = branch
 		}
-		if providedFlags["domains"] {
+		if providedFlags["domains"] && !stack.Pipeline {
 			domains, _ := flags.GetStringSlice("domains")
 			stack.Parameters.Domains = domains
 		}
