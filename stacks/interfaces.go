@@ -42,16 +42,34 @@ type Stack interface {
 }
 
 func CloudformationParametersToStruct(s Parameters, parameters []types.Parameter) error {
-	ref := reflect.ValueOf(s).Type().Elem()
+	structValue := reflect.ValueOf(s).Elem()
+	structType := structValue.Type()
+
+	// Build a map from CloudFormation parameter names to struct fields using cfnparam tags
+	paramToFieldMap := make(map[string]reflect.StructField)
+	fields := reflect.VisibleFields(structType)
+	for _, field := range fields {
+		// If field has a cfnparam tag, map the CloudFormation parameter name to this field
+		if cfnParamName, ok := field.Tag.Lookup("cfnparam"); ok && cfnParamName != "" {
+			paramToFieldMap[cfnParamName] = field
+		}
+		// Also map the field name itself for standard cases (when CloudFormation name matches Go name)
+		paramToFieldMap[field.Name] = field
+	}
+
 	for _, param := range parameters {
-		field, ok := ref.FieldByName(*param.ParameterKey)
+		// Look up the field for this CloudFormation parameter
+		field, ok := paramToFieldMap[*param.ParameterKey]
 		if !ok {
 			logrus.WithFields(logrus.Fields{"name": *param.ParameterKey}).Debug("unable to match Parameter")
-
 			continue
 		}
 
-		val := reflect.ValueOf(s).Elem().FieldByName(*param.ParameterKey)
+		val := structValue.FieldByIndex(field.Index)
+		if !val.CanSet() {
+			logrus.WithFields(logrus.Fields{"name": *param.ParameterKey}).Debug("unable to set Parameter")
+			continue
+		}
 
 		switch field.Type.Kind() {
 		case reflect.String:
@@ -89,21 +107,27 @@ func CloudformationParametersToStruct(s Parameters, parameters []types.Parameter
 func StructToCloudformationParameters(s Parameters) ([]types.Parameter, error) {
 	var params []types.Parameter
 
-	ref := reflect.ValueOf(s).Elem()
-	if ref.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("expected struct, got %s", ref.Kind())
+	structValue := reflect.ValueOf(s).Elem()
+	if structValue.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("expected struct, got %s", structValue.Kind())
 	}
 
-	fields := reflect.VisibleFields(ref.Type())
+	fields := reflect.VisibleFields(structValue.Type())
 	for i, field := range fields {
-		f := reflect.ValueOf(s).Elem().Field(i)
+		f := structValue.Field(i)
+
+		// Get the CloudFormation parameter name - use cfnparam tag if present, otherwise use field name
+		paramName := field.Name
+		if cfnParamName, ok := field.Tag.Lookup("cfnparam"); ok && cfnParamName != "" {
+			paramName = cfnParamName
+		}
 
 		var param types.Parameter
 
 		switch field.Type.Kind() {
 		case reflect.String:
 			param = types.Parameter{
-				ParameterKey:   aws.String(field.Name),
+				ParameterKey:   aws.String(paramName),
 				ParameterValue: aws.String(f.String()),
 			}
 		case reflect.Bool:
@@ -111,7 +135,7 @@ func StructToCloudformationParameters(s Parameters) ([]types.Parameter, error) {
 
 			var falseVal string
 
-			param = types.Parameter{ParameterKey: aws.String(field.Name)}
+			param = types.Parameter{ParameterKey: aws.String(paramName)}
 
 			if field.Tag.Get("cfnbool") == "yesno" {
 				trueVal = "yes"
@@ -130,7 +154,7 @@ func StructToCloudformationParameters(s Parameters) ([]types.Parameter, error) {
 		case reflect.Int:
 			val := f.Int()
 			param = types.Parameter{
-				ParameterKey:   aws.String(field.Name),
+				ParameterKey:   aws.String(paramName),
 				ParameterValue: aws.String(strconv.Itoa(int(val))),
 			}
 		case reflect.Slice:
@@ -140,7 +164,7 @@ func StructToCloudformationParameters(s Parameters) ([]types.Parameter, error) {
 
 			val := f.Interface().([]string)
 			param = types.Parameter{
-				ParameterKey:   aws.String(field.Name),
+				ParameterKey:   aws.String(paramName),
 				ParameterValue: aws.String(strings.Join(val, ",")),
 			}
 		default:
@@ -169,13 +193,31 @@ func PruneUnsupportedParameters(supportedParameters, desiredParameters []types.P
 		supportedParameterNames = append(supportedParameterNames, *param.ParameterKey)
 	}
 
+	desiredParameterNames := make(map[string]bool)
+	for _, param := range desiredParameters {
+		desiredParameterNames[*param.ParameterKey] = true
+	}
+
 	var prunedParameters []types.Parameter
 
+	// Add parameters that we're explicitly setting
 	for _, param := range desiredParameters {
 		if stringslice.Contains(*param.ParameterKey, supportedParameterNames) {
 			prunedParameters = append(prunedParameters, param)
 		} else {
 			logrus.WithFields(logrus.Fields{"name": *param.ParameterKey}).Debug("parameter not supported by stack")
+		}
+	}
+
+	// Add UsePreviousValue for parameters in CloudFormation that we're NOT setting
+	// This prevents them from being reset to template defaults
+	for _, param := range supportedParameters {
+		if !desiredParameterNames[*param.ParameterKey] {
+			prunedParameters = append(prunedParameters, types.Parameter{
+				ParameterKey:     param.ParameterKey,
+				UsePreviousValue: aws.Bool(true),
+			})
+			logrus.WithFields(logrus.Fields{"name": *param.ParameterKey}).Debug("preserving existing parameter value")
 		}
 	}
 
@@ -213,7 +255,7 @@ func CreateStack(cfg aws.Config, s Stack, name, release *string) error {
 		return err
 	}
 
-	if cfnStack.StackStatus != types.StackStatusCreateComplete {
+	if cfnStack.StackStatus != "CREATE_COMPLETE" {
 		return ErrStackCreationFailed
 	}
 
@@ -241,7 +283,7 @@ func ModifyStack(cfg aws.Config, s Stack, name *string) error {
 		return err
 	}
 
-	if cfnStack.StackStatus != types.StackStatusUpdateComplete {
+	if cfnStack.StackStatus != "UPDATE_COMPLETE" {
 		return fmt.Errorf("stack update failed: %s", cfnStack.StackStatus)
 	}
 
@@ -267,7 +309,7 @@ func UpdateStack(cfg aws.Config, s Stack, name, release *string) error {
 		return err
 	}
 
-	if cfnStack.StackStatus != types.StackStatusUpdateComplete {
+	if cfnStack.StackStatus != "UPDATE_COMPLETE" {
 		return fmt.Errorf("stack update failed: %s", cfnStack.StackStatus)
 	}
 
@@ -281,7 +323,7 @@ func CreateStackChangeset(cfg aws.Config, s Stack, name, release *string) (strin
 	}
 
 	changeSetType := types.ChangeSetTypeCreate
-	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(string(changeSetType)), time.Now().Unix())
+	changeSetName := fmt.Sprintf("create-%d", time.Now().Unix())
 	input := &cloudformation.CreateChangeSetInput{
 		ChangeSetType: changeSetType,
 		ChangeSetName: &changeSetName,
@@ -313,10 +355,10 @@ func ModifyStackChangeset(cfg aws.Config, s Stack, name *string) (string, error)
 		return "", err
 	}
 
-	changeSetType := types.ChangeSetTypeUpdate
-	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(string(changeSetType)), time.Now().Unix())
+	method := types.ChangeSetTypeUpdate
+	changeSetName := fmt.Sprintf("update-%d", time.Now().Unix())
 	input := &cloudformation.CreateChangeSetInput{
-		ChangeSetType:       changeSetType,
+		ChangeSetType:       method,
 		ChangeSetName:       &changeSetName,
 		StackName:           s.GetStack().StackName,
 		UsePreviousTemplate: aws.Bool(true),
@@ -345,10 +387,10 @@ func UpdateStackChangeset(cfg aws.Config, s Stack, name, release *string) (strin
 		return "", err
 	}
 
-	changeSetType := types.ChangeSetTypeUpdate
-	changeSetName := fmt.Sprintf("%s-%d", strings.ToLower(string(changeSetType)), time.Now().Unix())
+	method := types.ChangeSetTypeUpdate
+	changeSetName := fmt.Sprintf("update-%d", time.Now().Unix())
 	input := &cloudformation.CreateChangeSetInput{
-		ChangeSetType: changeSetType,
+		ChangeSetType: method,
 		ChangeSetName: &changeSetName,
 		StackName:     s.GetStack().StackName,
 		TemplateURL:   s.TemplateURL(release),

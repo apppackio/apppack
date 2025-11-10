@@ -30,19 +30,19 @@ type AppStackParameters struct {
 	Type                               string
 	Name                               string
 	ClusterStackName                   string   `flag:"cluster;fmtString:apppack-cluster-%s"`
-	RepositoryURL                      string   `flag:"repository"`
+	RepositoryURL                      string   `flag:"repository" cfnparam:"RepositoryUrl"`
 	Branch                             string   `flag:"branch"`
 	Domains                            []string `flag:"domains"`
-	DefaultAutoscalingAverageCPUTarget int
-	HealthCheckPath                    string `flag:"healthcheck-path"`
+	DefaultAutoscalingAverageCPUTarget int      `cfnparam:"DefaultAutoscalingAverageCpuTarget"`
+	HealthCheckPath                    string   `flag:"healthcheck-path"`
 	HealthcheckInterval                int
 	DeregistrationDelay                int
 	LoadBalancerRulePriority           int
 	LogRetentionDays                   int
-	AppPackRoleExternalID              string
+	AppPackRoleExternalID              string `cfnparam:"AppPackRoleExternalId"`
 	PrivateS3BucketEnabled             bool   `flag:"addon-private-s3"`
 	PublicS3BucketEnabled              bool   `flag:"addon-public-s3"`
-	SesDomain                          string `flag:"addon-ses-domain"`
+	SESDomain                          string `flag:"addon-ses-domain" cfnparam:"SesDomain"`
 	DatabaseStackName                  string `flag:"addon-database-name;fmtString:apppack-database-%s"`
 	RedisStackName                     string `flag:"addon-redis-name;fmtString:apppack-redis-%s"`
 	SQSQueueEnabled                    bool   `flag:"addon-sqs"`
@@ -50,7 +50,7 @@ type AppStackParameters struct {
 	Fargate                            bool     `flag:"ec2;negate"`
 	AllowedUsers                       []string `flag:"users"`
 	BuildWebhook                       bool     `flag:"disable-build-webhook;negate"`
-	CustomTaskPolicyArn                string
+	CustomTaskPolicyARN                string   `cfnparam:"CustomTaskPolicyArn"`
 }
 
 var DefaultAppStackParameters = AppStackParameters{
@@ -417,7 +417,7 @@ func (a *AppStack) AskForRedisStack(cfg aws.Config) error {
 }
 
 func (a *AppStack) AskForSES() error {
-	enable := a.Parameters.SesDomain != ""
+	enable := a.Parameters.SESDomain != ""
 
 	var verbose string
 
@@ -454,7 +454,7 @@ func (a *AppStack) AskForSES() error {
 		return a.AskForSESDomain()
 	}
 
-	a.Parameters.SesDomain = ""
+	a.Parameters.SESDomain = ""
 
 	return nil
 }
@@ -473,8 +473,8 @@ func (a *AppStack) AskForSESDomain() error {
 			Verbose:  verbose,
 			HelpText: "Only allow outbound email via SES from a specific domain (e.g., example.com). Use `*` to allow sending on any domain approved for sending in SES.",
 			Question: &survey.Question{
-				Name:     "SesDomain",
-				Prompt:   &survey.Input{Message: "SES Approved Domain", Default: a.Parameters.SesDomain},
+				Name:     "SESDomain",
+				Prompt:   &survey.Input{Message: "SES Approved Domain", Default: a.Parameters.SESDomain},
 				Validate: survey.Required,
 			},
 		},
@@ -501,6 +501,67 @@ func (a *AppStack) CanChangeParameter(name string) (bool, error) {
 	return *currentVal == "", nil
 }
 
+// BuildRepositoryURLQuestion creates the repository URL question
+func BuildRepositoryURLQuestion(valuePtr *string) *ui.QuestionExtra {
+	return &ui.QuestionExtra{
+		Verbose:  "What code repository should this app build from?",
+		HelpText: "Use the HTTP URL (e.g., https://github.com/{org}/{repo}.git). BitBucket and Github repositories are supported.",
+		WriteTo:  &ui.StringValueProxy{Value: valuePtr},
+		Question: &survey.Question{
+			Prompt:   &survey.Input{Message: "Repository URL", Default: *valuePtr},
+			Validate: survey.Required,
+		},
+	}
+}
+
+// BuildBranchQuestion creates the branch question for non-pipeline apps
+func BuildBranchQuestion(valuePtr *string) *ui.QuestionExtra {
+	return &ui.QuestionExtra{
+		Verbose:  "What branch should this app build from?",
+		HelpText: "The deployment pipeline will be triggered on new pushes to this branch.",
+		WriteTo:  &ui.StringValueProxy{Value: valuePtr},
+		Question: &survey.Question{
+			Prompt:   &survey.Input{Message: "Branch", Default: *valuePtr},
+			Validate: survey.Required,
+		},
+	}
+}
+
+// BuildDomainsQuestion creates the custom domains question for non-pipeline apps
+func BuildDomainsQuestion(domainsPtr *[]string) *ui.QuestionExtra {
+	return &ui.QuestionExtra{
+		Verbose:  "Should the app be served on a custom domain? (Optional)",
+		HelpText: "By default, the app will automatically be assigned a domain within the cluster. If you'd like it to respond on other domain(s), enter them here (one-per-line). See https://docs.apppack.io/how-to/custom-domains/ for more info.",
+		WriteTo:  &ui.MultiLineValueProxy{Value: domainsPtr},
+		Question: &survey.Question{
+			Prompt: &survey.Multiline{
+				Message: "Custom Domain(s)",
+				Default: strings.Join(*domainsPtr, "\n"),
+			},
+			Validate: func(val interface{}) error {
+				domains := strings.Split(val.(string), "\n")
+				if len(domains) > 4 {
+					return errors.New("limit of 4 custom domains exceeded")
+				}
+				return nil
+			},
+		},
+	}
+}
+
+// BuildHealthCheckPathQuestion creates the healthcheck path question
+func BuildHealthCheckPathQuestion(valuePtr *string) *ui.QuestionExtra {
+	return &ui.QuestionExtra{
+		Verbose:  "What path should be used for healthchecks?",
+		HelpText: "Enter a path (e.g., `/-/alive/`) that will always serve a 200 status code when the application is healthy.",
+		WriteTo:  &ui.StringValueProxy{Value: valuePtr},
+		Question: &survey.Question{
+			Prompt:   &survey.Input{Message: "Healthcheck Path", Default: *valuePtr},
+			Validate: survey.Required,
+		},
+	}
+}
+
 func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 	var questions []*ui.QuestionExtra
 
@@ -519,15 +580,7 @@ func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 
 	sort.Strings(a.Parameters.AllowedUsers)
 
-	questions = append(questions, &ui.QuestionExtra{
-		Verbose:  fmt.Sprintf("What code repository should this %s build from?", a.StackType()),
-		HelpText: "Use the HTTP URL (e.g., https://github.com/{org}/{repo}.git). BitBucket and Github repositories are supported.",
-		Question: &survey.Question{
-			Name:     "RepositoryUrl",
-			Prompt:   &survey.Input{Message: "Repository URL", Default: a.Parameters.RepositoryURL},
-			Validate: survey.Required,
-		},
-	})
+	questions = append(questions, BuildRepositoryURLQuestion(&a.Parameters.RepositoryURL))
 	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
 		return err
 	}
@@ -538,41 +591,13 @@ func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 		return err
 	}
 
-	if err = verifySourceCredentials(cfg, a.Parameters.RepositoryType); err != nil {
+	if err = VerifySourceCredentials(cfg, a.Parameters.RepositoryType); err != nil {
 		return err
 	}
 
 	if !a.Pipeline {
-		questions = append(questions, []*ui.QuestionExtra{
-			{
-				Verbose:  "What branch should this app build from?",
-				HelpText: "The deployment pipeline will be triggered on new pushes to this branch.",
-				Question: &survey.Question{
-					Name:     "Branch",
-					Prompt:   &survey.Input{Message: "Branch", Default: a.Parameters.Branch},
-					Validate: survey.Required,
-				},
-			},
-			{
-				Verbose:  "Should the app be served on a custom domain? (Optional)",
-				HelpText: "By default, the app will automatically be assigned a domain within the cluster. If you'd like it to respond on other domain(s), enter them here (one-per-line). See https://docs.apppack.io/how-to/custom-domains/ for more info.",
-				WriteTo:  &ui.MultiLineValueProxy{Value: &a.Parameters.Domains},
-				Question: &survey.Question{
-					Prompt: &survey.Multiline{
-						Message: "Custom Domain(s)",
-						Default: strings.Join(a.Parameters.Domains, "\n"),
-					},
-					Validate: func(val interface{}) error {
-						domains := strings.Split(val.(string), "\n")
-						if len(domains) > 4 {
-							return errors.New("limit of 4 custom domains exceeded")
-						}
-
-						return nil
-					},
-				},
-			},
-		}...)
+		questions = append(questions, BuildBranchQuestion(&a.Parameters.Branch))
+		questions = append(questions, BuildDomainsQuestion(&a.Parameters.Domains))
 	}
 
 	var sqsVerbose string
@@ -591,16 +616,8 @@ func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 		bucketHelpTextApp = "the app"
 	}
 
+	questions = append(questions, BuildHealthCheckPathQuestion(&a.Parameters.HealthCheckPath))
 	questions = append(questions, []*ui.QuestionExtra{
-		{
-			Verbose:  "What path should be used for healthchecks?",
-			HelpText: "Enter a path (e.g., `/-/alive/`) that will always serve a 200 status code when the application is healthy.",
-			Question: &survey.Question{
-				Name:     "HealthCheckPath",
-				Prompt:   &survey.Input{Message: "Healthcheck Path", Default: a.Parameters.HealthCheckPath},
-				Validate: survey.Required,
-			},
-		},
 		{
 			Verbose:  fmt.Sprintf("Should a private S3 Bucket be created for this %s?", a.StackType()),
 			HelpText: fmt.Sprintf("The S3 Bucket can be used to store files that should not be publicly accessible. Answering yes will create the bucket and provide its name to %s as a config variable. See https://docs.apppack.io/how-to/using-s3/ for more info.", bucketHelpTextApp),
@@ -817,7 +834,7 @@ func (*AppStack) TemplateURL(release *string) *string {
 	return &url
 }
 
-func verifySourceCredentials(cfg aws.Config, repositoryType string) error {
+func VerifySourceCredentials(cfg aws.Config, repositoryType string) error {
 	codebuildSvc := codebuild.NewFromConfig(cfg)
 
 	sourceCredentialsOutput, err := codebuildSvc.ListSourceCredentials(context.Background(), &codebuild.ListSourceCredentialsInput{})
@@ -870,7 +887,7 @@ func verifySourceCredentials(cfg aws.Config, repositoryType string) error {
 
 		ui.PauseUntilEnter("Finish authentication in your web browser then press ENTER to continue.")
 
-		return verifySourceCredentials(cfg, repositoryType)
+		return VerifySourceCredentials(cfg, repositoryType)
 	}
 
 	return nil

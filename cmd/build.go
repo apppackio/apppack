@@ -778,7 +778,7 @@ var buildStartCmd = &cobra.Command{
 			_, err = a.ReviewAppExists()
 			checkErr(err)
 		}
-		build, err := a.StartBuild(false)
+		build, err := a.StartBuild(false, refFlag)
 		checkErr(err)
 		ui.Spinner.Stop()
 		printSuccess("build started")
@@ -849,7 +849,10 @@ var buildListCmd = &cobra.Command{
 	},
 }
 
-var watchBuildFlag bool
+var (
+	watchBuildFlag bool
+	refFlag        string
+)
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
@@ -861,6 +864,7 @@ func init() {
 	buildStartCmd.Flags().BoolVarP(&watchBuildFlag, "watch", "w", false, "watch build process")
 	buildStartCmd.Flags().BoolVar(&watchBuildFlag, "wait", false, "watch build process")
 	buildStartCmd.Flags().MarkDeprecated("wait", "please use --watch instead")
+	buildStartCmd.Flags().StringVar(&refFlag, "ref", "", "git reference (branch, tag, or commit hash) to build")
 	buildCmd.AddCommand(buildListCmd)
 
 	buildCmd.AddCommand(buildWaitCmd)
