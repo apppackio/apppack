@@ -115,7 +115,7 @@ var reviewappsCreateCmd = &cobra.Command{
 		ui.PrintSuccess("review app stack created")
 		ui.Spinner.Suffix = " triggering initial build..."
 		ui.StartSpinner()
-		build, err := a.StartBuild(true)
+		build, err := a.StartBuild(true, "")
 		checkErr(err)
 		buildStatus, err := pollBuildStatus(a, int(*build.BuildNumber), 10)
 		checkErr(err)
