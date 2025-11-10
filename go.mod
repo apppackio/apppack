@@ -19,7 +19,6 @@ require (
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
-	gopkg.in/square/go-jose.v2 v2.6.0
 )
 
 require (
@@ -46,6 +45,7 @@ require (
 	github.com/aws/session-manager-plugin v0.0.0-20250205214155-b2b0bcd769d1
 	github.com/aws/smithy-go v1.23.2
 	github.com/cli/cli/v2 v2.83.0
+	github.com/go-jose/go-jose/v4 v4.1.1
 )
 
 require (
