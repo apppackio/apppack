@@ -6,8 +6,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 )
+
+// DetermineBuildSourceVersion returns the appropriate SourceVersion for CodeBuild
+// based on whether this is a review app or if a custom ref is provided.
+// Returns nil if no SourceVersion should be set (use default branch).
+func DetermineBuildSourceVersion(isReviewApp bool, reviewAppNumber *string, ref string) *string {
+	if isReviewApp && reviewAppNumber != nil {
+		return aws.String("pr/" + *reviewAppNumber)
+	}
+	if ref != "" {
+		return aws.String(ref)
+	}
+	return nil
+}
 
 type BuildPhaseDetail struct {
 	Arns  []string `json:"arns"`
