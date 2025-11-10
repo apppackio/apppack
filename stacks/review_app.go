@@ -13,6 +13,11 @@ import (
 	"github.com/spf13/pflag"
 )
 
+// IsReviewAppName checks if a name follows the review app naming convention (pipeline:pr)
+func IsReviewAppName(name string) bool {
+	return strings.Contains(name, ":")
+}
+
 func splitReviewAppName(name *string) (string, string) {
 	parts := strings.Split(*name, ":")
 

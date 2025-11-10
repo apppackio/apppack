@@ -61,6 +61,22 @@ func (m *MultiLineValueProxy) WriteAnswer(_ string, value interface{}) error {
 	return nil
 }
 
+// StringValueProxy allows setting a string value directly from a survey question
+type StringValueProxy struct {
+	Value *string
+}
+
+func (s *StringValueProxy) WriteAnswer(_ string, value interface{}) error {
+	ans, ok := value.(string)
+	if !ok {
+		return errors.New("unable to convert value to string")
+	}
+
+	*s.Value = ans
+
+	return nil
+}
+
 // AskQuestions tweaks survey.Ask (and AskOne) to format things the way we want
 func AskQuestions(questions []*QuestionExtra, response interface{}) error {
 	for _, q := range questions {

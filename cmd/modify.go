@@ -15,112 +15,173 @@ limitations under the License.
 */
 package cmd
 
-// import (
-// 	"fmt"
-// 	"strings"
+import (
+	"fmt"
 
-// 	"github.com/apppackio/apppack/stacks"
-// 	"github.com/apppackio/apppack/ui"
-// 	"github.com/aws/aws-sdk-go/aws/session"
-// 	"github.com/logrusorgru/aurora"
-// 	"github.com/spf13/cobra"
-// 	"github.com/spf13/pflag"
-// )
+	"github.com/apppackio/apppack/stacks"
+	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/apppack/utils"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/logrusorgru/aurora"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+)
 
-// // modifyCmd represents the create command
-// var modifyCmd = &cobra.Command{
-// 	Use:   "modify",
-// 	Short: "modify AppPack resources in your AWS account",
-// 	Long: `Use subcommands to modify AppPack resources in your account.
+func modifyAppStack(sess *session.Session, stack *stacks.AppStack, name string, flags *pflag.FlagSet) error {
+	// Track which flags were actually provided
+	providedFlags := make(map[string]bool)
+	flags.Visit(func(f *pflag.Flag) {
+		providedFlags[f.Name] = true
+	})
 
-// These require administrator access.
-// `,
-// 	DisableFlagsInUseLine: true,
-// }
+	// If no modifiable flags provided, run interactive mode
+	hasModifiableFlags := providedFlags["repository"] || providedFlags["branch"] ||
+		providedFlags["domains"] || providedFlags["healthcheck-path"]
 
-// func ModifyStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.FlagSet, name string) {
-// 	ui.StartSpinner()
-// 	checkErr(stacks.LoadStackFromCloudformation(sess, stack, &name))
-// 	checkErr(stack.UpdateFromFlags(flags))
-// 	var prefix string
-// 	if createChangeSet {
-// 		prefix = "Creating changeset for"
-// 	} else {
-// 		prefix = "Updating"
-// 	}
-// 	ui.Spinner.Stop()
-// 	fmt.Print(aurora.Green(fmt.Sprintf("✏️  %s %s `%s` in %s", prefix, strings.Title(stack.StackType()), name, *sess.Config.Region)).String())
-// 	if CurrentAccountRole != nil {
-// 		fmt.Print(aurora.Green(fmt.Sprintf(" on account %s", CurrentAccountRole.GetAccountName())).String())
-// 	}
-// 	fmt.Println()
-// 	if !nonInteractive {
-// 		checkErr(stack.AskQuestions(sess))
-// 	}
-// 	ui.StartSpinner()
-// 	if createChangeSet {
-// 		url, err := stacks.ModifyStackChangeset(sess, stack, &name)
-// 		checkErr(err)
-// 		ui.Spinner.Stop()
-// 		fmt.Println("View changeset at", aurora.White(url))
-// 	} else {
-// 		checkErr(stacks.ModifyStack(sess, stack, &name))
-// 		ui.Spinner.Stop()
-// 		ui.PrintSuccess(fmt.Sprintf("modified %s stack for %s", stack.StackType(), name))
-// 	}
-// }
+	if !hasModifiableFlags {
+		// Interactive mode - ask questions with current values as defaults
+		if err := askModifyQuestions(sess, stack); err != nil {
+			return err
+		}
+	} else {
+		// Flag mode - update only provided values
+		if providedFlags["repository"] {
+			repo, _ := flags.GetString("repository")
+			stack.Parameters.RepositoryURL = repo
+			if err := stack.Parameters.SetRepositoryType(); err != nil {
+				return err
+			}
+		}
+		if providedFlags["branch"] && !stack.Pipeline {
+			branch, _ := flags.GetString("branch")
+			stack.Parameters.Branch = branch
+		}
+		if providedFlags["domains"] && !stack.Pipeline {
+			domains, _ := flags.GetStringSlice("domains")
+			stack.Parameters.Domains = domains
+		}
+		if providedFlags["healthcheck-path"] {
+			path, _ := flags.GetString("healthcheck-path")
+			stack.Parameters.HealthCheckPath = path
+		}
+	}
 
-// // modifyAppCmd represents the modify app command
-// var modifyAppCmd = &cobra.Command{
-// 	Use:     "app",
-// 	Short:   "modify the settings for an app",
-// 	Args:    cobra.ExactArgs(1),
-// 	Example: "apppack modify app <appname>",
-// 	Long: `Modify the settings for an app after creation.
+	// Verify repository credentials if repository was changed
+	if providedFlags["repository"] || !hasModifiableFlags {
+		if err := stacks.VerifySourceCredentials(sess, stack.Parameters.RepositoryType); err != nil {
+			return err
+		}
+	}
 
-// Requires administrator privileges.`,
-// 	DisableFlagsInUseLine: true,
-// 	Run: func(cmd *cobra.Command, args []string) {
-// 		ui.StartSpinner()
-// 		sess, err := adminSession(SessionDurationSeconds)
-// 		checkErr(err)
-// 		ModifyStackCommand(sess, &stacks.AppStack{Pipeline: false, Parameters: &stacks.DefaultAppStackParameters}, cmd.Flags(), args[0])
-// 	},
-// }
+	// Apply the changes
+	ui.StartSpinner()
+	if err := stacks.ModifyStack(sess, stack, &name); err != nil {
+		ui.Spinner.Stop()
+		return err
+	}
 
-// func init() {
-// 	rootCmd.AddCommand(modifyCmd)
-// 	modifyCmd.PersistentFlags().StringVarP(&AccountIDorAlias, "account", "c", "", utils.AccountFlagHelpText)
-// 	modifyCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
-// 	modifyCmd.PersistentFlags().BoolVar(&createChangeSet, "check", false, "check stack in Cloudformation before creating")
-// 	modifyCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for user input")
-// 	modifyCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to create resources in")
+	ui.Spinner.Stop()
+	ui.PrintSuccess(fmt.Sprintf("modified app %s", name))
 
-// 	modifyCmd.AddCommand(modifyAppCmd)
-// 	modifyAppCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
-// 	modifyAppCmd.Flags().StringP("branch", "b", "", "branch to setup for continuous deployment")
-// 	modifyAppCmd.Flags().StringP("domain", "d", "", "custom domain to route to app (optional)")
-// 	modifyAppCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
-// 	modifyAppCmd.Flags().Bool("addon-private-s3", false, "setup private S3 bucket add-on")
-// 	modifyAppCmd.Flags().Bool("addon-public-s3", false, "setup public S3 bucket add-on")
-// 	modifyAppCmd.Flags().String("addon-database-name", "", "database instance to install add-on")
-// 	modifyAppCmd.Flags().String("addon-redis-name", "", "Redis instance to install add-on")
-// 	modifyAppCmd.Flags().Bool("addon-sqs", false, "setup SQS Queue add-on")
-// 	modifyAppCmd.Flags().String("addon-ses-domain", "", "domain approved for sending via SES add-on. Use '*' for all domains.")
-// 	modifyAppCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
-// 	modifyAppCmd.Flags().Bool("disable-build-webhook", false, "disable creation of a webhook on the repo to automatically trigger builds on push")
+	return nil
+}
 
-// 	// pipelineCmd.Flags().SortFlags = false
-// 	// pipelineCmd.Flags().StringP("repository", "r", "", "repository URL, e.g. https://github.com/apppackio/apppack-demo-python.git")
-// 	// pipelineCmd.Flags().String("healthcheck-path", "/", "path which will return a 200 status code for healthchecks")
-// 	// pipelineCmd.Flags().Bool("addon-private-s3", false, "setup private S3 bucket add-on")
-// 	// pipelineCmd.Flags().Bool("addon-public-s3", false, "setup public S3 bucket add-on")
-// 	// pipelineCmd.Flags().Bool("addon-database", false, "setup database add-on")
-// 	// pipelineCmd.Flags().String("addon-database-name", "", "database instance to install add-on")
-// 	// pipelineCmd.Flags().Bool("addon-redis", false, "setup Redis add-on")
-// 	// pipelineCmd.Flags().String("addon-redis-name", "", "Redis instance to install add-on")
-// 	// pipelineCmd.Flags().Bool("addon-sqs", false, "setup SQS Queue add-on")
-// 	// pipelineCmd.Flags().Bool("addon-ses", false, "setup SES (Email) add-on (requires manual approval of domain at SES)")
-// 	// pipelineCmd.Flags().String("addon-ses-domain", "*", "domain approved for sending via SES add-on. Use '*' for all domains.")
-// 	// pipelineCmd.Flags().StringSliceP("users", "u", []string{}, "email addresses for users who can manage the app (comma separated)")
-// }
+func askModifyQuestions(sess *session.Session, stack *stacks.AppStack) error {
+	var questions []*ui.QuestionExtra
+
+	// Repository URL
+	questions = append(questions, stacks.BuildRepositoryURLQuestion(&stack.Parameters.RepositoryURL))
+
+	if err := ui.AskQuestions(questions, stack.Parameters); err != nil {
+		return err
+	}
+
+	if err := stack.Parameters.SetRepositoryType(); err != nil {
+		return err
+	}
+
+	questions = []*ui.QuestionExtra{}
+
+	// Branch and Domains (only for non-pipeline apps)
+	if !stack.Pipeline {
+		questions = append(questions, stacks.BuildBranchQuestion(&stack.Parameters.Branch))
+		questions = append(questions, stacks.BuildDomainsQuestion(&stack.Parameters.Domains))
+	}
+
+	// Healthcheck path
+	questions = append(questions, stacks.BuildHealthCheckPathQuestion(&stack.Parameters.HealthCheckPath))
+
+	return ui.AskQuestions(questions, stack.Parameters)
+}
+
+// modifyCmd represents the modify command
+var modifyCmd = &cobra.Command{
+	Use:   "modify",
+	Short: "modify AppPack resources",
+	Long: `Use subcommands to modify AppPack resources.
+
+These require administrator access.
+`,
+	DisableFlagsInUseLine: true,
+}
+
+// modifyAppCmd represents the modify app command
+var modifyAppCmd = &cobra.Command{
+	Use:   "app <name>",
+	Short: "modify an AppPack application",
+	Long: `*Requires admin permissions.*
+
+Modify an existing AppPack application or pipeline.
+
+If no flags are provided, an interactive prompt will be provided.`,
+	Args:                  cobra.ExactArgs(1),
+	DisableFlagsInUseLine: true,
+	Example: `  # Interactive mode - prompts for all modifiable parameters
+  apppack modify app my-app
+
+  # Update specific parameters with flags
+  apppack modify app my-app --branch develop
+  apppack modify app my-app --repository https://github.com/org/new-repo.git --branch main
+  apppack modify app my-app --domains example.com,www.example.com`,
+	Run: func(cmd *cobra.Command, args []string) {
+		name := args[0]
+
+		// Prevent modifying review apps - they should be managed at the pipeline level
+		if stacks.IsReviewAppName(name) {
+			checkErr(fmt.Errorf("cannot modify review app directly. Review apps are managed at the pipeline level. To change settings, modify the pipeline instead"))
+		}
+
+		ui.StartSpinner()
+		sess, err := adminSession(SessionDurationSeconds)
+		checkErr(err)
+
+		stack, err := appOrPipelineStack(sess, name)
+		checkErr(err)
+
+		ui.Spinner.Stop()
+		fmt.Print(aurora.Green(fmt.Sprintf("🔧 Modifying %s `%s`", stack.StackType(), name)).String())
+		if CurrentAccountRole != nil {
+			fmt.Print(aurora.Green(" on " + CurrentAccountRole.GetAccountName()).String())
+		}
+		fmt.Println()
+
+		checkErr(modifyAppStack(sess, stack, name, cmd.Flags()))
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(modifyCmd)
+
+	modifyCmd.AddCommand(modifyAppCmd)
+	modifyAppCmd.Flags().StringP("repository", "r", "", "repository URL")
+	modifyAppCmd.Flags().StringP("branch", "b", "", "branch name")
+	modifyAppCmd.Flags().StringSliceP("domains", "d", []string{}, "custom domains (comma-separated)")
+	modifyAppCmd.Flags().String("healthcheck-path", "", "healthcheck path")
+	modifyAppCmd.Flags().StringVarP(
+		&AccountIDorAlias,
+		"account",
+		"c",
+		"",
+		utils.AccountFlagHelpText,
+	)
+}
