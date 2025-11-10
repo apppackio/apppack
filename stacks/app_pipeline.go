@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -14,10 +15,10 @@ import (
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ddb"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/codebuild"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/codebuild"
+	codebuildtypes "github.com/aws/aws-sdk-go-v2/service/codebuild/types"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-isatty"
@@ -74,16 +75,16 @@ var DefaultPipelineStackParameters = AppStackParameters{
 	BuildWebhook:                       DefaultAppStackParameters.BuildWebhook,
 }
 
-func (p *AppStackParameters) Import(parameters []*cloudformation.Parameter) error {
+func (p *AppStackParameters) Import(parameters []types.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
 
-func (p *AppStackParameters) ToCloudFormationParameters() ([]*cloudformation.Parameter, error) {
+func (p *AppStackParameters) ToCloudFormationParameters() ([]types.Parameter, error) {
 	return StructToCloudformationParameters(p)
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (p *AppStackParameters) SetInternalFields(_ *session.Session, name *string) error {
+func (p *AppStackParameters) SetInternalFields(_ aws.Config, name *string) error {
 	// update values from flags if they are set
 	if p.LoadBalancerRulePriority == 0 {
 		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // #nosec G404 -- Non-crypto random for LB priority assignment
@@ -122,7 +123,7 @@ func (p *AppStackParameters) SetRepositoryType() error {
 }
 
 type AppStack struct {
-	Stack      *cloudformation.Stack
+	Stack      *types.Stack
 	Parameters *AppStackParameters
 	Pipeline   bool
 }
@@ -131,23 +132,23 @@ func (a *AppStack) GetParameters() Parameters {
 	return a.Parameters
 }
 
-func (a *AppStack) GetStack() *cloudformation.Stack {
+func (a *AppStack) GetStack() *types.Stack {
 	return a.Stack
 }
 
-func (a *AppStack) SetStack(stack *cloudformation.Stack) {
+func (a *AppStack) SetStack(stack *types.Stack) {
 	a.Stack = stack
 }
 
-func (*AppStack) PostCreate(_ *session.Session) error {
+func (*AppStack) PostCreate(_ aws.Config) error {
 	return nil
 }
 
-func (*AppStack) PreDelete(_ *session.Session) error {
+func (*AppStack) PreDelete(_ aws.Config) error {
 	return nil
 }
 
-func (*AppStack) PostDelete(_ *session.Session, _ *string) error {
+func (*AppStack) PostDelete(_ aws.Config, _ *string) error {
 	return nil
 }
 
@@ -174,7 +175,7 @@ func (a *AppStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return nil
 }
 
-func (a *AppStack) AskForDatabase(sess *session.Session) error {
+func (a *AppStack) AskForDatabase(cfg aws.Config) error {
 	enable := a.Parameters.DatabaseStackName != ""
 
 	var helpText string
@@ -213,7 +214,7 @@ func (a *AppStack) AskForDatabase(sess *session.Session) error {
 		}
 
 		if canChange {
-			return a.AskForDatabaseStack(sess)
+			return a.AskForDatabaseStack(cfg)
 		}
 
 		return nil
@@ -240,10 +241,10 @@ func databaseSelectTransform(ans interface{}) interface{} {
 }
 
 // AskForDatabaseStack gives the user a choice of available database stacks
-func (a *AppStack) AskForDatabaseStack(sess *session.Session) error {
+func (a *AppStack) AskForDatabaseStack(cfg aws.Config) error {
 	clusterName := a.ClusterName()
 	// databases is a list of `{name} ({engine})` for the databases in the cluster
-	databases, err := ddb.ListStacks(sess, &clusterName, "DATABASE")
+	databases, err := ddb.ListStacks(cfg, &clusterName, "DATABASE")
 	if err != nil {
 		return err
 	}
@@ -307,7 +308,7 @@ func redisSelectTransform(ans interface{}) interface{} {
 	return o
 }
 
-func (a *AppStack) AskForRedis(sess *session.Session) error {
+func (a *AppStack) AskForRedis(cfg aws.Config) error {
 	enable := a.Parameters.RedisStackName != ""
 
 	var verbose string
@@ -351,7 +352,7 @@ func (a *AppStack) AskForRedis(sess *session.Session) error {
 		}
 
 		if canChange {
-			return a.AskForRedisStack(sess)
+			return a.AskForRedisStack(cfg)
 		}
 
 		return nil
@@ -363,10 +364,10 @@ func (a *AppStack) AskForRedis(sess *session.Session) error {
 }
 
 // AskForRedisStack gives the user a choice of available Redis stacks
-func (a *AppStack) AskForRedisStack(sess *session.Session) error {
+func (a *AppStack) AskForRedisStack(cfg aws.Config) error {
 	clusterName := a.ClusterName()
 
-	redises, err := ddb.ListStacks(sess, &clusterName, "REDIS")
+	redises, err := ddb.ListStacks(cfg, &clusterName, "REDIS")
 	if err != nil {
 		return err
 	}
@@ -561,13 +562,13 @@ func BuildHealthCheckPathQuestion(valuePtr *string) *ui.QuestionExtra {
 	}
 }
 
-func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R1005
+func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 	var questions []*ui.QuestionExtra
 
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(
-			sess,
+			cfg,
 			fmt.Sprintf("Which cluster should this %s be installed in?", a.StackType()),
 			"A cluster represents an isolated network and its associated resources (Database, Redis, etc.).",
 			a.Parameters,
@@ -590,7 +591,7 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 		return err
 	}
 
-	if err = VerifySourceCredentials(sess, a.Parameters.RepositoryType); err != nil {
+	if err = VerifySourceCredentials(cfg, a.Parameters.RepositoryType); err != nil {
 		return err
 	}
 
@@ -661,11 +662,11 @@ func (a *AppStack) AskQuestions(sess *session.Session) error { // skipcq: GO-R10
 		return err
 	}
 
-	if err := a.AskForDatabase(sess); err != nil {
+	if err := a.AskForDatabase(cfg); err != nil {
 		return err
 	}
 
-	if err := a.AskForRedis(sess); err != nil {
+	if err := a.AskForRedis(cfg); err != nil {
 		return err
 	}
 
@@ -802,14 +803,14 @@ func (a *AppStack) StackName(name *string) *string {
 	return &stackName
 }
 
-func (a *AppStack) Tags(name *string) []*cloudformation.Tag {
-	tags := []*cloudformation.Tag{
+func (a *AppStack) Tags(name *string) []types.Tag {
+	tags := []types.Tag{
 		{Key: aws.String("apppack:appName"), Value: name},
 		{Key: aws.String("apppack:cluster"), Value: aws.String(a.ClusterName())},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}
 	if a.Pipeline {
-		tags = append(tags, &cloudformation.Tag{
+		tags = append(tags, types.Tag{
 			Key:   aws.String("apppack:pipeline"),
 			Value: aws.String("true"),
 		})
@@ -818,9 +819,9 @@ func (a *AppStack) Tags(name *string) []*cloudformation.Tag {
 	return tags
 }
 
-func (*AppStack) Capabilities() []*string {
-	return []*string{
-		aws.String("CAPABILITY_IAM"),
+func (*AppStack) Capabilities() []types.Capability {
+	return []types.Capability{
+		types.CapabilityCapabilityIam,
 	}
 }
 
@@ -833,10 +834,10 @@ func (*AppStack) TemplateURL(release *string) *string {
 	return &url
 }
 
-func VerifySourceCredentials(sess *session.Session, repositoryType string) error {
-	codebuildSvc := codebuild.New(sess)
+func VerifySourceCredentials(cfg aws.Config, repositoryType string) error {
+	codebuildSvc := codebuild.NewFromConfig(cfg)
 
-	sourceCredentialsOutput, err := codebuildSvc.ListSourceCredentials(&codebuild.ListSourceCredentialsInput{})
+	sourceCredentialsOutput, err := codebuildSvc.ListSourceCredentials(context.Background(), &codebuild.ListSourceCredentialsInput{})
 	if err != nil {
 		return err
 	}
@@ -844,18 +845,19 @@ func VerifySourceCredentials(sess *session.Session, repositoryType string) error
 	hasCredentials := false
 
 	for _, cred := range sourceCredentialsOutput.SourceCredentialsInfos {
-		if *cred.ServerType == repositoryType {
+		if cred.ServerType == codebuildtypes.ServerType(repositoryType) {
 			hasCredentials = true
 		}
 	}
 
 	if !hasCredentials {
 		var friendlySourceName string
-		if repositoryType == "BITBUCKET" {
+		switch repositoryType {
+		case "BITBUCKET":
 			friendlySourceName = "Bitbucket"
-		} else if repositoryType == "GITHUB" {
+		case "GITHUB":
 			friendlySourceName = "GitHub"
-		} else {
+		default:
 			return fmt.Errorf("unsupported repository type: %s", repositoryType)
 		}
 
@@ -868,9 +870,9 @@ func VerifySourceCredentials(sess *session.Session, repositoryType string) error
 		fmt.Printf("    4. Click %s\n", aurora.Bold("Connect to "+friendlySourceName))
 		fmt.Printf("    5. Click %s in the popup window\n", aurora.Bold("Confirm"))
 		fmt.Printf("    6. %s You can close the browser window and continue with app setup here.\n\n", aurora.Bold("That's it!"))
-		newProjectURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/project/new", *sess.Config.Region)
+		newProjectURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/project/new", cfg.Region)
 
-		url, err := auth.GetConsoleURL(sess, newProjectURL)
+		url, err := auth.GetConsoleURL(cfg, newProjectURL)
 		if err == nil && isatty.IsTerminal(os.Stdin.Fd()) {
 			fmt.Println("Opening the CodeBuild new project page now...")
 
@@ -885,12 +887,12 @@ func VerifySourceCredentials(sess *session.Session, repositoryType string) error
 
 		ui.PauseUntilEnter("Finish authentication in your web browser then press ENTER to continue.")
 
-		return VerifySourceCredentials(sess, repositoryType)
+		return VerifySourceCredentials(cfg, repositoryType)
 	}
 
 	return nil
 }
 
-func GetPipelineStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
-	return bridge.GetStack(sess, fmt.Sprintf(PipelineStackNameTmpl, name))
+func GetPipelineStack(cfg aws.Config, name string) (*types.Stack, error) {
+	return bridge.GetStack(cfg, fmt.Sprintf(PipelineStackNameTmpl, name))
 }

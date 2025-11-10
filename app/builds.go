@@ -6,8 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 // DetermineBuildSourceVersion returns the appropriate SourceVersion for CodeBuild
@@ -24,11 +23,11 @@ func DetermineBuildSourceVersion(isReviewApp bool, reviewAppNumber *string, ref 
 }
 
 type BuildPhaseDetail struct {
-	Arns  []string `json:"arns"`
-	Logs  string   `json:"logs"`
-	Start int64    `json:"start"`
-	End   int64    `json:"end"`
-	State string   `json:"state"`
+	Arns  []string `dynamodbav:"arns"  json:"arns"`
+	Logs  string   `dynamodbav:"logs"  json:"logs"`
+	Start int64    `dynamodbav:"start" json:"start"`
+	End   int64    `dynamodbav:"end"   json:"end"`
+	State string   `dynamodbav:"state" json:"state"`
 }
 
 func (b *BuildPhaseDetail) StartTime() time.Time {
@@ -46,16 +45,16 @@ const (
 )
 
 type BuildStatus struct {
-	AppName     string           `json:"app"`
-	BuildNumber int              `json:"build_number"`
-	PRNumber    string           `json:"pr_number"`
-	Commit      string           `json:"commit"`
-	Build       BuildPhaseDetail `json:"build"`
-	Test        BuildPhaseDetail `json:"test"`
-	Finalize    BuildPhaseDetail `json:"finalize"`
-	Release     BuildPhaseDetail `json:"release"`
-	Postdeploy  BuildPhaseDetail `json:"postdeploy"`
-	Deploy      BuildPhaseDetail `json:"deploy"`
+	AppName     string           `dynamodbav:"app"          json:"app"`
+	BuildNumber int              `dynamodbav:"build_number" json:"build_number"`
+	PRNumber    string           `dynamodbav:"pr_number"    json:"pr_number"`
+	Commit      string           `dynamodbav:"commit"       json:"commit"`
+	Build       BuildPhaseDetail `dynamodbav:"build"        json:"build"`
+	Test        BuildPhaseDetail `dynamodbav:"test"         json:"test"`
+	Finalize    BuildPhaseDetail `dynamodbav:"finalize"     json:"finalize"`
+	Release     BuildPhaseDetail `dynamodbav:"release"      json:"release"`
+	Postdeploy  BuildPhaseDetail `dynamodbav:"postdeploy"   json:"postdeploy"`
+	Deploy      BuildPhaseDetail `dynamodbav:"deploy"       json:"deploy"`
 }
 
 type BuildPhase struct {
@@ -140,7 +139,7 @@ func (b *BuildStatus) FirstFailedPhase() *BuildPhase {
 }
 
 // GetCommitLog retrieves commit.txt stored in S3
-func (b *BuildStatus) GetCommitLog(sess *session.Session) (*string, error) {
+func (b *BuildStatus) GetCommitLog(cfg aws.Config) (*string, error) {
 	if b.Build.Logs == "" || !strings.HasPrefix(b.Build.Logs, "s3://") {
 		return nil, errors.New("build logs not available yet")
 	}
@@ -149,7 +148,7 @@ func (b *BuildStatus) GetCommitLog(sess *session.Session) (*string, error) {
 	s3Parts = append(s3Parts[0:len(s3Parts)-1], "commit.txt")
 	commitURL := strings.Join(s3Parts, "/")
 
-	builder, err := S3FromURL(sess, commitURL)
+	builder, err := S3FromURL(cfg, commitURL)
 	if err != nil {
 		return nil, err
 	}

@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -26,12 +27,11 @@ import (
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
-	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -39,16 +39,16 @@ import (
 
 var dbOutputFile string
 
-func downloadFile(sess *session.Session, objInput *s3.GetObjectInput, outputFile string) error {
+func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string) error {
 	ui.Spinner.Suffix = " downloading " + outputFile
-	downloader := s3manager.NewDownloader(sess)
+	downloader := manager.NewDownloader(s3.NewFromConfig(cfg))
 
 	file, err := os.Create(outputFile)
 	if err != nil {
 		return err
 	}
 
-	_, err = downloader.Download(file, objInput)
+	_, err = downloader.Download(context.Background(), file, objInput)
 	if err != nil {
 		return err
 	}
@@ -56,10 +56,10 @@ func downloadFile(sess *session.Session, objInput *s3.GetObjectInput, outputFile
 	return nil
 }
 
-func uploadFile(sess *session.Session, uploadInput *s3manager.UploadInput) error {
-	uploader := s3manager.NewUploader(sess)
+func uploadFile(cfg aws.Config, uploadInput *s3.PutObjectInput) error {
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 
-	_, err := uploader.Upload(uploadInput)
+	_, err := uploader.Upload(context.Background(), uploadInput)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ var dbShellCmd = &cobra.Command{
 		checkErr(err)
 		family, exec, err := a.DBShellTaskInfo()
 		checkErr(err)
-		StartInteractiveShell(a, family, aws.String("entrypoint.sh "+*exec), []string{"/bin/sh", "-c"}, &ecs.TaskOverride{})
+		StartInteractiveShell(a, family, aws.String("entrypoint.sh "+*exec), []string{"/bin/sh", "-c"}, &ecstypes.TaskOverride{})
 	},
 }
 
@@ -136,42 +136,40 @@ var dbDumpCmd = &cobra.Command{
 	},
 }
 
-func taskLogs(sess *session.Session, task *ecs.Task) error {
-	ecsSvc := ecs.New(sess)
+func taskLogs(cfg aws.Config, task *ecstypes.Task) error {
+	ecsSvc := ecs.NewFromConfig(cfg)
 
-	taskDefn, err := ecsSvc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
+	taskDefn, err := ecsSvc.DescribeTaskDefinition(context.Background(), &ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: task.TaskDefinitionArn,
 	})
 	if err != nil {
 		return err
 	}
 
-	updatedTaskResp, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
+	updatedTaskResp, err := ecsSvc.DescribeTasks(context.Background(), &ecs.DescribeTasksInput{
 		Cluster: task.ClusterArn,
-		Tasks:   []*string{task.TaskArn},
+		Tasks:   []string{*task.TaskArn},
 	})
 	if err != nil {
 		return err
 	}
 
-	task = updatedTaskResp.Tasks[0]
+	task = &updatedTaskResp.Tasks[0]
 
 	containerDefn := taskDefn.TaskDefinition.ContainerDefinitions[0]
 	logConfig := containerDefn.LogConfiguration
 	taskArnParts := strings.Split(*task.TaskArn, "/")
 	taskID := taskArnParts[len(taskArnParts)-1]
-	sawConfig.Group = *logConfig.Options["awslogs-group"]
+	sawConfig.Group = logConfig.Options["awslogs-group"]
 	sawConfig.Start = task.StartedAt.Format(time.RFC3339)
-	sawConfig.Streams = []*cloudwatchlogs.LogStream{{
-		LogStreamName: aws.String(
-			fmt.Sprintf("%s/%s/%s",
-				*logConfig.Options["awslogs-stream-prefix"],
-				*containerDefn.Name,
-				taskID),
-		),
-	}}
+	// Use prefix-based filtering instead of directly setting streams
+	// since saw library uses v1 SDK types for Streams
+	sawConfig.Prefix = fmt.Sprintf("%s/%s/%s",
+		logConfig.Options["awslogs-stream-prefix"],
+		*containerDefn.Name,
+		taskID)
 
-	newBlade(sess).GetEvents()
+	newBlade(cfg).GetEvents()
 
 	return nil
 }
@@ -229,19 +227,19 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			checkErr(err)
 			remoteFile = fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)
 			ui.Spinner.Suffix = " uploading " + args[0]
-			err = uploadFile(app.Session, &s3manager.UploadInput{
+			err = uploadFile(app.Session, &s3.PutObjectInput{
 				Bucket: getObjectInput.Bucket,
 				Key:    getObjectInput.Key,
 				Body:   file,
 			})
 			checkErr(err)
 		}
-		taskOverride := &ecs.TaskOverride{}
+		taskOverride := &ecstypes.TaskOverride{}
 		if isPostgres {
-			taskOverride.ContainerOverrides = []*ecs.ContainerOverride{
+			taskOverride.ContainerOverrides = []ecstypes.ContainerOverride{
 				{
 					Name: aws.String("app"),
-					Environment: []*ecs.KeyValuePair{
+					Environment: []ecstypes.KeyValuePair{
 						{Name: aws.String("PG_RESTORE_JOBS"), Value: aws.String(strconv.Itoa(postgresLoadJobs))},
 					},
 				},

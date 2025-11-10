@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -27,7 +28,7 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/app"
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/spf13/cobra"
 )
 
@@ -56,8 +57,8 @@ import (
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-func execEnvironment(command string, args []string, creds *credentials.Credentials) error {
-	val, err := creds.Get()
+func execEnvironment(command string, args []string, cfg aws.Config) error {
+	creds, err := cfg.Credentials.Retrieve(context.Background())
 	if err != nil {
 		// return fmt.Errorf("Failed to get credentials for %s: %w", input.ProfileName, err)
 		return err
@@ -66,18 +67,18 @@ func execEnvironment(command string, args []string, creds *credentials.Credentia
 	env := environ(os.Environ())
 
 	// log.Println("Setting subprocess env: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY")
-	env.Set("AWS_ACCESS_KEY_ID", val.AccessKeyID)
-	env.Set("AWS_SECRET_ACCESS_KEY", val.SecretAccessKey)
+	env.Set("AWS_ACCESS_KEY_ID", creds.AccessKeyID)
+	env.Set("AWS_SECRET_ACCESS_KEY", creds.SecretAccessKey)
 
-	if val.SessionToken != "" {
+	if creds.SessionToken != "" {
 		// log.Println("Setting subprocess env: AWS_SESSION_TOKEN, AWS_SECURITY_TOKEN")
-		env.Set("AWS_SESSION_TOKEN", val.SessionToken)
-		env.Set("AWS_SECURITY_TOKEN", val.SessionToken)
+		env.Set("AWS_SESSION_TOKEN", creds.SessionToken)
+		env.Set("AWS_SECURITY_TOKEN", creds.SessionToken)
 	}
 
-	if expiration, err := creds.ExpiresAt(); err == nil {
+	if !creds.Expires.IsZero() {
 		// log.Println("Setting subprocess env: AWS_SESSION_EXPIRATION")
-		env.Set("AWS_SESSION_EXPIRATION", expiration.UTC().Format(time.RFC3339))
+		env.Set("AWS_SESSION_EXPIRATION", creds.Expires.UTC().Format(time.RFC3339))
 	}
 
 	if !supportsExecSyscall() {
@@ -171,7 +172,7 @@ var awsExecCmd = &cobra.Command{
 		if len(args) < 1 {
 			checkErr(errors.New("provide an executable to run as an argument"))
 		}
-		err = execEnvironment(args[0], args[1:], a.Session.Config.Credentials)
+		err = execEnvironment(args[0], args[1:], a.Session)
 		checkErr(err)
 	},
 }

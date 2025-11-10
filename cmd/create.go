@@ -23,7 +23,7 @@ import (
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
 	"github.com/apppackio/apppack/utils"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -39,9 +39,9 @@ var (
 	ErrRegionNotSetup = errors.New("region isn't setup -- either change the --region or use --create-region to setup this region")
 )
 
-func CreateStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.FlagSet, name string) {
+func CreateStackCommand(cfg aws.Config, stack stacks.Stack, flags *pflag.FlagSet, name string) {
 	stackName := stack.StackName(&name)
-	exists, err := bridge.StackExists(sess, *stackName)
+	exists, err := bridge.StackExists(cfg, *stackName)
 	checkErr(err)
 
 	if *exists {
@@ -52,7 +52,7 @@ func CreateStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.
 	ui.Spinner.Stop()
 
 	caser := cases.Title(language.English)
-	fmt.Print(aurora.Green(fmt.Sprintf("🏗  Creating %s `%s` in %s", caser.String(stack.StackType()), name, *sess.Config.Region)).String())
+	fmt.Print(aurora.Green(fmt.Sprintf("🏗  Creating %s `%s` in %s", caser.String(stack.StackType()), name, cfg.Region)).String())
 
 	if CurrentAccountRole != nil {
 		fmt.Print(aurora.Green(" on " + CurrentAccountRole.GetAccountName()).String())
@@ -61,18 +61,18 @@ func CreateStackCommand(sess *session.Session, stack stacks.Stack, flags *pflag.
 	fmt.Println()
 
 	if !nonInteractive {
-		checkErr(stack.AskQuestions(sess))
+		checkErr(stack.AskQuestions(cfg))
 	}
 
 	ui.StartSpinner()
 
 	if createChangeSet {
-		url, err := stacks.CreateStackChangeset(sess, stack, &name, &release)
+		url, err := stacks.CreateStackChangeset(cfg, stack, &name, &release)
 		checkErr(err)
 		ui.Spinner.Stop()
 		fmt.Println("View changeset at", aurora.White(url))
 	} else {
-		checkErr(stacks.CreateStack(sess, stack, &name, &release))
+		checkErr(stacks.CreateStack(cfg, stack, &name, &release))
 		ui.Spinner.Stop()
 		ui.PrintSuccess(fmt.Sprintf("created %s stack %s", stack.StackType(), name))
 	}
@@ -98,10 +98,10 @@ var appCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		name := args[0]
-		exists, err := bridge.StackExists(sess, fmt.Sprintf(stacks.PipelineStackNameTmpl, name))
+		exists, err := bridge.StackExists(cfg, fmt.Sprintf(stacks.PipelineStackNameTmpl, name))
 		checkErr(err)
 		if *exists {
 			checkErr(fmt.Errorf("a pipeline named %s already exists -- app and pipeline names must be unique", name))
@@ -109,7 +109,7 @@ var appCmd = &cobra.Command{
 		appParameters := stacks.DefaultAppStackParameters
 		appParameters.Name = name
 		CreateStackCommand(
-			sess,
+			cfg,
 			&stacks.AppStack{
 				Parameters: &appParameters,
 				Pipeline:   false,
@@ -130,10 +130,10 @@ var pipelineCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		name := args[0]
-		exists, err := bridge.StackExists(sess, fmt.Sprintf(stacks.AppStackNameTmpl, name))
+		exists, err := bridge.StackExists(cfg, fmt.Sprintf(stacks.AppStackNameTmpl, name))
 		checkErr(err)
 		if *exists {
 			checkErr(fmt.Errorf("an app named %s already exists -- app and pipeline names must be unique", name))
@@ -141,7 +141,7 @@ var pipelineCmd = &cobra.Command{
 		pipelineParameters := stacks.DefaultPipelineStackParameters
 		pipelineParameters.Name = name
 		CreateStackCommand(
-			sess,
+			cfg,
 			&stacks.AppStack{
 				Parameters: &pipelineParameters,
 				Pipeline:   true,
@@ -168,19 +168,19 @@ var createClusterCmd = &cobra.Command{
 			name = args[0]
 		}
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		regionExists, err := bridge.StackExists(sess, "apppack-region-"+*sess.Config.Region)
+		regionExists, err := bridge.StackExists(cfg, "apppack-region-"+cfg.Region)
 		checkErr(err)
 		// handle region creation if the user wants
 		if !*regionExists {
 			ui.Spinner.Stop()
-			fmt.Println(aurora.Blue(fmt.Sprintf("ℹ %s region is not initialized", *sess.Config.Region)))
+			fmt.Println(aurora.Blue(fmt.Sprintf("ℹ %s region is not initialized", cfg.Region)))
 			createRegion, err := cmd.Flags().GetBool("create-region")
 			checkErr(err)
 			if !nonInteractive && !createRegion {
 				fmt.Printf("If this is your first cluster or you want to setup up a new region, type '%s' to continue.\n", aurora.White("yes"))
-				fmt.Print(aurora.White(fmt.Sprintf("Create cluster in %s region? ", *sess.Config.Region)).String())
+				fmt.Print(aurora.White(fmt.Sprintf("Create cluster in %s region? ", cfg.Region)).String())
 				var confirm string
 				_, _ = fmt.Scanln(&confirm)
 				if confirm != "yes" {
@@ -196,7 +196,7 @@ var createClusterCmd = &cobra.Command{
 		clusterParameters := stacks.DefaultClusterStackParameters
 		clusterParameters.Name = name
 		CreateStackCommand(
-			sess,
+			cfg,
 			&stacks.ClusterStack{
 				Parameters: &clusterParameters,
 			},
@@ -219,7 +219,7 @@ The domain(s) provided must all be a part of the same parent domain and a Route5
 	Run: func(cmd *cobra.Command, args []string) {
 		primaryDomain := args[0]
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		parameters := &stacks.CustomDomainStackParameters{}
 		domainParameters := []*string{&parameters.PrimaryDomain, &parameters.AltDomain1, &parameters.AltDomain2, &parameters.AltDomain3, &parameters.AltDomain4, &parameters.AltDomain5}
@@ -227,7 +227,7 @@ The domain(s) provided must all be a part of the same parent domain and a Route5
 			*domainParameters[i] = domain
 		}
 		CreateStackCommand(
-			sess,
+			cfg,
 			&stacks.CustomDomainStack{Parameters: parameters},
 			cmd.Flags(),
 			primaryDomain,
@@ -245,7 +245,7 @@ Creates an AppPack Redis instance. ` + "If a `<name>` is not provided, the defau
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		var name string
 		if len(args) == 0 {
@@ -256,7 +256,7 @@ Creates an AppPack Redis instance. ` + "If a `<name>` is not provided, the defau
 		redisParameters := stacks.DefaultRedisStackParameters
 		redisParameters.Name = name
 		CreateStackCommand(
-			sess,
+			cfg,
 			&stacks.RedisStack{
 				Parameters: &redisParameters,
 			},
@@ -275,7 +275,7 @@ var createDatabaseCmd = &cobra.Command{
 	Args:                  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
 		var name string
 		if len(args) == 0 {
@@ -286,7 +286,7 @@ var createDatabaseCmd = &cobra.Command{
 		dbParameters := stacks.DefaultDatabaseStackParameters
 		dbParameters.Name = name
 		CreateStackCommand(
-			sess,
+			cfg,
 			&stacks.DatabaseStack{
 				Parameters: &dbParameters,
 			},
@@ -303,16 +303,16 @@ var createRegionCmd = &cobra.Command{
 	Long:                  "*Requires admin permissions.*",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, _ []string) {
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		region := sess.Config.Region
+		region := cfg.Region
 		CreateStackCommand(
-			sess,
+			cfg,
 			&stacks.RegionStack{
 				Parameters: &stacks.RegionStackParameters{},
 			},
 			cmd.Flags(),
-			*region,
+			region,
 		)
 	},
 }

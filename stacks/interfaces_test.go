@@ -5,8 +5,8 @@ import (
 
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/stacks"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 )
 
 func TestStructToCloudformationParameters(t *testing.T) {
@@ -64,7 +64,7 @@ func TestStructToCloudformationParameters(t *testing.T) {
 func TestCloudformationParametersToStruct(t *testing.T) {
 	t.Parallel()
 
-	cfnParams := []*cloudformation.Parameter{
+	cfnParams := []types.Parameter{
 		{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test")},
 		{ParameterKey: aws.String("SQSQueueEnabled"), ParameterValue: aws.String(stacks.Enabled)},
 		{ParameterKey: aws.String("LoadBalancerRulePriority"), ParameterValue: aws.String("20")},
@@ -106,7 +106,7 @@ func TestCloudformationParametersToStructWithNameMapping(t *testing.T) {
 	t.Parallel()
 
 	// Test that CloudFormation parameter "RepositoryUrl" maps to struct field "RepositoryURL" via cfnparam tag
-	cfnParams := []*cloudformation.Parameter{
+	cfnParams := []types.Parameter{
 		{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test-app")},
 		{ParameterKey: aws.String("RepositoryUrl"), ParameterValue: aws.String("https://github.com/org/repo.git")},
 		{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("main")},
@@ -144,10 +144,10 @@ func TestCloudformationParametersToStructWithNameMapping(t *testing.T) {
 	}
 
 	// Find the RepositoryUrl parameter
-	var repoParam *cloudformation.Parameter
-	for _, param := range params {
-		if *param.ParameterKey == "RepositoryUrl" {
-			repoParam = param
+	var repoParam *types.Parameter
+	for i := range params {
+		if *params[i].ParameterKey == "RepositoryUrl" {
+			repoParam = &params[i]
 			break
 		}
 	}
@@ -164,21 +164,21 @@ func TestPruneUnsupportedParameters(t *testing.T) {
 
 	tests := []struct {
 		name                string
-		supportedParameters []*cloudformation.Parameter
-		desiredParameters   []*cloudformation.Parameter
-		expectedParameters  []*cloudformation.Parameter
+		supportedParameters []types.Parameter
+		desiredParameters   []types.Parameter
+		expectedParameters  []types.Parameter
 	}{
 		{
 			name: "preserve unmodified parameters with UsePreviousValue",
-			supportedParameters: []*cloudformation.Parameter{
+			supportedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test-app")},
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("main")},
 				{ParameterKey: aws.String("RepositoryURL"), ParameterValue: aws.String("https://github.com/org/repo.git")},
 			},
-			desiredParameters: []*cloudformation.Parameter{
+			desiredParameters: []types.Parameter{
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 			},
-			expectedParameters: []*cloudformation.Parameter{
+			expectedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 				{ParameterKey: aws.String("Name"), UsePreviousValue: aws.Bool(true)},
 				{ParameterKey: aws.String("RepositoryURL"), UsePreviousValue: aws.Bool(true)},
@@ -186,32 +186,32 @@ func TestPruneUnsupportedParameters(t *testing.T) {
 		},
 		{
 			name: "exclude unsupported parameters",
-			supportedParameters: []*cloudformation.Parameter{
+			supportedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test-app")},
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("main")},
 			},
-			desiredParameters: []*cloudformation.Parameter{
+			desiredParameters: []types.Parameter{
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 				{ParameterKey: aws.String("NewParameter"), ParameterValue: aws.String("value")},
 			},
-			expectedParameters: []*cloudformation.Parameter{
+			expectedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 				{ParameterKey: aws.String("Name"), UsePreviousValue: aws.Bool(true)},
 			},
 		},
 		{
 			name: "update multiple parameters and preserve others",
-			supportedParameters: []*cloudformation.Parameter{
+			supportedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test-app")},
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("main")},
 				{ParameterKey: aws.String("RepositoryURL"), ParameterValue: aws.String("https://github.com/org/repo.git")},
 				{ParameterKey: aws.String("HealthCheckPath"), ParameterValue: aws.String("/health")},
 			},
-			desiredParameters: []*cloudformation.Parameter{
+			desiredParameters: []types.Parameter{
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 				{ParameterKey: aws.String("HealthCheckPath"), ParameterValue: aws.String("/alive")},
 			},
-			expectedParameters: []*cloudformation.Parameter{
+			expectedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 				{ParameterKey: aws.String("HealthCheckPath"), ParameterValue: aws.String("/alive")},
 				{ParameterKey: aws.String("Name"), UsePreviousValue: aws.Bool(true)},
@@ -220,39 +220,39 @@ func TestPruneUnsupportedParameters(t *testing.T) {
 		},
 		{
 			name:                "empty supported parameters",
-			supportedParameters: []*cloudformation.Parameter{},
-			desiredParameters: []*cloudformation.Parameter{
+			supportedParameters: []types.Parameter{},
+			desiredParameters: []types.Parameter{
 				{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test-app")},
 			},
-			expectedParameters: []*cloudformation.Parameter{},
+			expectedParameters: []types.Parameter{},
 		},
 		{
 			name: "all parameters being updated",
-			supportedParameters: []*cloudformation.Parameter{
+			supportedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test-app")},
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("main")},
 			},
-			desiredParameters: []*cloudformation.Parameter{
+			desiredParameters: []types.Parameter{
 				{ParameterKey: aws.String("Name"), ParameterValue: aws.String("new-app")},
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 			},
-			expectedParameters: []*cloudformation.Parameter{
+			expectedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Name"), ParameterValue: aws.String("new-app")},
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 			},
 		},
 		{
 			name: "preserve CloudFormation parameters unknown to CLI",
-			supportedParameters: []*cloudformation.Parameter{
+			supportedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Name"), ParameterValue: aws.String("test-app")},
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("main")},
 				{ParameterKey: aws.String("NewTemplateParameter"), ParameterValue: aws.String("some-value")},
 				{ParameterKey: aws.String("AnotherNewParameter"), ParameterValue: aws.String("another-value")},
 			},
-			desiredParameters: []*cloudformation.Parameter{
+			desiredParameters: []types.Parameter{
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 			},
-			expectedParameters: []*cloudformation.Parameter{
+			expectedParameters: []types.Parameter{
 				{ParameterKey: aws.String("Branch"), ParameterValue: aws.String("develop")},
 				{ParameterKey: aws.String("Name"), UsePreviousValue: aws.Bool(true)},
 				{ParameterKey: aws.String("NewTemplateParameter"), UsePreviousValue: aws.Bool(true)},
@@ -271,7 +271,7 @@ func TestPruneUnsupportedParameters(t *testing.T) {
 			}
 
 			// Build a map of expected parameters for easier lookup
-			expectedMap := make(map[string]*cloudformation.Parameter)
+			expectedMap := make(map[string]types.Parameter)
 			for _, param := range tt.expectedParameters {
 				expectedMap[*param.ParameterKey] = param
 			}

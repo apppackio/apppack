@@ -21,15 +21,15 @@ import (
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
 	"github.com/apppackio/apppack/utils"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
 // UpgradeStackCmd updates the stack to the latest cloudformation template
-func UpgradeStackCmd(sess *session.Session, stack stacks.Stack, name string) {
+func UpgradeStackCmd(cfg aws.Config, stack stacks.Stack, name string) {
 	ui.StartSpinner()
-	checkErr(stacks.LoadStackFromCloudformation(sess, stack, &name))
+	checkErr(stacks.LoadStackFromCloudformation(cfg, stack, &name))
 
 	var prefix string
 	if createChangeSet {
@@ -45,7 +45,7 @@ func UpgradeStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 		fmt.Print(aurora.Green(fmt.Sprintf(" `%s`", name)).String())
 	}
 
-	fmt.Print(aurora.Green(" in " + *sess.Config.Region).String())
+	fmt.Print(aurora.Green(" in " + cfg.Region).String())
 
 	if CurrentAccountRole != nil {
 		fmt.Print(aurora.Green(" on account " + CurrentAccountRole.GetAccountName()).String())
@@ -55,12 +55,12 @@ func UpgradeStackCmd(sess *session.Session, stack stacks.Stack, name string) {
 	ui.StartSpinner()
 
 	if createChangeSet {
-		url, err := stacks.UpdateStackChangeset(sess, stack, &name, &release)
+		url, err := stacks.UpdateStackChangeset(cfg, stack, &name, &release)
 		checkErr(err)
 		ui.Spinner.Stop()
 		fmt.Println("View changeset at", aurora.White(url))
 	} else {
-		checkErr(stacks.UpdateStack(sess, stack, &name, &release))
+		checkErr(stacks.UpdateStack(cfg, stack, &name, &release))
 		ui.Spinner.Stop()
 
 		var nameSuccessMsg string
@@ -87,9 +87,9 @@ var upgradeAccountCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		UpgradeStackCmd(sess, &stacks.AccountStack{Parameters: &stacks.AccountStackParameters{}}, "")
+		UpgradeStackCmd(cfg, &stacks.AccountStack{Parameters: &stacks.AccountStackParameters{}}, "")
 	},
 }
 
@@ -101,9 +101,9 @@ var upgradeRegionCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		UpgradeStackCmd(sess, &stacks.RegionStack{Parameters: &stacks.RegionStackParameters{}}, *sess.Config.Region)
+		UpgradeStackCmd(cfg, &stacks.RegionStack{Parameters: &stacks.RegionStackParameters{}}, cfg.Region)
 	},
 }
 
@@ -116,9 +116,9 @@ var upgradeAppCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		UpgradeStackCmd(sess, &stacks.AppStack{Pipeline: false, Parameters: &stacks.DefaultAppStackParameters}, args[0])
+		UpgradeStackCmd(cfg, &stacks.AppStack{Pipeline: false, Parameters: &stacks.DefaultAppStackParameters}, args[0])
 	},
 }
 
@@ -131,9 +131,9 @@ var upgradePipelineCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		UpgradeStackCmd(sess, &stacks.AppStack{Pipeline: true, Parameters: &stacks.DefaultPipelineStackParameters}, args[0])
+		UpgradeStackCmd(cfg, &stacks.AppStack{Pipeline: true, Parameters: &stacks.DefaultPipelineStackParameters}, args[0])
 	},
 }
 
@@ -146,9 +146,9 @@ var upgradeClusterCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		UpgradeStackCmd(sess, &stacks.ClusterStack{Parameters: &stacks.ClusterStackParameters{}}, args[0])
+		UpgradeStackCmd(cfg, &stacks.ClusterStack{Parameters: &stacks.ClusterStackParameters{}}, args[0])
 	},
 }
 
@@ -161,9 +161,9 @@ var upgradeRedisCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		UpgradeStackCmd(sess, &stacks.RedisStack{Parameters: &stacks.DefaultRedisStackParameters}, args[0])
+		UpgradeStackCmd(cfg, &stacks.RedisStack{Parameters: &stacks.DefaultRedisStackParameters}, args[0])
 	},
 }
 
@@ -176,9 +176,9 @@ var upgradeDatabaseCmd = &cobra.Command{
 	Args:                  cobra.ExactArgs(1),
 	Run: func(_ *cobra.Command, args []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(MaxSessionDurationSeconds)
+		cfg, err := adminSession(MaxSessionDurationSeconds)
 		checkErr(err)
-		UpgradeStackCmd(sess, &stacks.DatabaseStack{Parameters: &stacks.DefaultDatabaseStackParameters}, args[0])
+		UpgradeStackCmd(cfg, &stacks.DatabaseStack{Parameters: &stacks.DefaultDatabaseStackParameters}, args[0])
 	},
 }
 

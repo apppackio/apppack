@@ -24,14 +24,14 @@ import (
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/service/ecs"
+	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/dustin/go-humanize"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-func getTag(tags []*ecs.Tag, key string) (*string, error) {
+func getTag(tags []ecstypes.Tag, key string) (*string, error) {
 	for _, tag := range tags {
 		if *tag.Key == key {
 			return tag.Value, nil
@@ -41,7 +41,7 @@ func getTag(tags []*ecs.Tag, key string) (*string, error) {
 	return nil, fmt.Errorf("tag %s not found", key)
 }
 
-func printTask(t *ecs.Task, count *int) {
+func printTask(t *ecstypes.Task, count *int) {
 	tag, err := getTag(t.Tags, "apppack:processType")
 	checkErr(err)
 
@@ -91,7 +91,7 @@ var psCmd = &cobra.Command{
 		ui.Spinner.Stop()
 		checkErr(err)
 		// group tasks by process type
-		grouped := map[string][]*ecs.Task{}
+		grouped := map[string][]ecstypes.Task{}
 		for _, t := range tasks {
 			tag, err := getTag(t.Tags, "apppack:processType")
 			if err != nil {
@@ -107,7 +107,7 @@ var psCmd = &cobra.Command{
 		sort.Strings(keys)
 		err = a.LoadDeployStatus()
 		checkErr(err)
-		var extraProcs []*ecs.Task
+		var extraProcs []ecstypes.Task
 		// iterate over process types/tasks
 		for _, proc := range keys {
 			status, err := a.DeployStatus.FindProcess(proc)
@@ -158,8 +158,8 @@ var psCmd = &cobra.Command{
 		if len(extraProcs) > 0 {
 			fmt.Printf("\n")
 		}
-		for _, t := range extraProcs {
-			printTask(t, nil)
+		for i := range extraProcs {
+			printTask(&extraProcs[i], nil)
 		}
 	},
 }

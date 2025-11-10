@@ -22,12 +22,12 @@ import (
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/service/ecs"
+	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
-func printEvent(event *ecs.ServiceEvent) {
+func printEvent(event ecstypes.ServiceEvent) {
 	fmt.Println(aurora.Faint(event.CreatedAt.Local().Format("Jan 02, 2006 15:04:05 MST")), *event.Message)
 }
 

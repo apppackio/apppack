@@ -1,17 +1,18 @@
 package stacks
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/elasticache"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/elasticache"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -35,16 +36,16 @@ func isPreviousElasticacheGeneration(instanceClass *string) bool {
 type RedisStackParameters struct {
 	Name               string
 	ClusterStackName   string `flag:"cluster;fmtString:apppack-cluster-%s"`
-	InstanceClass      string `flag:"instance-lass"`
+	InstanceClass      string `flag:"instance-class"`
 	MultiAZ            bool   `cfnbool:"yesno"                             flag:"multi-az"`
 	AuthTokenParameter string
 }
 
-func (p *RedisStackParameters) Import(parameters []*cloudformation.Parameter) error {
+func (p *RedisStackParameters) Import(parameters []types.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
 
-func (p *RedisStackParameters) ToCloudFormationParameters() ([]*cloudformation.Parameter, error) {
+func (p *RedisStackParameters) ToCloudFormationParameters() ([]types.Parameter, error) {
 	return StructToCloudformationParameters(p)
 }
 
@@ -53,10 +54,10 @@ var DefaultRedisStackParameters = RedisStackParameters{
 	MultiAZ:       false,
 }
 
-func listElasticacheInstanceClasses(sess *session.Session) ([]string, error) {
-	elasticacheSvc := elasticache.New(sess)
+func listElasticacheInstanceClasses(cfg aws.Config) ([]string, error) {
+	elasticacheSvc := elasticache.NewFromConfig(cfg)
 
-	out, err := elasticacheSvc.DescribeReservedCacheNodesOfferings(&elasticache.DescribeReservedCacheNodesOfferingsInput{
+	out, err := elasticacheSvc.DescribeReservedCacheNodesOfferings(context.Background(), &elasticache.DescribeReservedCacheNodesOfferingsInput{
 		OfferingType:       aws.String("No Upfront"),
 		Duration:           aws.String("1"),
 		ProductDescription: aws.String("redis"),
@@ -80,7 +81,7 @@ func listElasticacheInstanceClasses(sess *session.Session) ([]string, error) {
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (p *RedisStackParameters) SetInternalFields(sess *session.Session, name *string) error {
+func (p *RedisStackParameters) SetInternalFields(cfg aws.Config, name *string) error {
 	if p.AuthTokenParameter == "" {
 		authToken := fmt.Sprintf(redisAuthTokenParameterTmpl, *name)
 		p.AuthTokenParameter = authToken
@@ -90,11 +91,11 @@ func (p *RedisStackParameters) SetInternalFields(sess *session.Session, name *st
 			return err
 		}
 
-		ssmSvc := ssm.New(sess)
-		_, err = ssmSvc.PutParameter(&ssm.PutParameterInput{
+		ssmSvc := ssm.NewFromConfig(cfg)
+		_, err = ssmSvc.PutParameter(context.Background(), &ssm.PutParameterInput{
 			Name:  &authToken,
 			Value: &password,
-			Type:  aws.String("SecureString"),
+			Type:  ssmtypes.ParameterTypeSecureString,
 		})
 
 		return err
@@ -108,7 +109,7 @@ func (p *RedisStackParameters) SetInternalFields(sess *session.Session, name *st
 }
 
 type RedisStack struct {
-	Stack      *cloudformation.Stack
+	Stack      *types.Stack
 	Parameters *RedisStackParameters
 }
 
@@ -116,23 +117,23 @@ func (a *RedisStack) GetParameters() Parameters {
 	return a.Parameters
 }
 
-func (a *RedisStack) GetStack() *cloudformation.Stack {
+func (a *RedisStack) GetStack() *types.Stack {
 	return a.Stack
 }
 
-func (a *RedisStack) SetStack(stack *cloudformation.Stack) {
+func (a *RedisStack) SetStack(stack *types.Stack) {
 	a.Stack = stack
 }
 
-func (*RedisStack) PostCreate(_ *session.Session) error {
+func (*RedisStack) PostCreate(_ aws.Config) error {
 	return nil
 }
 
-func (*RedisStack) PreDelete(_ *session.Session) error {
+func (*RedisStack) PreDelete(_ aws.Config) error {
 	return nil
 }
 
-func (a *RedisStack) PostDelete(sess *session.Session, name *string) error {
+func (a *RedisStack) PostDelete(cfg aws.Config, name *string) error {
 	// PostDelete gets called during destroy even if the stack doesn't exist
 	// to cleanup orphaned resources. In that scenario, the name is provided
 	// otherwise it can be looked up from the Stack.
@@ -148,8 +149,8 @@ func (a *RedisStack) PostDelete(sess *session.Session, name *string) error {
 	parameterName := fmt.Sprintf(redisAuthTokenParameterTmpl, *name)
 	logrus.WithFields(logrus.Fields{"name": parameterName}).Debug("deleting SSM parameter")
 
-	ssmSvc := ssm.New(sess)
-	_, err := ssmSvc.DeleteParameter(&ssm.DeleteParameterInput{
+	ssmSvc := ssm.NewFromConfig(cfg)
+	_, err := ssmSvc.DeleteParameter(context.Background(), &ssm.DeleteParameterInput{
 		Name: &parameterName,
 	})
 
@@ -164,13 +165,13 @@ func (a *RedisStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return ui.FlagsToStruct(a.Parameters, flags)
 }
 
-func (a *RedisStack) AskQuestions(sess *session.Session) error {
+func (a *RedisStack) AskQuestions(cfg aws.Config) error {
 	var questions []*ui.QuestionExtra
 
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(
-			sess,
+			cfg,
 			"Which cluster should this Redis instance be installed in?",
 			"A cluster represents an isolated network and its associated resources (Apps, Database, Redis, etc.).",
 			a.Parameters,
@@ -210,7 +211,7 @@ func (a *RedisStack) AskQuestions(sess *session.Session) error {
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " retrieving instance classes"
 
-	instanceClasses, err := listElasticacheInstanceClasses(sess)
+	instanceClasses, err := listElasticacheInstanceClasses(cfg)
 	if err != nil {
 		return err
 	}
@@ -248,17 +249,17 @@ func (*RedisStack) StackType() string {
 	return "redis"
 }
 
-func (a *RedisStack) Tags(name *string) []*cloudformation.Tag {
-	return []*cloudformation.Tag{
+func (a *RedisStack) Tags(name *string) []types.Tag {
+	return []types.Tag{
 		{Key: aws.String("apppack:redis"), Value: name},
 		{Key: aws.String("apppack:cluster"), Value: aws.String(a.ClusterName())},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}
 }
 
-func (*RedisStack) Capabilities() []*string {
-	return []*string{
-		aws.String("CAPABILITY_IAM"),
+func (*RedisStack) Capabilities() []types.Capability {
+	return []types.Capability{
+		types.CapabilityCapabilityIam,
 	}
 }
 

@@ -1,25 +1,27 @@
 package bridge
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/smithy-go"
 )
 
 // stackExists checks if a named Cfn Stack already exists in the region
-func StackExists(sess *session.Session, stackName string) (*bool, error) {
-	stack, err := GetStack(sess, stackName)
+func StackExists(cfg aws.Config, stackName string) (*bool, error) {
+	stack, err := GetStack(cfg, stackName)
 
 	var exists bool
 
 	if err != nil {
-		var aerr awserr.Error
-		if errors.As(err, &aerr) {
-			if aerr.Code() == "ValidationError" {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() == "ValidationError" {
 				exists = false
 
 				return &exists, nil
@@ -29,12 +31,12 @@ func StackExists(sess *session.Session, stackName string) (*bool, error) {
 		return nil, err
 	}
 
-	exists = *stack.StackStatus != cloudformation.StackStatusDeleteComplete
+	exists = stack.StackStatus != types.StackStatusDeleteComplete
 
 	return &exists, nil
 }
 
-func GetStackParameter(parameters []*cloudformation.Parameter, name string) (*string, error) {
+func GetStackParameter(parameters []types.Parameter, name string) (*string, error) {
 	for _, parameter := range parameters {
 		if *parameter.ParameterKey == name {
 			return parameter.ParameterValue, nil
@@ -44,7 +46,7 @@ func GetStackParameter(parameters []*cloudformation.Parameter, name string) (*st
 	return nil, fmt.Errorf("no parameter named %s", name)
 }
 
-func GetStackOutput(outputs []*cloudformation.Output, name string) (*string, error) {
+func GetStackOutput(outputs []types.Output, name string) (*string, error) {
 	for _, output := range outputs {
 		if *output.OutputKey == name {
 			return output.OutputValue, nil
@@ -54,30 +56,28 @@ func GetStackOutput(outputs []*cloudformation.Output, name string) (*string, err
 	return nil, fmt.Errorf("no output named %s", name)
 }
 
-func GetStack(sess *session.Session, name string) (*cloudformation.Stack, error) {
-	cfnSvc := cloudformation.New(sess)
+func GetStack(cfg aws.Config, name string) (*types.Stack, error) {
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
-	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+	stacks, err := cfnSvc.DescribeStacks(context.Background(), &cloudformation.DescribeStacksInput{
 		StackName: &name,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return stacks.Stacks[0], nil
+	return &stacks.Stacks[0], nil
 }
 
-func ApppackStacks(sess *session.Session) ([]*cloudformation.Stack, error) {
-	cfnSvc := cloudformation.New(sess)
+func ApppackStacks(cfg aws.Config) ([]types.Stack, error) {
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
-	var stacks []*cloudformation.Stack
+	var stacks []types.Stack
 
-	var token *string
+	paginator := cloudformation.NewDescribeStacksPaginator(cfnSvc, &cloudformation.DescribeStacksInput{})
 
-	for {
-		resp, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
-			NextToken: token,
-		})
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(context.Background())
 		if err != nil {
 			return nil, err
 		}
@@ -87,12 +87,6 @@ func ApppackStacks(sess *session.Session) ([]*cloudformation.Stack, error) {
 				stacks = append(stacks, stack)
 			}
 		}
-
-		if resp.NextToken == nil {
-			break
-		}
-
-		token = resp.NextToken
 	}
 
 	return stacks, nil

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/apppackio/apppack/app"
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 func TestDetermineBuildSourceVersion(t *testing.T) {

@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -8,10 +9,10 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/rds"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/rds"
+	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -74,10 +75,10 @@ func standardEngineName(engine *string) (string, error) {
 	return "", errors.New("unrecognized databae engine. valid options are 'mysql' or 'postgres'")
 }
 
-func getLatestRdsVersion(sess *session.Session, engine *string) (string, error) {
-	rdsSvc := rds.New(sess)
+func getLatestRdsVersion(cfg aws.Config, engine *string) (string, error) {
+	rdsSvc := rds.NewFromConfig(cfg)
 
-	resp, err := rdsSvc.DescribeDBEngineVersions(&rds.DescribeDBEngineVersionsInput{Engine: engine})
+	resp, err := rdsSvc.DescribeDBEngineVersions(context.Background(), &rds.DescribeDBEngineVersionsInput{Engine: engine})
 	if err != nil {
 		return "", err
 	}
@@ -91,27 +92,25 @@ func getLatestRdsVersion(sess *session.Session, engine *string) (string, error) 
 	return "", fmt.Errorf("no compatible version found for engine %s", *engine)
 }
 
-func listRDSInstanceClasses(sess *session.Session, engine, version *string) ([]string, error) {
-	rdsSvc := rds.New(sess)
+func listRDSInstanceClasses(cfg aws.Config, engine, version *string) ([]string, error) {
+	rdsSvc := rds.NewFromConfig(cfg)
 
-	var instanceClassResults []*rds.OrderableDBInstanceOption
+	var instanceClassResults []rdstypes.OrderableDBInstanceOption
 
-	err := rdsSvc.DescribeOrderableDBInstanceOptionsPages(&rds.DescribeOrderableDBInstanceOptionsInput{
+	paginator := rds.NewDescribeOrderableDBInstanceOptionsPaginator(rdsSvc, &rds.DescribeOrderableDBInstanceOptionsInput{
 		Engine:        engine,
 		EngineVersion: version,
-	}, func(resp *rds.DescribeOrderableDBInstanceOptionsOutput, lastPage bool) bool {
-		for _, instanceOption := range resp.OrderableDBInstanceOptions {
-			if instanceOption == nil {
-				continue
-			}
+	})
 
-			instanceClassResults = append(instanceClassResults, instanceOption)
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(context.Background())
+		if err != nil {
+			return nil, err
 		}
 
-		return !lastPage
-	})
-	if err != nil {
-		return nil, err
+		for _, instanceOption := range resp.OrderableDBInstanceOptions {
+			instanceClassResults = append(instanceClassResults, instanceOption)
+		}
 	}
 
 	var instanceClasses []string
@@ -140,19 +139,19 @@ type DatabaseStackParameters struct {
 	MaxAllocatedStorage int    `flag:"max-allocated-storage"`
 }
 
-func (p *DatabaseStackParameters) Import(parameters []*cloudformation.Parameter) error {
+func (p *DatabaseStackParameters) Import(parameters []types.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
 
-func (p *DatabaseStackParameters) ToCloudFormationParameters() ([]*cloudformation.Parameter, error) {
+func (p *DatabaseStackParameters) ToCloudFormationParameters() ([]types.Parameter, error) {
 	return StructToCloudformationParameters(p)
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (p *DatabaseStackParameters) SetInternalFields(sess *session.Session, name *string) error {
+func (p *DatabaseStackParameters) SetInternalFields(cfg aws.Config, name *string) error {
 	var err error
 	if p.Version == "" {
-		p.Version, err = getLatestRdsVersion(sess, &p.Engine)
+		p.Version, err = getLatestRdsVersion(cfg, &p.Engine)
 		if err != nil {
 			return err
 		}
@@ -179,7 +178,7 @@ var DefaultDatabaseStackParameters = DatabaseStackParameters{
 }
 
 type DatabaseStack struct {
-	Stack      *cloudformation.Stack
+	Stack      *types.Stack
 	Parameters *DatabaseStackParameters
 }
 
@@ -187,17 +186,17 @@ func (a *DatabaseStack) GetParameters() Parameters {
 	return a.Parameters
 }
 
-func (a *DatabaseStack) GetStack() *cloudformation.Stack {
+func (a *DatabaseStack) GetStack() *types.Stack {
 	return a.Stack
 }
 
-func (a *DatabaseStack) SetStack(stack *cloudformation.Stack) {
+func (a *DatabaseStack) SetStack(stack *types.Stack) {
 	a.Stack = stack
 }
 
 // SetDeletionProtection toggles the deletion protection flag on the database instance or cluster
-func (a *DatabaseStack) SetDeletionProtection(sess *session.Session, value bool) error {
-	rdsSvc := rds.New(sess)
+func (a *DatabaseStack) SetDeletionProtection(cfg aws.Config, value bool) error {
+	rdsSvc := rds.NewFromConfig(cfg)
 	DBID, err1 := bridge.GetStackOutput(a.Stack.Outputs, "DBId")
 	DBType, err2 := bridge.GetStackOutput(a.Stack.Outputs, "DBType")
 	// If stack failed to complete successfully, we may not have a DB instance to modify
@@ -211,13 +210,13 @@ func (a *DatabaseStack) SetDeletionProtection(sess *session.Session, value bool)
 		logrus.WithFields(logrus.Fields{"identifier": DBID, "value": value}).Debug("setting RDS deletion protection")
 
 		if *DBType == "instance" {
-			_, err := rdsSvc.ModifyDBInstance(&input)
+			_, err := rdsSvc.ModifyDBInstance(context.Background(), &input)
 
 			return err
 		}
 
 		if *DBType == "cluster" {
-			_, err := rdsSvc.ModifyDBCluster(&rds.ModifyDBClusterInput{
+			_, err := rdsSvc.ModifyDBCluster(context.Background(), &rds.ModifyDBClusterInput{
 				DBClusterIdentifier: input.DBInstanceIdentifier,
 				DeletionProtection:  input.DeletionProtection,
 				ApplyImmediately:    input.ApplyImmediately,
@@ -255,15 +254,15 @@ func (a *DatabaseStack) SetDeletionProtection(sess *session.Session, value bool)
 }
 
 // PreDelete will remove deletion protection on the stack
-func (a *DatabaseStack) PreDelete(sess *session.Session) error {
-	return a.SetDeletionProtection(sess, false)
+func (a *DatabaseStack) PreDelete(cfg aws.Config) error {
+	return a.SetDeletionProtection(cfg, false)
 }
 
-func (a *DatabaseStack) PostCreate(sess *session.Session) error {
-	return a.SetDeletionProtection(sess, true)
+func (a *DatabaseStack) PostCreate(cfg aws.Config) error {
+	return a.SetDeletionProtection(cfg, true)
 }
 
-func (*DatabaseStack) PostDelete(_ *session.Session, _ *string) error {
+func (*DatabaseStack) PostDelete(_ aws.Config, _ *string) error {
 	return nil
 }
 
@@ -275,7 +274,7 @@ func (a *DatabaseStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return ui.FlagsToStruct(a.Parameters, flags)
 }
 
-func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
+func (a *DatabaseStack) AskQuestions(cfg aws.Config) error {
 	var questions []*ui.QuestionExtra
 
 	var err error
@@ -284,7 +283,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 
 	if a.Stack == nil {
 		err = AskForCluster(
-			sess,
+			cfg,
 			"Which cluster should this Database be installed in?",
 			"A cluster represents an isolated network and its associated resources (Apps, Database, Redis, etc.).",
 			a.Parameters,
@@ -339,7 +338,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 			return err
 		}
 
-		a.Parameters.Version, err = getLatestRdsVersion(sess, &a.Parameters.Engine)
+		a.Parameters.Version, err = getLatestRdsVersion(cfg, &a.Parameters.Engine)
 		if err != nil {
 			return err
 		}
@@ -350,7 +349,7 @@ func (a *DatabaseStack) AskQuestions(sess *session.Session) error {
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " retrieving instance classes for " + a.Parameters.Engine
 
-	instanceClasses, err := listRDSInstanceClasses(sess, &a.Parameters.Engine, &a.Parameters.Version)
+	instanceClasses, err := listRDSInstanceClasses(cfg, &a.Parameters.Engine, &a.Parameters.Version)
 	if err != nil {
 		return err
 	}
@@ -403,17 +402,17 @@ func (*DatabaseStack) StackType() string {
 	return "database"
 }
 
-func (a *DatabaseStack) Tags(name *string) []*cloudformation.Tag {
-	return []*cloudformation.Tag{
+func (a *DatabaseStack) Tags(name *string) []types.Tag {
+	return []types.Tag{
 		{Key: aws.String("apppack:database"), Value: name},
 		{Key: aws.String("apppack:cluster"), Value: aws.String(a.ClusterName())},
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}
 }
 
-func (*DatabaseStack) Capabilities() []*string {
-	return []*string{
-		aws.String("CAPABILITY_IAM"),
+func (*DatabaseStack) Capabilities() []types.Capability {
+	return []types.Capability{
+		types.CapabilityCapabilityIam,
 	}
 }
 

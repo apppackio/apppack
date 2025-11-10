@@ -7,9 +7,8 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/spf13/pflag"
 )
 
@@ -17,21 +16,21 @@ type AccountStackParameters struct {
 	Administrators []string `flag:"administrators"`
 }
 
-func (p *AccountStackParameters) Import(parameters []*cloudformation.Parameter) error {
+func (p *AccountStackParameters) Import(parameters []types.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
 
-func (p *AccountStackParameters) ToCloudFormationParameters() ([]*cloudformation.Parameter, error) {
+func (p *AccountStackParameters) ToCloudFormationParameters() ([]types.Parameter, error) {
 	return StructToCloudformationParameters(p)
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (*AccountStackParameters) SetInternalFields(_ *session.Session, _ *string) error {
+func (*AccountStackParameters) SetInternalFields(_ aws.Config, _ *string) error {
 	return nil
 }
 
 type AccountStack struct {
-	Stack      *cloudformation.Stack
+	Stack      *types.Stack
 	Parameters *AccountStackParameters
 }
 
@@ -39,23 +38,23 @@ func (a *AccountStack) GetParameters() Parameters {
 	return a.Parameters
 }
 
-func (a *AccountStack) GetStack() *cloudformation.Stack {
+func (a *AccountStack) GetStack() *types.Stack {
 	return a.Stack
 }
 
-func (a *AccountStack) SetStack(stack *cloudformation.Stack) {
+func (a *AccountStack) SetStack(stack *types.Stack) {
 	a.Stack = stack
 }
 
-func (*AccountStack) PostCreate(_ *session.Session) error {
+func (*AccountStack) PostCreate(_ aws.Config) error {
 	return nil
 }
 
-func (*AccountStack) PreDelete(_ *session.Session) error {
+func (*AccountStack) PreDelete(_ aws.Config) error {
 	return nil
 }
 
-func (*AccountStack) PostDelete(_ *session.Session, _ *string) error {
+func (*AccountStack) PostDelete(_ aws.Config, _ *string) error {
 	return nil
 }
 
@@ -70,7 +69,7 @@ func (a *AccountStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return nil
 }
 
-func (a *AccountStack) AskQuestions(_ *session.Session) error {
+func (a *AccountStack) AskQuestions(_ aws.Config) error {
 	return ui.AskQuestions([]*ui.QuestionExtra{
 		{
 			Verbose:  "Who can administer this account?",
@@ -94,15 +93,15 @@ func (*AccountStack) StackType() string {
 	return "account"
 }
 
-func (*AccountStack) Tags(_ *string) []*cloudformation.Tag {
-	return []*cloudformation.Tag{
+func (*AccountStack) Tags(_ *string) []types.Tag {
+	return []types.Tag{
 		{Key: aws.String("apppack"), Value: aws.String("true")},
 	}
 }
 
-func (*AccountStack) Capabilities() []*string {
-	return []*string{
-		aws.String("CAPABILITY_IAM"),
+func (*AccountStack) Capabilities() []types.Capability {
+	return []types.Capability{
+		types.CapabilityCapabilityIam,
 	}
 }
 

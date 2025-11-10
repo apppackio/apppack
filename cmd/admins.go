@@ -23,14 +23,14 @@ import (
 	"github.com/apppackio/apppack/stringslice"
 	"github.com/apppackio/apppack/ui"
 	"github.com/apppackio/apppack/utils"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/spf13/cobra"
 )
 
-func accountStack(sess *session.Session) (*stacks.AccountStack, error) {
+func accountStack(cfg aws.Config) (*stacks.AccountStack, error) {
 	stack := &stacks.AccountStack{Parameters: &stacks.AccountStackParameters{}}
 
-	err := stacks.LoadStackFromCloudformation(sess, stack, new(string))
+	err := stacks.LoadStackFromCloudformation(cfg, stack, new(string))
 	if err != nil {
 		return nil, err
 	}
@@ -38,11 +38,11 @@ func accountStack(sess *session.Session) (*stacks.AccountStack, error) {
 	return stack, nil
 }
 
-func updateAdministrators(sess *session.Session, stack *stacks.AccountStack, name *string) error {
+func updateAdministrators(cfg aws.Config, stack *stacks.AccountStack, name *string) error {
 	sort.Strings(stack.Parameters.Administrators)
 	ui.StartSpinner()
 
-	if err := stacks.ModifyStack(sess, stack, name); err != nil {
+	if err := stacks.ModifyStack(cfg, stack, name); err != nil {
 		ui.Spinner.Stop()
 
 		return err
@@ -67,9 +67,9 @@ var adminsCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		stack, err := accountStack(sess)
+		stack, err := accountStack(cfg)
 		checkErr(err)
 		ui.Spinner.Stop()
 		for _, u := range stack.Parameters.Administrators {
@@ -93,9 +93,9 @@ var adminsAddCmd = &cobra.Command{
 			}
 		}
 		ui.StartSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		stack, err := accountStack(sess)
+		stack, err := accountStack(cfg)
 		checkErr(err)
 		stack.Parameters.Administrators = append(stack.Parameters.Administrators, args...)
 		var dupes []string
@@ -104,7 +104,7 @@ var adminsAddCmd = &cobra.Command{
 		for _, d := range dupes {
 			printWarning(d + " is already an administrator")
 		}
-		checkErr(updateAdministrators(sess, stack, &AppName))
+		checkErr(updateAdministrators(cfg, stack, &AppName))
 	},
 }
 
@@ -123,9 +123,9 @@ Updates the application Cloudformation stack to remove an administrators.`,
 			}
 		}
 		ui.StartSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		stack, err := accountStack(sess)
+		stack, err := accountStack(cfg)
 		checkErr(err)
 		var notFound []string
 		stack.Parameters.Administrators, notFound = removeFromSlice(stack.Parameters.Administrators, args)
@@ -133,7 +133,7 @@ Updates the application Cloudformation stack to remove an administrators.`,
 		for _, n := range notFound {
 			printWarning(n + " is not an administrator")
 		}
-		checkErr(updateAdministrators(sess, stack, &AppName))
+		checkErr(updateAdministrators(cfg, stack, &AppName))
 	},
 }
 

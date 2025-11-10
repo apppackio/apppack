@@ -1,13 +1,15 @@
 package metrics
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/apppackio/apppack/app"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/cloudwatch"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/mum4k/termdash/cell"
 	"github.com/mum4k/termdash/widgets/linechart"
 )
@@ -50,7 +52,7 @@ func (o *MetricOptions) TimeframeStart() time.Time {
 type AppMetrics interface {
 	GetApp() *app.App
 	GetOptions() *MetricOptions
-	MetricDataQueries() []*cloudwatch.MetricDataQuery
+	MetricDataQueries() []types.MetricDataQuery
 	MetricColor(name *string) cell.Color
 	LineChartOptions() []linechart.Option
 	Title() string
@@ -96,15 +98,15 @@ func (*ServiceUtilizationMetrics) LineChartOptions() []linechart.Option {
 	}
 }
 
-func (m *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
-	return []*cloudwatch.MetricDataQuery{
+func (m *ServiceUtilizationMetrics) MetricDataQueries() []types.MetricDataQuery {
+	return []types.MetricDataQuery{
 		{
 			Id: aws.String("cpu"),
-			MetricStat: &cloudwatch.MetricStat{
-				Metric: &cloudwatch.Metric{
+			MetricStat: &types.MetricStat{
+				Metric: &types.Metric{
 					Namespace:  aws.String("AWS/ECS"),
 					MetricName: aws.String("CPUUtilization"),
-					Dimensions: []*cloudwatch.Dimension{
+					Dimensions: []types.Dimension{
 						{
 							Name:  aws.String("ClusterName"),
 							Value: aws.String(m.App.Settings.Cluster.Name),
@@ -115,17 +117,17 @@ func (m *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricData
 						},
 					},
 				},
-				Period: aws.Int64(m.Options.Timeframe.Period()),
+				Period: aws.Int32(int32(m.Options.Timeframe.Period())),
 				Stat:   aws.String("Maximum"),
 			},
 		},
 		{
 			Id: aws.String("memory"),
-			MetricStat: &cloudwatch.MetricStat{
-				Metric: &cloudwatch.Metric{
+			MetricStat: &types.MetricStat{
+				Metric: &types.Metric{
 					Namespace:  aws.String("AWS/ECS"),
 					MetricName: aws.String("MemoryUtilization"),
-					Dimensions: []*cloudwatch.Dimension{
+					Dimensions: []types.Dimension{
 						{
 							Name:  aws.String("ClusterName"),
 							Value: aws.String(m.App.Settings.Cluster.Name),
@@ -136,7 +138,7 @@ func (m *ServiceUtilizationMetrics) MetricDataQueries() []*cloudwatch.MetricData
 						},
 					},
 				},
-				Period: aws.Int64(m.Options.Timeframe.Period()),
+				Period: aws.Int32(int32(m.Options.Timeframe.Period())),
 				Stat:   aws.String("Maximum"),
 			},
 		},
@@ -174,15 +176,15 @@ func (*ResponseTimeMetrics) LineChartOptions() []linechart.Option {
 	return []linechart.Option{}
 }
 
-func (m *ResponseTimeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
-	return []*cloudwatch.MetricDataQuery{
+func (m *ResponseTimeMetrics) MetricDataQueries() []types.MetricDataQuery {
+	return []types.MetricDataQuery{
 		{
 			Id: aws.String(strings.ToLower(m.Stat)),
-			MetricStat: &cloudwatch.MetricStat{
-				Metric: &cloudwatch.Metric{
+			MetricStat: &types.MetricStat{
+				Metric: &types.Metric{
 					Namespace:  aws.String("AWS/ApplicationELB"),
 					MetricName: aws.String("TargetResponseTime"),
-					Dimensions: []*cloudwatch.Dimension{
+					Dimensions: []types.Dimension{
 						{
 							Name:  aws.String("TargetGroup"),
 							Value: aws.String(m.App.Settings.TargetGroup.Suffix),
@@ -193,7 +195,7 @@ func (m *ResponseTimeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery 
 						},
 					},
 				},
-				Period: aws.Int64(m.Options.Timeframe.Period()),
+				Period: aws.Int32(int32(m.Options.Timeframe.Period())),
 				Stat:   &m.Stat,
 			},
 		},
@@ -236,15 +238,15 @@ func (*StatusCodeMetrics) LineChartOptions() []linechart.Option {
 	return []linechart.Option{}
 }
 
-func (m *StatusCodeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
-	metricDataQueries := []*cloudwatch.MetricDataQuery{
+func (m *StatusCodeMetrics) MetricDataQueries() []types.MetricDataQuery {
+	metricDataQueries := []types.MetricDataQuery{
 		{
 			Id: aws.String("mm" + m.Code),
-			MetricStat: &cloudwatch.MetricStat{
-				Metric: &cloudwatch.Metric{
+			MetricStat: &types.MetricStat{
+				Metric: &types.Metric{
 					Namespace:  aws.String("AWS/ApplicationELB"),
 					MetricName: aws.String(fmt.Sprintf("HTTPCode_Target_%s_Count", strings.ToUpper(m.Code))),
-					Dimensions: []*cloudwatch.Dimension{
+					Dimensions: []types.Dimension{
 						{
 							Name:  aws.String("TargetGroup"),
 							Value: aws.String(m.App.Settings.TargetGroup.Suffix),
@@ -255,7 +257,7 @@ func (m *StatusCodeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
 						},
 					},
 				},
-				Period: aws.Int64(m.Options.Timeframe.Period()),
+				Period: aws.Int32(int32(m.Options.Timeframe.Period())),
 				Stat:   aws.String("Sum"),
 			},
 		},
@@ -267,13 +269,13 @@ func (m *StatusCodeMetrics) MetricDataQueries() []*cloudwatch.MetricDataQuery {
 func FetchMetrics(metrics AppMetrics) (*cloudwatch.GetMetricDataOutput, error) {
 	app := metrics.GetApp()
 	options := metrics.GetOptions()
-	cloudwatchSvc := cloudwatch.New(app.Session)
+	cloudwatchSvc := cloudwatch.NewFromConfig(app.Session)
 
-	return cloudwatchSvc.GetMetricData(&cloudwatch.GetMetricDataInput{
+	return cloudwatchSvc.GetMetricData(context.Background(), &cloudwatch.GetMetricDataInput{
 		StartTime:         aws.Time(options.TimeframeStart()),
 		EndTime:           aws.Time(time.Now()),
-		ScanBy:            aws.String("TimestampAscending"),
-		MaxDatapoints:     aws.Int64(10000),
+		ScanBy:            types.ScanByTimestampAscending,
+		MaxDatapoints:     aws.Int32(10000),
 		MetricDataQueries: metrics.MetricDataQueries(),
 	})
 }

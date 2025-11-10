@@ -7,9 +7,8 @@ import (
 
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/spf13/pflag"
 )
 
@@ -38,16 +37,16 @@ type ReviewAppStackParameters struct {
 	CustomTaskPolicy       bool
 }
 
-func (p *ReviewAppStackParameters) Import(parameters []*cloudformation.Parameter) error {
+func (p *ReviewAppStackParameters) Import(parameters []types.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
 
-func (p *ReviewAppStackParameters) ToCloudFormationParameters() ([]*cloudformation.Parameter, error) {
+func (p *ReviewAppStackParameters) ToCloudFormationParameters() ([]types.Parameter, error) {
 	return StructToCloudformationParameters(p)
 }
 
 // SetParametersFromPipeline sets parameters for the review app based on output from the pipeline stack
-func (p *ReviewAppStackParameters) SetParametersFromPipeline(stack *cloudformation.Stack) error {
+func (p *ReviewAppStackParameters) SetParametersFromPipeline(stack *types.Stack) error {
 	databaseLambda, err := bridge.GetStackOutput(stack.Outputs, "DatabaseManagerLambdaArn")
 	if err != nil {
 		return err
@@ -101,12 +100,12 @@ func (p *ReviewAppStackParameters) SetParametersFromPipeline(stack *cloudformati
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (p *ReviewAppStackParameters) SetInternalFields(sess *session.Session, name *string) error {
+func (p *ReviewAppStackParameters) SetInternalFields(cfg aws.Config, name *string) error {
 	ui.StartSpinner()
 
 	pipeline, pr := splitReviewAppName(name)
 
-	pipelineStack, err := bridge.GetStack(sess, fmt.Sprintf(PipelineStackNameTmpl, pipeline))
+	pipelineStack, err := bridge.GetStack(cfg, fmt.Sprintf(PipelineStackNameTmpl, pipeline))
 	if err != nil {
 		return err
 	}
@@ -125,7 +124,7 @@ func (p *ReviewAppStackParameters) SetInternalFields(sess *session.Session, name
 }
 
 type ReviewAppStack struct {
-	Stack      *cloudformation.Stack
+	Stack      *types.Stack
 	Parameters *ReviewAppStackParameters
 }
 
@@ -133,23 +132,23 @@ func (a *ReviewAppStack) GetParameters() Parameters {
 	return a.Parameters
 }
 
-func (a *ReviewAppStack) GetStack() *cloudformation.Stack {
+func (a *ReviewAppStack) GetStack() *types.Stack {
 	return a.Stack
 }
 
-func (a *ReviewAppStack) SetStack(stack *cloudformation.Stack) {
+func (a *ReviewAppStack) SetStack(stack *types.Stack) {
 	a.Stack = stack
 }
 
-func (*ReviewAppStack) PostCreate(_ *session.Session) error {
+func (*ReviewAppStack) PostCreate(_ aws.Config) error {
 	return nil
 }
 
-func (*ReviewAppStack) PreDelete(_ *session.Session) error {
+func (*ReviewAppStack) PreDelete(_ aws.Config) error {
 	return nil
 }
 
-func (*ReviewAppStack) PostDelete(_ *session.Session, _ *string) error {
+func (*ReviewAppStack) PostDelete(_ aws.Config, _ *string) error {
 	return nil
 }
 
@@ -157,7 +156,7 @@ func (a *ReviewAppStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return ui.FlagsToStruct(a.Parameters, flags)
 }
 
-func (*ReviewAppStack) AskQuestions(_ *session.Session) error {
+func (*ReviewAppStack) AskQuestions(_ aws.Config) error {
 	return nil
 }
 
@@ -171,10 +170,10 @@ func (*ReviewAppStack) StackType() string {
 	return "review app"
 }
 
-func (*ReviewAppStack) Tags(name *string) []*cloudformation.Tag {
+func (*ReviewAppStack) Tags(name *string) []types.Tag {
 	pipeline, pr := splitReviewAppName(name)
 
-	return []*cloudformation.Tag{
+	return []types.Tag{
 		{Key: aws.String("apppack:appName"), Value: &pipeline},
 		{Key: aws.String("apppack:reviewApp"), Value: aws.String("pr" + pr)},
 		// {Key: aws.String("apppack:cluster"), Value: aws.String("...")},
@@ -182,14 +181,14 @@ func (*ReviewAppStack) Tags(name *string) []*cloudformation.Tag {
 	}
 }
 
-func (*ReviewAppStack) Capabilities() []*string {
-	return []*string{
-		aws.String("CAPABILITY_IAM"),
+func (*ReviewAppStack) Capabilities() []types.Capability {
+	return []types.Capability{
+		types.CapabilityCapabilityIam,
 	}
 }
 
-func (a *ReviewAppStack) CfnRole(sess *session.Session) (*string, error) {
-	stack, err := bridge.GetStack(sess, a.Parameters.PipelineStackName)
+func (a *ReviewAppStack) CfnRole(cfg aws.Config) (*string, error) {
+	stack, err := bridge.GetStack(cfg, a.Parameters.PipelineStackName)
 	if err != nil {
 		return nil, err
 	}

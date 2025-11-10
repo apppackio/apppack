@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -12,8 +13,9 @@ import (
 	"github.com/AlecAivazis/survey/v2/core"
 	"github.com/apppackio/apppack/ddb"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
@@ -25,8 +27,8 @@ func CloudformationStackURL(region, stackID *string) string {
 	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
 }
 
-func AskForCluster(sess *session.Session, verbose, helpText string, response interface{}) error {
-	clusters, err := ddb.ListClusters(sess)
+func AskForCluster(cfg aws.Config, verbose, helpText string, response interface{}) error {
+	clusters, err := ddb.ListClusters(cfg)
 	if err != nil {
 		return err
 	}
@@ -52,10 +54,10 @@ func AskForCluster(sess *session.Session, verbose, helpText string, response int
 }
 
 // waitForCloudformationStack displays the progress of a Stack while it waits for it to complete
-func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName string) (*cloudformation.Stack, error) {
+func waitForCloudformationStack(cfnSvc *cloudformation.Client, stackName string) (*types.Stack, error) {
 	ui.StartSpinner()
 
-	stackDesc, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+	stackDesc, err := cfnSvc.DescribeStacks(context.Background(), &cloudformation.DescribeStacksInput{
 		StackName: &stackName,
 	})
 	if err != nil {
@@ -64,13 +66,13 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 
 	stack := stackDesc.Stacks[0]
 
-	if strings.HasSuffix(*stack.StackStatus, "_COMPLETE") || strings.HasSuffix(*stack.StackStatus, "_FAILED") {
+	if strings.HasSuffix(string(stack.StackStatus), "_COMPLETE") || strings.HasSuffix(string(stack.StackStatus), "_FAILED") {
 		ui.Spinner.Stop()
 
-		return stack, nil
+		return &stack, nil
 	}
 
-	stackresources, err := cfnSvc.DescribeStackResources(&cloudformation.DescribeStackResourcesInput{
+	stackresources, err := cfnSvc.DescribeStackResources(context.Background(), &cloudformation.DescribeStackResourcesInput{
 		StackName: &stackName,
 	})
 	if err != nil {
@@ -91,7 +93,7 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 
 	for _, resource := range stackresources.StackResources {
 		// CREATE_IN_PROGRESS | CREATE_FAILED | CREATE_COMPLETE | DELETE_IN_PROGRESS | DELETE_FAILED | DELETE_COMPLETE | DELETE_SKIPPED | UPDATE_IN_PROGRESS | UPDATE_FAILED | UPDATE_COMPLETE | IMPORT_FAILED | IMPORT_COMPLETE | IMPORT_IN_PROGRESS | IMPORT_ROLLBACK_IN_PROGRESS | IMPORT_ROLLBACK_FAILED | IMPORT_ROLLBACK_COMPLETE
-		if strings.HasSuffix(*resource.ResourceStatus, "_FAILED") {
+		if strings.HasSuffix(string(resource.ResourceStatus), "_FAILED") {
 			// only warn on the first failure
 			// failures will cascade and end up being extra noise
 			if !stackHasFailure {
@@ -102,13 +104,13 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 				stackHasFailure = true
 			}
 
-			failed = append(failed, *resource.ResourceStatus)
-		} else if strings.HasSuffix(*resource.ResourceStatus, "_IN_PROGRESS") {
-			inProgress = append(inProgress, *resource.ResourceStatus)
-		} else if *resource.ResourceStatus == "CREATE_COMPLETE" {
-			created = append(created, *resource.ResourceStatus)
-		} else if *resource.ResourceStatus == DeleteComplete {
-			deleted = append(deleted, *resource.ResourceStatus)
+			failed = append(failed, string(resource.ResourceStatus))
+		} else if strings.HasSuffix(string(resource.ResourceStatus), "_IN_PROGRESS") {
+			inProgress = append(inProgress, string(resource.ResourceStatus))
+		} else if resource.ResourceStatus == types.ResourceStatusCreateComplete {
+			created = append(created, string(resource.ResourceStatus))
+		} else if resource.ResourceStatus == types.ResourceStatusDeleteComplete {
+			deleted = append(deleted, string(resource.ResourceStatus))
 		}
 	}
 
@@ -125,8 +127,8 @@ func waitForCloudformationStack(cfnSvc *cloudformation.CloudFormation, stackName
 }
 
 // retryStackCreation will attempt to destroy and recreate the stack
-func retryStackCreation(sess *session.Session, stackID *string, input *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
-	cfnSvc := cloudformation.New(sess)
+func retryStackCreation(cfg aws.Config, stackID *string, input *cloudformation.CreateStackInput) (*types.Stack, error) {
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
 	ui.PrintWarning("stack creation failed")
 	fmt.Println("retrying operation... deleting and recreating stack")
@@ -134,7 +136,7 @@ func retryStackCreation(sess *session.Session, stackID *string, input *cloudform
 
 	defer sentry.Flush(time.Second * 5)
 
-	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{StackName: stackID})
+	_, err := cfnSvc.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{StackName: stackID})
 	if err != nil {
 		return nil, err
 	}
@@ -144,11 +146,11 @@ func retryStackCreation(sess *session.Session, stackID *string, input *cloudform
 		return nil, err
 	}
 
-	if *stack.StackStatus != DeleteComplete {
+	if stack.StackStatus != types.StackStatusDeleteComplete {
 		err = fmt.Errorf("Stack destruction failed: %s", *stack.StackName)
 		sentry.CaptureException(err)
 		fmt.Printf("%s", aurora.Bold(aurora.White(
-			"Unable to destroy stack. Check Cloudformation console for more details:\n"+CloudformationStackURL(sess.Config.Region, stackID),
+			"Unable to destroy stack. Check Cloudformation console for more details:\n"+CloudformationStackURL(&cfg.Region, stackID),
 		)))
 
 		return nil, err
@@ -156,15 +158,15 @@ func retryStackCreation(sess *session.Session, stackID *string, input *cloudform
 
 	fmt.Println("successfully deleted failed stack...")
 
-	return CreateStackAndWait(sess, input)
+	return CreateStackAndWait(cfg, input)
 }
 
 var retry = true
 
-func CreateStackAndWait(sess *session.Session, stackInput *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
-	cfnSvc := cloudformation.New(sess)
+func CreateStackAndWait(cfg aws.Config, stackInput *cloudformation.CreateStackInput) (*types.Stack, error) {
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
-	stackOutput, err := cfnSvc.CreateStack(stackInput)
+	stackOutput, err := cfnSvc.CreateStack(context.Background(), stackInput)
 	if err != nil {
 		return nil, err
 	}
@@ -177,19 +179,19 @@ func CreateStackAndWait(sess *session.Session, stackInput *cloudformation.Create
 		return nil, err
 	}
 
-	if retry && *stack.StackStatus == "ROLLBACK_COMPLETE" {
+	if retry && stack.StackStatus == types.StackStatusRollbackComplete {
 		retry = false
 
-		return retryStackCreation(sess, stack.StackId, stackInput)
+		return retryStackCreation(cfg, stack.StackId, stackInput)
 	}
 
 	return stack, err
 }
 
-func UpdateStackAndWait(sess *session.Session, stackInput *cloudformation.UpdateStackInput) (*cloudformation.Stack, error) {
-	cfnSvc := cloudformation.New(sess)
+func UpdateStackAndWait(cfg aws.Config, stackInput *cloudformation.UpdateStackInput) (*types.Stack, error) {
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
-	_, err := cfnSvc.UpdateStack(stackInput)
+	_, err := cfnSvc.UpdateStack(context.Background(), stackInput)
 	if err != nil {
 		return nil, err
 	}
@@ -197,10 +199,10 @@ func UpdateStackAndWait(sess *session.Session, stackInput *cloudformation.Update
 	return waitForCloudformationStack(cfnSvc, *stackInput.StackName)
 }
 
-func CreateChangeSetAndWait(sess *session.Session, changesetInput *cloudformation.CreateChangeSetInput) (*cloudformation.DescribeChangeSetOutput, error) {
-	cfnSvc := cloudformation.New(sess)
+func CreateChangeSetAndWait(cfg aws.Config, changesetInput *cloudformation.CreateChangeSetInput) (*cloudformation.DescribeChangeSetOutput, error) {
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
-	if _, err := cfnSvc.CreateChangeSet(changesetInput); err != nil {
+	if _, err := cfnSvc.CreateChangeSet(context.Background(), changesetInput); err != nil {
 		return nil, err
 	}
 
@@ -209,17 +211,18 @@ func CreateChangeSetAndWait(sess *session.Session, changesetInput *cloudformatio
 		StackName:     changesetInput.StackName,
 	}
 
-	changeSet, err := cfnSvc.DescribeChangeSet(&describeChangeSetInput)
+	changeSet, err := cfnSvc.DescribeChangeSet(context.Background(), &describeChangeSetInput)
 	if err != nil {
 		return nil, err
 	}
 
-	if *changeSet.Status == cloudformation.ChangeSetStatusFailed &&
+	if changeSet.Status == types.ChangeSetStatusFailed &&
 		strings.Contains(*changeSet.StatusReason, "didn't contain changes") {
 		return nil, fmt.Errorf("no changes detected in stack %s, skipping execution", *changesetInput.StackName)
 	}
 
-	if err := cfnSvc.WaitUntilChangeSetCreateComplete(&describeChangeSetInput); err != nil {
+	waiter := cloudformation.NewChangeSetCreateCompleteWaiter(cfnSvc)
+	if err := waiter.Wait(context.Background(), &describeChangeSetInput, 5*time.Minute); err != nil {
 		return nil, err
 	}
 
@@ -228,14 +231,14 @@ func CreateChangeSetAndWait(sess *session.Session, changesetInput *cloudformatio
 
 // DeleteStackAndWait will execute the PreDelete hook, delete the stack and wait for it to complete,
 // then, if successful, execute the PostDelete hook.
-func DeleteStackAndWait(sess *session.Session, stack Stack) (*cloudformation.Stack, error) {
-	if err := stack.PreDelete(sess); err != nil {
+func DeleteStackAndWait(cfg aws.Config, stack Stack) (*types.Stack, error) {
+	if err := stack.PreDelete(cfg); err != nil {
 		return nil, err
 	}
 
-	cfnSvc := cloudformation.New(sess)
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
-	_, err := cfnSvc.DeleteStack(&cloudformation.DeleteStackInput{
+	_, err := cfnSvc.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 		StackName: stack.GetStack().StackId,
 	})
 	if err != nil {
@@ -243,8 +246,8 @@ func DeleteStackAndWait(sess *session.Session, stack Stack) (*cloudformation.Sta
 	}
 
 	cfnStack, err := waitForCloudformationStack(cfnSvc, *stack.GetStack().StackId)
-	if err == nil && *cfnStack.StackStatus == DeleteComplete {
-		if err := stack.PostDelete(sess, nil); err != nil {
+	if err == nil && cfnStack.StackStatus == types.StackStatusDeleteComplete {
+		if err := stack.PostDelete(cfg, nil); err != nil {
 			logrus.WithFields(logrus.Fields{"err": err}).Warning("post-delete failed")
 
 			return nil, err

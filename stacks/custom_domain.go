@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -8,11 +9,12 @@ import (
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/spf13/pflag"
 )
 
@@ -22,14 +24,14 @@ var (
 )
 
 // appList gets a list of app names from DynamoDB
-func appList(sess *session.Session) ([]string, error) {
-	ddbSvc := dynamodb.New(sess)
+func appList(cfg aws.Config) ([]string, error) {
+	ddbSvc := dynamodb.NewFromConfig(cfg)
 
-	result, err := ddbSvc.Query(&dynamodb.QueryInput{
+	result, err := ddbSvc.Query(context.Background(), &dynamodb.QueryInput{
 		TableName:              aws.String("apppack"),
 		KeyConditionExpression: aws.String("primary_id = :id1"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":id1": {S: aws.String("CLUSTERS")},
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":id1": &ddbtypes.AttributeValueMemberS{Value: "CLUSTERS"},
 		},
 	})
 	if err != nil {
@@ -37,12 +39,12 @@ func appList(sess *session.Session) ([]string, error) {
 	}
 
 	type clusterItem struct {
-		SecondaryID string `json:"secondary_id"`
+		SecondaryID string `dynamodbav:"secondary_id"`
 	}
 
 	var clusterItems []clusterItem
 
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &clusterItems)
+	err = attributevalue.UnmarshalListOfMaps(result.Items, &clusterItems)
 	if err != nil {
 		return nil, err
 	}
@@ -59,8 +61,8 @@ func appList(sess *session.Session) ([]string, error) {
 }
 
 // appForDomain returns the app name associated with a given domain
-func appForDomain(sess *session.Session, domain string) (*string, error) {
-	appNames, err := appList(sess)
+func appForDomain(cfg aws.Config, domain string) (*string, error) {
+	appNames, err := appList(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +70,7 @@ func appForDomain(sess *session.Session, domain string) (*string, error) {
 	for _, appName := range appNames {
 		a := app.App{
 			Name:    appName,
-			Session: sess,
+			Session: cfg,
 		}
 		if err = a.LoadSettings(); err != nil {
 			return nil, err
@@ -84,10 +86,10 @@ func appForDomain(sess *session.Session, domain string) (*string, error) {
 	return nil, ErrAppNotFound
 }
 
-func clusterStackForApp(sess *session.Session, appName string) (*string, error) {
-	cfnSvc := cloudformation.New(sess)
+func clusterStackForApp(cfg aws.Config, appName string) (*string, error) {
+	cfnSvc := cloudformation.NewFromConfig(cfg)
 
-	stacks, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+	stacks, err := cfnSvc.DescribeStacks(context.Background(), &cloudformation.DescribeStacksInput{
 		StackName: aws.String(fmt.Sprintf(AppStackNameTmpl, appName)),
 	})
 	if err != nil {
@@ -115,27 +117,27 @@ type CustomDomainStackParameters struct {
 	AltDomain5       string
 }
 
-func (p *CustomDomainStackParameters) Import(parameters []*cloudformation.Parameter) error {
+func (p *CustomDomainStackParameters) Import(parameters []types.Parameter) error {
 	return CloudformationParametersToStruct(p, parameters)
 }
 
-func (p *CustomDomainStackParameters) ToCloudFormationParameters() ([]*cloudformation.Parameter, error) {
+func (p *CustomDomainStackParameters) ToCloudFormationParameters() ([]types.Parameter, error) {
 	return StructToCloudformationParameters(p)
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (p *CustomDomainStackParameters) SetInternalFields(sess *session.Session, name *string) error {
+func (p *CustomDomainStackParameters) SetInternalFields(cfg aws.Config, name *string) error {
 	ui.StartSpinner()
 
 	p.PrimaryDomain = *name
 	ui.Spinner.Suffix = " looking up app details"
 
-	appName, err := appForDomain(sess, *name)
+	appName, err := appForDomain(cfg, *name)
 	if err != nil {
 		return err
 	}
 
-	clusterStackName, err := clusterStackForApp(sess, *appName)
+	clusterStackName, err := clusterStackForApp(cfg, *appName)
 	if err != nil {
 		return err
 	}
@@ -143,12 +145,12 @@ func (p *CustomDomainStackParameters) SetInternalFields(sess *session.Session, n
 	p.ClusterStackName = *clusterStackName
 	ui.Spinner.Suffix = " verifying hosted zone"
 
-	zone, err := bridge.HostedZoneForDomain(sess, *name)
+	zone, err := bridge.HostedZoneForDomain(cfg, *name)
 	if err != nil {
 		return err
 	}
 
-	if err = checkHostedZone(sess, zone); err != nil {
+	if err = checkHostedZone(cfg, zone); err != nil {
 		return err
 	}
 
@@ -158,7 +160,7 @@ func (p *CustomDomainStackParameters) SetInternalFields(sess *session.Session, n
 			continue
 		}
 
-		altZone, err := bridge.HostedZoneForDomain(sess, *altDomain)
+		altZone, err := bridge.HostedZoneForDomain(cfg, *altDomain)
 		if err != nil {
 			return err
 		}
@@ -178,7 +180,7 @@ func (p *CustomDomainStackParameters) SetInternalFields(sess *session.Session, n
 }
 
 type CustomDomainStack struct {
-	Stack      *cloudformation.Stack
+	Stack      *types.Stack
 	Parameters *CustomDomainStackParameters
 }
 
@@ -186,23 +188,23 @@ func (a *CustomDomainStack) GetParameters() Parameters {
 	return a.Parameters
 }
 
-func (a *CustomDomainStack) GetStack() *cloudformation.Stack {
+func (a *CustomDomainStack) GetStack() *types.Stack {
 	return a.Stack
 }
 
-func (a *CustomDomainStack) SetStack(stack *cloudformation.Stack) {
+func (a *CustomDomainStack) SetStack(stack *types.Stack) {
 	a.Stack = stack
 }
 
-func (*CustomDomainStack) PostCreate(_ *session.Session) error {
+func (*CustomDomainStack) PostCreate(_ aws.Config) error {
 	return nil
 }
 
-func (*CustomDomainStack) PreDelete(_ *session.Session) error {
+func (*CustomDomainStack) PreDelete(_ aws.Config) error {
 	return nil
 }
 
-func (*CustomDomainStack) PostDelete(_ *session.Session, _ *string) error {
+func (*CustomDomainStack) PostDelete(_ aws.Config, _ *string) error {
 	return nil
 }
 
@@ -210,7 +212,7 @@ func (a *CustomDomainStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return ui.FlagsToStruct(a.Parameters, flags)
 }
 
-func (*CustomDomainStack) AskQuestions(_ *session.Session) error {
+func (*CustomDomainStack) AskQuestions(_ aws.Config) error {
 	return nil
 }
 
@@ -226,8 +228,8 @@ func (*CustomDomainStack) StackType() string {
 	return "custom domain"
 }
 
-func (a *CustomDomainStack) Tags(*string) []*cloudformation.Tag {
-	return []*cloudformation.Tag{
+func (a *CustomDomainStack) Tags(*string) []types.Tag {
+	return []types.Tag{
 		{Key: aws.String("apppack:customDomain"), Value: &a.Parameters.CertificateName},
 		// TODO: add app name tag
 		// {Key: aws.String("apppack:appName"), Value: appName},
@@ -235,9 +237,9 @@ func (a *CustomDomainStack) Tags(*string) []*cloudformation.Tag {
 	}
 }
 
-func (*CustomDomainStack) Capabilities() []*string {
-	return []*string{
-		aws.String("CAPABILITY_IAM"),
+func (*CustomDomainStack) Capabilities() []types.Capability {
+	return []types.Capability{
+		types.CapabilityCapabilityIam,
 	}
 }
 

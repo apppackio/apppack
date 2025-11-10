@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/apppackio/apppack/app"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/juju/ansiterm"
 )
 
@@ -16,7 +17,7 @@ var errMock = errors.New("mock error")
 func TestConfigVariablesToJSON(t *testing.T) {
 	t.Parallel()
 
-	c := app.NewConfigVariables([]*ssm.Parameter{
+	c := app.NewConfigVariables([]ssmtypes.Parameter{
 		{Name: aws.String("/apppack/apps/myapp/FOO"), Value: aws.String("bar")},
 	})
 
@@ -61,7 +62,7 @@ func TestConfigVariablesToJSONUnmanaged(t *testing.T) {
 func TestConfigVariablesToConsole(t *testing.T) {
 	t.Parallel()
 
-	c := app.NewConfigVariables([]*ssm.Parameter{
+	c := app.NewConfigVariables([]ssmtypes.Parameter{
 		{Name: aws.String("/apppack/apps/myapp/config/FOO"), Value: aws.String("bar")},
 		{Name: aws.String("/apppack/apps/myapp/LONGERVARIABLEFOO"), Value: aws.String("baz")},
 	})
@@ -82,7 +83,7 @@ func TestConfigVariablesToConsole(t *testing.T) {
 func TestConfigVariablesTransform(t *testing.T) {
 	t.Parallel()
 
-	c := app.NewConfigVariables([]*ssm.Parameter{
+	c := app.NewConfigVariables([]ssmtypes.Parameter{
 		{Name: aws.String("/apppack/apps/myapp/config/FOO"), Value: aws.String("bar")},
 		{Name: aws.String("/apppack/apps/myapp/config/BAZ"), Value: aws.String("qux")},
 	})
@@ -116,7 +117,7 @@ func TestConfigVariablesTransform(t *testing.T) {
 func TestConfigVariableLoadManaged(t *testing.T) {
 	t.Parallel()
 
-	managedVar := app.NewConfigVariables([]*ssm.Parameter{
+	managedVar := app.NewConfigVariables([]ssmtypes.Parameter{
 		{Name: aws.String("/apppack/apps/myapp/config/FOO"), Value: aws.String("bar")},
 	})[0]
 
@@ -124,12 +125,12 @@ func TestConfigVariableLoadManaged(t *testing.T) {
 
 	managedFunc := func(*ssm.ListTagsForResourceInput) (*ssm.ListTagsForResourceOutput, error) {
 		return &ssm.ListTagsForResourceOutput{
-			TagList: []*ssm.Tag{{Key: aws.String("aws:cloudformation:stack-id"), Value: aws.String("stackid")}},
+			TagList: []ssmtypes.Tag{{Key: aws.String("aws:cloudformation:stack-id"), Value: aws.String("stackid")}},
 		}, nil
 	}
 
 	unmanagedFunc := func(*ssm.ListTagsForResourceInput) (*ssm.ListTagsForResourceOutput, error) {
-		return &ssm.ListTagsForResourceOutput{TagList: []*ssm.Tag{}}, nil
+		return &ssm.ListTagsForResourceOutput{TagList: []ssmtypes.Tag{}}, nil
 	}
 
 	errorFunc := func(*ssm.ListTagsForResourceInput) (*ssm.ListTagsForResourceOutput, error) {

@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -26,8 +27,9 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
@@ -35,16 +37,16 @@ import (
 )
 
 // WaitForTaskRunning waits for a task to be running or complete
-func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
-	ecsSvc := ecs.New(a.Session)
+func WaitForTaskRunning(a *app.App, task *ecstypes.Task) error {
+	ecsSvc := ecs.NewFromConfig(a.Session)
 
 	status := ""
 	for status != "RUNNING" {
 		time.Sleep(2 * time.Second)
 
-		out, err := ecsSvc.DescribeTasks(&ecs.DescribeTasksInput{
-			Cluster: &a.Settings.Cluster.ARN,
-			Tasks:   []*string{task.TaskArn},
+		out, err := ecsSvc.DescribeTasks(context.Background(), &ecs.DescribeTasksInput{
+			Cluster: task.ClusterArn,
+			Tasks:   []string{*task.TaskArn},
 		})
 		if err != nil {
 			return err
@@ -64,7 +66,7 @@ func WaitForTaskRunning(a *app.App, task *ecs.Task) error {
 	return nil
 }
 
-func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskCommandPrefix []string, taskOverride *ecs.TaskOverride) {
+func StartInteractiveShell(a *app.App, taskFamily, shellCmd *string, taskCommandPrefix []string, taskOverride *ecstypes.TaskOverride) {
 	task, err := a.StartTask(
 		taskFamily,
 		append(taskCommandPrefix, app.ShellBackgroundCommand...),
@@ -189,7 +191,7 @@ func interactiveCmd(a *app.App, cmd string) {
 		ui.StartSpinner()
 
 		ecsSession, err := a.CreateEcsSession(
-			tasks[answers["task"].(survey.OptionAnswer).Index],
+			&tasks[answers["task"].(survey.OptionAnswer).Index],
 			exec,
 		)
 		checkErr(err)
@@ -205,7 +207,7 @@ func interactiveCmd(a *app.App, cmd string) {
 		taskCommandPrefix = []string{"/bin/sh", "-c"}
 	}
 
-	StartInteractiveShell(a, taskFamily, &exec, taskCommandPrefix, &ecs.TaskOverride{
+	StartInteractiveShell(a, taskFamily, &exec, taskCommandPrefix, &ecstypes.TaskOverride{
 		Cpu:    aws.String(strconv.Itoa(size.CPU)),
 		Memory: aws.String(strconv.Itoa(size.Memory)),
 	})

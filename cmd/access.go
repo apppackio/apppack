@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -26,8 +27,8 @@ import (
 	"github.com/apppackio/apppack/stringslice"
 	"github.com/apppackio/apppack/ui"
 	"github.com/apppackio/apppack/utils"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/spf13/cobra"
 )
 
@@ -61,18 +62,18 @@ func removeFromSlice(slice, toRemove []string) ([]string, []string) {
 	return result, notFound
 }
 
-func appOrPipelineStack(sess *session.Session, name string) (*stacks.AppStack, error) {
+func appOrPipelineStack(cfg aws.Config, name string) (*stacks.AppStack, error) {
 	// Initialize with default parameters so fields have default values before Import
 	appParams := stacks.DefaultAppStackParameters
 	stack := stacks.AppStack{Pipeline: false, Parameters: &appParams}
-	err := stacks.LoadStackFromCloudformation(sess, &stack, &name)
+	err := stacks.LoadStackFromCloudformation(cfg, &stack, &name)
 	if err != nil {
 		// Try as pipeline
 		pipelineParams := stacks.DefaultPipelineStackParameters
 		stack.Pipeline = true
 		stack.Parameters = &pipelineParams
 
-		err = stacks.LoadStackFromCloudformation(sess, &stack, &name)
+		err = stacks.LoadStackFromCloudformation(cfg, &stack, &name)
 		if err != nil {
 			return nil, err
 		}
@@ -81,36 +82,37 @@ func appOrPipelineStack(sess *session.Session, name string) (*stacks.AppStack, e
 	return &stack, nil
 }
 
-func adminSession(sessionDuration int) (*session.Session, error) {
+func adminSession(sessionDuration int) (aws.Config, error) {
 	if UseAWSCredentials {
+		ctx := context.Background()
 		if region != "" {
-			return session.NewSession(&aws.Config{Region: &region})
+			return config.LoadDefaultConfig(ctx, config.WithRegion(region))
 		}
 
-		sess, err := session.NewSession()
+		cfg, err := config.LoadDefaultConfig(ctx)
 		if err != nil {
-			return nil, err
+			return aws.Config{}, err
 		}
 
-		if *sess.Config.Region == "" {
-			return nil, errors.New("no region provided. Use the `--region` flag or set the AWS_REGION environment")
+		if cfg.Region == "" {
+			return aws.Config{}, errors.New("no region provided. Use the `--region` flag or set the AWS_REGION environment")
 		}
 
-		return sess, nil
+		return cfg, nil
 	}
 
-	var sess *session.Session
+	var cfg aws.Config
 
 	var err error
-	sess, CurrentAccountRole, err = auth.AdminAWSSession(AccountIDorAlias, sessionDuration, region)
+	cfg, CurrentAccountRole, err = auth.AdminAWSSession(AccountIDorAlias, sessionDuration, region)
 
-	return sess, err
+	return cfg, err
 }
 
-func updateAllowedUsers(sess *session.Session, stack *stacks.AppStack, name *string) error {
+func updateAllowedUsers(cfg aws.Config, stack *stacks.AppStack, name *string) error {
 	ui.StartSpinner()
 
-	if err := stacks.ModifyStack(sess, stack, name); err != nil {
+	if err := stacks.ModifyStack(cfg, stack, name); err != nil {
 		ui.Spinner.Stop()
 
 		return err
@@ -135,9 +137,9 @@ var accessCmd = &cobra.Command{
 	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
 		var err error
-		sess, err := adminSession(SessionDurationSeconds)
+		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		stack, err := appOrPipelineStack(sess, AppName)
+		stack, err := appOrPipelineStack(cfg, AppName)
 		checkErr(err)
 		sort.Strings(stack.Parameters.AllowedUsers)
 		ui.Spinner.Stop()
@@ -163,9 +165,9 @@ Updates the application Cloudformation stack to add access for the user.`,
 			}
 		}
 		ui.StartSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		stack, err := appOrPipelineStack(sess, AppName)
+		stack, err := appOrPipelineStack(cfg, AppName)
 		checkErr(err)
 		stack.Parameters.AllowedUsers = append(stack.Parameters.AllowedUsers, args...)
 		var dupes []string
@@ -175,7 +177,7 @@ Updates the application Cloudformation stack to add access for the user.`,
 		for _, d := range dupes {
 			printWarning(fmt.Sprintf("%s already has access to %s", d, AppName))
 		}
-		checkErr(updateAllowedUsers(sess, stack, &AppName))
+		checkErr(updateAllowedUsers(cfg, stack, &AppName))
 	},
 }
 
@@ -195,9 +197,9 @@ Updates the application Cloudformation stack to remove access for the user.`,
 			}
 		}
 		ui.StartSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		stack, err := appOrPipelineStack(sess, AppName)
+		stack, err := appOrPipelineStack(cfg, AppName)
 		checkErr(err)
 		var notFound []string
 		stack.Parameters.AllowedUsers, notFound = removeFromSlice(stack.Parameters.AllowedUsers, args)
@@ -206,7 +208,7 @@ Updates the application Cloudformation stack to remove access for the user.`,
 		for _, n := range notFound {
 			printWarning(fmt.Sprintf("%s does not have access to %s", n, AppName))
 		}
-		checkErr(updateAllowedUsers(sess, stack, &AppName))
+		checkErr(updateAllowedUsers(cfg, stack, &AppName))
 	},
 }
 

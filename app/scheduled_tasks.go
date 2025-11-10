@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
 
 type ScheduledTask struct {
@@ -66,12 +67,13 @@ func (a *App) CreateScheduledTask(schedule, command string) ([]*ScheduledTask, e
 	}
 
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
+	parameterType := ssmtypes.ParameterTypeString
 
 	err = a.AWS.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Value:     aws.String(string(tasksBytes)),
 		Overwrite: aws.Bool(true),
-		Type:      aws.String("String"),
+		Type:      parameterType,
 	})
 	if err != nil {
 		return nil, err
@@ -100,12 +102,13 @@ func (a *App) DeleteScheduledTask(idx int) (*ScheduledTask, error) {
 	}
 
 	parameterName := fmt.Sprintf("/apppack/apps/%s/scheduled-tasks", a.Name)
+	parameterType := ssmtypes.ParameterTypeString
 
 	err = a.AWS.PutParameter(&ssm.PutParameterInput{
 		Name:      &parameterName,
 		Value:     aws.String(string(tasksBytes)),
 		Overwrite: aws.Bool(true),
-		Type:      aws.String("String"),
+		Type:      parameterType,
 	})
 	if err != nil {
 		return nil, err

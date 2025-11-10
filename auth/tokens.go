@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,9 +10,9 @@ import (
 	"time"
 
 	"github.com/apppackio/apppack/state"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/square/go-jose.v2/jwt"
 )
@@ -215,22 +216,29 @@ func (t *Tokens) GetAdminRole(idOrAlias string) (*AdminRole, error) {
 	return found, nil
 }
 
-func (t *Tokens) GetCredentials(role Role, duration int) (*sts.Credentials, error) {
+func (t *Tokens) GetCredentials(role Role, duration int) (*types.Credentials, error) {
 	userInfo, err := UserInfoFromCache()
 	if err != nil {
 		return nil, err
 	}
 
-	sess := session.Must(session.NewSession())
-	svc := sts.New(sess)
+	cfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithRegion("us-east-1"), // STS is a global service, use us-east-1 as default
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	svc := sts.NewFromConfig(cfg)
 	roleARN := role.GetRoleARN()
 	logrus.WithFields(logrus.Fields{"role": roleARN}).Debug("assuming role")
 
-	resp, err := svc.AssumeRoleWithWebIdentity(&sts.AssumeRoleWithWebIdentityInput{
+	durationSeconds := int32(duration)
+	resp, err := svc.AssumeRoleWithWebIdentity(context.Background(), &sts.AssumeRoleWithWebIdentityInput{
 		RoleArn:          &roleARN,
 		WebIdentityToken: &t.IDToken,
 		RoleSessionName:  &userInfo.Email,
-		DurationSeconds:  aws.Int64(int64(duration)),
+		DurationSeconds:  &durationSeconds,
 	})
 	if err != nil {
 		return nil, err

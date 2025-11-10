@@ -21,13 +21,13 @@ import (
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
 	"github.com/apppackio/apppack/utils"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-func modifyAppStack(sess *session.Session, stack *stacks.AppStack, name string, flags *pflag.FlagSet) error {
+func modifyAppStack(cfg aws.Config, stack *stacks.AppStack, name string, flags *pflag.FlagSet) error {
 	// Track which flags were actually provided
 	providedFlags := make(map[string]bool)
 	flags.Visit(func(f *pflag.Flag) {
@@ -40,7 +40,7 @@ func modifyAppStack(sess *session.Session, stack *stacks.AppStack, name string, 
 
 	if !hasModifiableFlags {
 		// Interactive mode - ask questions with current values as defaults
-		if err := askModifyQuestions(sess, stack); err != nil {
+		if err := askModifyQuestions(cfg, stack); err != nil {
 			return err
 		}
 	} else {
@@ -68,14 +68,14 @@ func modifyAppStack(sess *session.Session, stack *stacks.AppStack, name string, 
 
 	// Verify repository credentials if repository was changed
 	if providedFlags["repository"] || !hasModifiableFlags {
-		if err := stacks.VerifySourceCredentials(sess, stack.Parameters.RepositoryType); err != nil {
+		if err := stacks.VerifySourceCredentials(cfg, stack.Parameters.RepositoryType); err != nil {
 			return err
 		}
 	}
 
 	// Apply the changes
 	ui.StartSpinner()
-	if err := stacks.ModifyStack(sess, stack, &name); err != nil {
+	if err := stacks.ModifyStack(cfg, stack, &name); err != nil {
 		ui.Spinner.Stop()
 		return err
 	}
@@ -86,7 +86,7 @@ func modifyAppStack(sess *session.Session, stack *stacks.AppStack, name string, 
 	return nil
 }
 
-func askModifyQuestions(sess *session.Session, stack *stacks.AppStack) error {
+func askModifyQuestions(cfg aws.Config, stack *stacks.AppStack) error {
 	var questions []*ui.QuestionExtra
 
 	// Repository URL
@@ -152,10 +152,10 @@ If no flags are provided, an interactive prompt will be provided.`,
 		}
 
 		ui.StartSpinner()
-		sess, err := adminSession(SessionDurationSeconds)
+		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
 
-		stack, err := appOrPipelineStack(sess, name)
+		stack, err := appOrPipelineStack(cfg, name)
 		checkErr(err)
 
 		ui.Spinner.Stop()
@@ -165,7 +165,7 @@ If no flags are provided, an interactive prompt will be provided.`,
 		}
 		fmt.Println()
 
-		checkErr(modifyAppStack(sess, stack, name, cmd.Flags()))
+		checkErr(modifyAppStack(cfg, stack, name, cmd.Flags()))
 	},
 }
 

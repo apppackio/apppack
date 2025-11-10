@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,9 +26,9 @@ import (
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/smithy-go"
 	"github.com/juju/ansiterm"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
@@ -51,8 +52,8 @@ var getCmd = &cobra.Command{
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
-		svc := ssm.New(a.Session)
-		resp, err := svc.GetParameter(&ssm.GetParameterInput{
+		svc := ssm.NewFromConfig(a.Session)
+		resp, err := svc.GetParameter(context.Background(), &ssm.GetParameterInput{
 			Name:           aws.String(fmt.Sprintf("%s%s", a.ConfigPrefix(), args[0])),
 			WithDecryption: aws.Bool(true),
 		})
@@ -97,8 +98,8 @@ var unsetCmd = &cobra.Command{
 		name := args[0]
 		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
-		svc := ssm.New(a.Session)
-		_, err = svc.DeleteParameter(&ssm.DeleteParameterInput{
+		svc := ssm.NewFromConfig(a.Session)
+		_, err = svc.DeleteParameter(context.Background(), &ssm.DeleteParameterInput{
 			Name: aws.String(fmt.Sprintf("%s%s", a.ConfigPrefix(), args[0])),
 		})
 		ui.Spinner.Stop()
@@ -204,9 +205,9 @@ var configImportCmd = &cobra.Command{
 		for key, val := range config {
 			err = a.SetConfig(key, val, importConfigOverride)
 			if err != nil {
-				var aerr awserr.Error
-				if errors.As(err, &aerr) {
-					if aerr.Code() == "ParameterAlreadyExists" && !importConfigOverride {
+				var apiErr smithy.APIError
+				if errors.As(err, &apiErr) {
+					if apiErr.ErrorCode() == "ParameterAlreadyExists" && !importConfigOverride {
 						skipped++
 
 						continue
