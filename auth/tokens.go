@@ -13,8 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-sdk-go-v2/service/sts/types"
+	jose "github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/square/go-jose.v2/jwt"
 )
 
 type Tokens struct {
@@ -71,7 +72,15 @@ func (t *Tokens) WriteToCache() error {
 }
 
 func (t *Tokens) IsExpired() (*bool, error) {
-	parsedToken, err := jwt.ParseSigned(t.AccessToken)
+	// Allow common JWT signature algorithms (RS256, HS256, ES256)
+	// We're not verifying the signature (using UnsafeClaimsWithoutVerification),
+	// just parsing to check expiration time
+	allowedAlgorithms := []jose.SignatureAlgorithm{
+		jose.RS256, // RSA with SHA-256 (most common for Auth0)
+		jose.HS256, // HMAC with SHA-256
+		jose.ES256, // ECDSA with P-256 and SHA-256
+	}
+	parsedToken, err := jwt.ParseSigned(t.AccessToken, allowedAlgorithms)
 	if err == nil {
 		out := jwt.Claims{}
 		// AWS will verify the token
