@@ -2,6 +2,7 @@ package stacks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sort"
@@ -216,7 +217,18 @@ func (a *ClusterStack) SetDeletionProtection(cfg aws.Config, value bool) error {
 			},
 		})
 
-		return err
+		if err != nil {
+			// If load balancer doesn't exist and we're turning deletion protection off,
+			// just log and continue (load balancer may have been manually deleted)
+			var lbNotFound *elbv2types.LoadBalancerNotFoundException
+			if !value && errors.As(err, &lbNotFound) {
+				logrus.WithFields(logrus.Fields{"error": err}).Debug("load balancer not found when disabling deletion protection")
+				return nil
+			}
+			return err
+		}
+
+		return nil
 	}
 	// if we get an error trying to set deletion protection, return it
 	// just log errors trying to turn it off because the instance/cluster may not exist
