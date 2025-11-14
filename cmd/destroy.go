@@ -67,7 +67,7 @@ func DestroyStackCmd(cfg aws.Config, stack stacks.Stack, name string) {
 
 				retry = false
 
-				destroy()
+				return destroy()
 			}
 
 			return fmt.Errorf("failed to delete %s", *stack.StackName)
