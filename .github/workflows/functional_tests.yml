@@ -104,7 +104,7 @@ jobs:
       -
         name: Destroy cluster
         run: |
-          yes apppack-cluster-apppack | ./apppack destroy cluster apppack  --aws-credentials --region us-east-1
+          yes apppack-cluster-apppack | ./apppack destroy cluster apppack --aws-credentials --region us-east-1
         if: always()
         timeout-minutes: 10
         env:
