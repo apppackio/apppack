@@ -103,10 +103,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       -
         name: Destroy cluster
-        # retry as temporary workaround for known AWS issues with deleting clusters
         run: |
-          yes apppack-cluster-apppack | ./apppack destroy cluster apppack --aws-credentials --region us-east-1 || \
-          (sleep 10 && yes apppack-cluster-apppack | ./apppack destroy cluster apppack --aws-credentials --region us-east-1)
+          yes apppack-cluster-apppack | ./apppack destroy cluster apppack --aws-credentials --region us-east-1
         if: always()
         timeout-minutes: 10
         env:

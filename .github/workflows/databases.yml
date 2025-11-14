@@ -242,11 +242,9 @@ jobs:
           path: bin
       -
         name: Destroy cluster
-        # retry as temporary workaround for known AWS issues with deleting clusters
         run: |
             chmod +x ./bin/apppack
-            yes apppack-cluster-apppack | ./bin/apppack destroy cluster apppack --aws-credentials --region us-east-2 || \
-            (sleep 10 && yes apppack-cluster-apppack | ./bin/apppack destroy cluster apppack --aws-credentials --region us-east-2)
+            yes apppack-cluster-apppack | ./bin/apppack destroy cluster apppack --aws-credentials --region us-east-2
         if: always()
         timeout-minutes: 8
         env:
