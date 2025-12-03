@@ -25,6 +25,10 @@ import (
 const (
 	repoOwner = "apppackio"
 	repoName  = "apppack"
+
+	// maxBinarySize is the maximum allowed size for the extracted binary (100MB).
+	// This prevents potential DoS via decompression bombs.
+	maxBinarySize = 100 * 1024 * 1024
 )
 
 // PlatformInfo represents the current platform for download purposes.
@@ -256,7 +260,7 @@ func extractTarGz(archivePath, destDir string) (string, error) {
 				return "", fmt.Errorf("creating binary file: %w", err)
 			}
 
-			if _, err := io.Copy(outFile, tr); err != nil {
+			if _, err := io.CopyN(outFile, tr, maxBinarySize); err != nil && !errors.Is(err, io.EOF) {
 				outFile.Close()
 
 				return "", fmt.Errorf("extracting binary: %w", err)
@@ -301,11 +305,11 @@ func extractZip(archivePath, destDir string) (string, error) {
 				return "", fmt.Errorf("creating binary file: %w", err)
 			}
 
-			_, err = io.Copy(outFile, rc)
+			_, err = io.CopyN(outFile, rc, maxBinarySize)
 			rc.Close()
 			outFile.Close()
 
-			if err != nil {
+			if err != nil && !errors.Is(err, io.EOF) {
 				return "", fmt.Errorf("extracting binary: %w", err)
 			}
 
