@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
+	"github.com/charmbracelet/huh"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
@@ -124,24 +124,20 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 
 				return
 			}
-			var taskList []string
-			for _, t := range tasks {
-				taskList = append(taskList, fmt.Sprintf("%s %s", t.Schedule, t.Command))
+			options := make([]huh.Option[int], len(tasks))
+			for i, t := range tasks {
+				options[i] = huh.NewOption(fmt.Sprintf("%s %s", t.Schedule, t.Command), i)
 			}
-			questions := []*survey.Question{{
-				Name: "task",
-				Prompt: &survey.Select{
-					Message:       "Scheduled task to delete:",
-					Options:       taskList,
-					FilterMessage: "",
-				},
-			}}
-			answers := make(map[string]int)
 			ui.Spinner.Stop()
-			if err := survey.Ask(questions, &answers); err != nil {
-				checkErr(err)
-			}
-			idx = answers["task"]
+			form := huh.NewForm(
+				huh.NewGroup(
+					huh.NewSelect[int]().
+						Title("Scheduled task to delete:").
+						Options(options...).
+						Value(&idx),
+				),
+			)
+			checkErr(form.Run())
 		}
 		task, err = a.DeleteScheduledTask(idx)
 		checkErr(err)
