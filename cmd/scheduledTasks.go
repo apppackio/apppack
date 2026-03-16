@@ -129,21 +129,32 @@ If no index is provided, an interactive prompt will be provided to choose the ta
 				options[i] = huh.NewOption(fmt.Sprintf("%s %s", t.Schedule, t.Command), i)
 			}
 			ui.Spinner.Stop()
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewSelect[int]().
-						Title("Scheduled task to delete:").
-						Options(options...).
-						Value(&idx),
-				),
-			)
+			form, idxPtr := ScheduledTaskDeleteForm(options)
 			checkErr(form.Run())
+			idx = *idxPtr
 		}
 		task, err = a.DeleteScheduledTask(idx)
 		checkErr(err)
 		printSuccess("scheduled task deleted:")
 		fmt.Printf("  %s %s\n", aurora.Faint(task.Schedule), task.Command)
 	},
+}
+
+// ScheduledTaskDeleteForm builds the interactive form for selecting a task to delete.
+// Returns the form and a pointer to the selected index.
+func ScheduledTaskDeleteForm(options []huh.Option[int]) (*huh.Form, *int) {
+	var idx int
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[int]().
+				Title("Scheduled task to delete:").
+				Options(options...).
+				Value(&idx),
+		),
+	)
+
+	return form, &idx
 }
 
 func init() {
