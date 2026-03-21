@@ -8,7 +8,6 @@ import (
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
-	"github.com/charmbracelet/huh"
 	"github.com/spf13/pflag"
 )
 
@@ -69,52 +68,10 @@ func (a *AccountStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return nil
 }
 
-func (a *AccountStack) AskQuestions(_ aws.Config) error {
-	form, adminsPtr := AccountAdministratorsForm(strings.Join(a.Parameters.Administrators, "\n"))
-	if err := form.Run(); err != nil {
-		return err
-	}
-	a.Parameters.Administrators = splitLines(*adminsPtr)
-
+// AskQuestions is a no-op for AccountStack — administrators are managed
+// via the `admins add/remove` commands which take email args directly.
+func (*AccountStack) AskQuestions(_ aws.Config) error {
 	return nil
-}
-
-// splitLines splits a string by newlines and filters out empty lines.
-func splitLines(s string) []string {
-	var result []string
-	for _, line := range strings.Split(s, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-
-	return result
-}
-
-// AccountAdministratorsForm builds the interactive form for entering administrator emails.
-// Returns the form and a pointer to the raw multiline text value.
-func AccountAdministratorsForm(defaultValue string) (*huh.Form, *string) {
-	admins := defaultValue
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title("Who can administer this account?").
-				Description("A list of email addresses (one per line) who have access to manage this AppPack account.\nThese users will be assigned a permissive IAM policy in your AWS account and should be fully trusted."),
-			huh.NewText().
-				Title("Administrators").
-				Value(&admins).
-				Validate(func(s string) error {
-					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("at least one administrator is required")
-					}
-					return nil
-				}),
-		),
-	)
-
-	return form, &admins
 }
 
 func (*AccountStack) StackName(_ *string) *string {
