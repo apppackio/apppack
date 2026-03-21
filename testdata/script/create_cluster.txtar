@@ -1,0 +1,6 @@
+# Test create cluster help output
+exec apppack create cluster --help
+stdout 'Creates an AppPack Cluster'
+stdout '\-\-cidr'
+stdout '\-\-domain'
+! stderr .
