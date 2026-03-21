@@ -174,7 +174,7 @@ func (a *RedisStack) AskQuestions(cfg aws.Config) error {
 			cfg,
 			"Which cluster should this Redis instance be installed in?",
 			"A cluster represents an isolated network and its associated resources (Apps, Database, Redis, etc.).",
-			a.Parameters,
+			&a.Parameters.ClusterStackName,
 		)
 		if err != nil {
 			return err
