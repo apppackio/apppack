@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	"github.com/charmbracelet/huh"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -166,11 +166,8 @@ func (a *RedisStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 }
 
 func (a *RedisStack) AskQuestions(cfg aws.Config) error {
-	var questions []*ui.QuestionExtra
-
-	var err error
 	if a.Stack == nil {
-		err = AskForCluster(
+		err := AskForCluster(
 			cfg,
 			"Which cluster should this Redis instance be installed in?",
 			"A cluster represents an isolated network and its associated resources (Apps, Database, Redis, etc.).",
@@ -185,29 +182,14 @@ func (a *RedisStack) AskQuestions(cfg aws.Config) error {
 		a.Parameters.InstanceClass = DefaultRedisStackParameters.InstanceClass
 	}
 
-	questions = append(questions, []*ui.QuestionExtra{
-		{
-			Verbose: "Should this Redis instance be setup in multiple availability zones?",
-			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, " +
-				"but double the cost at AWS. For more info see " +
-				"https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html.",
-			WriteTo: &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "Multi AZ",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(a.Parameters.MultiAZ),
-				},
-			},
-		},
-	}...)
-	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
+	// Multi-AZ prompt
+	multiAZForm, multiAZPtr := RedisMultiAZForm(a.Parameters.MultiAZ)
+	if err := multiAZForm.Run(); err != nil {
 		return err
 	}
-	// Clear the questions slice so we can reuse it
-	questions = questions[:0]
+	a.Parameters.MultiAZ = ui.YesNoToBool(*multiAZPtr)
 
+	// Fetch instance classes from AWS
 	ui.StartSpinner()
 	ui.Spinner.Suffix = " retrieving instance classes"
 
@@ -219,24 +201,63 @@ func (a *RedisStack) AskQuestions(cfg aws.Config) error {
 	ui.Spinner.Stop()
 	ui.Spinner.Suffix = ""
 
-	questions = append(questions, []*ui.QuestionExtra{
-		{
-			Verbose:  "What instance class should be used for this Redis instance?",
-			HelpText: "Enter the Redis instance class. For more info see https://aws.amazon.com/elasticache/pricing/.",
-			Question: &survey.Question{
-				Name: "InstanceClass",
-				Prompt: &survey.Select{
-					Message:       "Instance Class",
-					Options:       instanceClasses,
-					FilterMessage: "",
-					Default:       a.Parameters.InstanceClass,
-				},
-				Validate: survey.Required,
-			},
-		},
-	}...)
+	// Instance class prompt
+	instanceClassForm, instanceClassPtr := RedisInstanceClassForm(instanceClasses, a.Parameters.InstanceClass)
+	if err := instanceClassForm.Run(); err != nil {
+		return err
+	}
+	a.Parameters.InstanceClass = *instanceClassPtr
 
-	return ui.AskQuestions(questions, a.Parameters)
+	return nil
+}
+
+// RedisMultiAZForm builds the interactive form for selecting multi-AZ mode.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func RedisMultiAZForm(defaultMultiAZ bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultMultiAZ)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Should this Redis instance be setup in multiple availability zones?").
+				Description("Multiple availability zones (AZs) provide more resilience in the case of an AZ outage,\nbut double the cost at AWS. For more info see\nhttps://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html."),
+			huh.NewSelect[string]().
+				Title("Multi AZ").
+				Options(ui.YesNoOptions(defaultMultiAZ)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// RedisInstanceClassForm builds the interactive form for selecting an instance class.
+// Returns the form and a pointer to the selected instance class.
+func RedisInstanceClassForm(instanceClasses []string, defaultClass string) (*huh.Form, *string) {
+	selected := defaultClass
+
+	options := make([]huh.Option[string], len(instanceClasses))
+	for i, c := range instanceClasses {
+		opt := huh.NewOption(c, c)
+		if c == defaultClass {
+			opt = opt.Selected(true)
+		}
+		options[i] = opt
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("What instance class should be used for this Redis instance?").
+				Description("Enter the Redis instance class. For more info see https://aws.amazon.com/elasticache/pricing/."),
+			huh.NewSelect[string]().
+				Title("Instance Class").
+				Options(options...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
 }
 
 func (*RedisStack) StackName(name *string) *string {
