@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
+	"github.com/charmbracelet/huh"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -275,11 +275,7 @@ func (a *DatabaseStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 }
 
 func (a *DatabaseStack) AskQuestions(cfg aws.Config) error {
-	var questions []*ui.QuestionExtra
-
 	var err error
-
-	var aurora bool
 
 	if a.Stack == nil {
 		err = AskForCluster(
@@ -292,39 +288,19 @@ func (a *DatabaseStack) AskQuestions(cfg aws.Config) error {
 			return err
 		}
 
-		questions = append(questions, []*ui.QuestionExtra{
-			{
-				Verbose:  "What engine should this Database use?",
-				HelpText: "",
-				Question: &survey.Question{
-					Name: "Engine",
-					Prompt: &survey.Select{
-						Message:       "Type",
-						Options:       []string{"postgres", "mysql"},
-						FilterMessage: "",
-						Default:       "postgres",
-					},
-					Validate: survey.Required,
-				},
-			},
-			{
-				Verbose:  "Should this Database use the Aurora engine variant?",
-				HelpText: "Aurora provides many benefits over the standard engines, but is not available on very small instance sizes. For more info see https://aws.amazon.com/rds/aurora/.",
-				WriteTo:  &ui.BooleanOptionProxy{Value: &aurora},
-				Question: &survey.Question{
-					Prompt: &survey.Select{
-						Message:       "Aurora",
-						Options:       []string{"yes", "no"},
-						FilterMessage: "",
-						Default:       ui.BooleanAsYesNo(aurora),
-					},
-					Validate: survey.Required,
-				},
-			},
-		}...)
-		if err = ui.AskQuestions(questions, a.Parameters); err != nil {
+		// Engine prompt
+		engineForm, enginePtr := DatabaseEngineForm(a.Parameters.Engine)
+		if err = engineForm.Run(); err != nil {
 			return err
 		}
+		a.Parameters.Engine = *enginePtr
+
+		// Aurora prompt
+		auroraForm, auroraPtr := DatabaseAuroraForm(false)
+		if err = auroraForm.Run(); err != nil {
+			return err
+		}
+		aurora := ui.YesNoToBool(*auroraPtr)
 
 		ui.StartSpinner()
 
@@ -342,8 +318,6 @@ func (a *DatabaseStack) AskQuestions(cfg aws.Config) error {
 		if err != nil {
 			return err
 		}
-
-		questions = []*ui.QuestionExtra{}
 	}
 
 	ui.StartSpinner()
@@ -356,40 +330,123 @@ func (a *DatabaseStack) AskQuestions(cfg aws.Config) error {
 
 	ui.Spinner.Stop()
 	ui.Spinner.Suffix = ""
-	questions = append(questions, []*ui.QuestionExtra{
-		{
-			Verbose:  "What instance class should be used for this Database?",
-			HelpText: "Enter the Database instance class. For more info see https://aws.amazon.com/rds/pricing/.",
-			Question: &survey.Question{
-				Name: "InstanceClass",
-				Prompt: &survey.Select{
-					Message:       "Instance Class",
-					Options:       instanceClasses,
-					FilterMessage: "",
-					Default:       a.Parameters.InstanceClass,
-				},
-				Validate: survey.Required,
-			},
-		},
-		{
-			Verbose: "Should this Database be setup in multiple availability zones?",
-			HelpText: "Multiple availability zones (AZs) provide more resilience in the case of an AZ outage, " +
-				"but double the cost at AWS. In the case of Aurora databases, enabling multiple availability zones will give you access to a read-replica." +
-				"For more info see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html.",
-			WriteTo: &ui.BooleanOptionProxy{Value: &a.Parameters.MultiAZ},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "Multi AZ",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(a.Parameters.MultiAZ),
-				},
-				Validate: survey.Required,
-			},
-		},
-	}...)
 
-	return ui.AskQuestions(questions, a.Parameters)
+	// Instance class prompt
+	instanceClassForm, instanceClassPtr := DatabaseInstanceClassForm(instanceClasses, a.Parameters.InstanceClass)
+	if err = instanceClassForm.Run(); err != nil {
+		return err
+	}
+	a.Parameters.InstanceClass = *instanceClassPtr
+
+	// Multi-AZ prompt
+	multiAZForm, multiAZPtr := DatabaseMultiAZForm(a.Parameters.MultiAZ)
+	if err = multiAZForm.Run(); err != nil {
+		return err
+	}
+	a.Parameters.MultiAZ = ui.YesNoToBool(*multiAZPtr)
+
+	return nil
+}
+
+// DatabaseEngineForm builds the interactive form for selecting the database engine.
+// Returns the form and a pointer to the selected engine value.
+func DatabaseEngineForm(defaultEngine string) (*huh.Form, *string) {
+	if defaultEngine == "" {
+		defaultEngine = "postgres"
+	}
+	selected := defaultEngine
+
+	options := []huh.Option[string]{
+		huh.NewOption("postgres", "postgres"),
+		huh.NewOption("mysql", "mysql"),
+	}
+	if defaultEngine == "mysql" {
+		options[1] = options[1].Selected(true)
+	} else {
+		options[0] = options[0].Selected(true)
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("What engine should this Database use?"),
+			huh.NewSelect[string]().
+				Title("Type").
+				Options(options...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// DatabaseAuroraForm builds the interactive form for selecting Aurora mode.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func DatabaseAuroraForm(defaultAurora bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultAurora)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Should this Database use the Aurora engine variant?").
+				Description("Aurora provides many benefits over the standard engines, but is not available on very small\ninstance sizes. For more info see https://aws.amazon.com/rds/aurora/."),
+			huh.NewSelect[string]().
+				Title("Aurora").
+				Options(ui.YesNoOptions(defaultAurora)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// DatabaseInstanceClassForm builds the interactive form for selecting a database instance class.
+// Returns the form and a pointer to the selected instance class.
+func DatabaseInstanceClassForm(instanceClasses []string, defaultClass string) (*huh.Form, *string) {
+	selected := defaultClass
+
+	options := make([]huh.Option[string], len(instanceClasses))
+	for i, c := range instanceClasses {
+		opt := huh.NewOption(c, c)
+		if c == defaultClass {
+			opt = opt.Selected(true)
+		}
+		options[i] = opt
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("What instance class should be used for this Database?").
+				Description("Enter the Database instance class. For more info see https://aws.amazon.com/rds/pricing/."),
+			huh.NewSelect[string]().
+				Title("Instance Class").
+				Options(options...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// DatabaseMultiAZForm builds the interactive form for selecting multi-AZ mode.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func DatabaseMultiAZForm(defaultMultiAZ bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultMultiAZ)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Should this Database be setup in multiple availability zones?").
+				Description("Multiple availability zones (AZs) provide more resilience in the case of an AZ outage,\nbut double the cost at AWS. In the case of Aurora databases, enabling multiple availability\nzones will give you access to a read-replica. For more info see\nhttps://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html."),
+			huh.NewSelect[string]().
+				Title("Multi AZ").
+				Options(ui.YesNoOptions(defaultMultiAZ)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
 }
 
 func (*DatabaseStack) StackName(name *string) *string {
