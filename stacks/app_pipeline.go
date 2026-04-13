@@ -571,7 +571,7 @@ func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 			cfg,
 			fmt.Sprintf("Which cluster should this %s be installed in?", a.StackType()),
 			"A cluster represents an isolated network and its associated resources (Database, Redis, etc.).",
-			a.Parameters,
+			&a.Parameters.ClusterStackName,
 		)
 		if err != nil {
 			return err

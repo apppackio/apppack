@@ -9,13 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/AlecAivazis/survey/v2/core"
 	"github.com/apppackio/apppack/ddb"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/charmbracelet/huh"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
@@ -27,7 +26,13 @@ func CloudformationStackURL(region, stackID *string) string {
 	return fmt.Sprintf("https://%s.console.aws.amazon.com/cloudformation/home#/stacks/events?stackId=%s", *region, url.QueryEscape(*stackID))
 }
 
-func AskForCluster(cfg aws.Config, verbose, helpText string, response interface{}) error {
+// AskForCluster prompts the user to select a cluster. If clusterStackName is
+// already set (e.g. via --cluster flag), the prompt is skipped.
+func AskForCluster(cfg aws.Config, verbose, helpText string, clusterStackName *string) error {
+	if *clusterStackName != "" {
+		return nil
+	}
+
 	clusters, err := ddb.ListClusters(cfg)
 	if err != nil {
 		return err
@@ -37,20 +42,41 @@ func AskForCluster(cfg aws.Config, verbose, helpText string, response interface{
 		return errors.New("no AppPack clusters are setup")
 	}
 
-	return ui.AskQuestions([]*ui.QuestionExtra{
-		{
-			Verbose:  verbose,
-			HelpText: helpText,
-			Question: &survey.Question{
-				Name: "ClusterStackName",
-				Prompt: &survey.Select{
-					Message: "Cluster",
-					Options: clusters,
-				},
-				Transform: clusterSelectTransform,
-			},
-		},
-	}, response)
+	options := make([]huh.Option[string], len(clusters))
+	for i, c := range clusters {
+		options[i] = huh.NewOption(c, fmt.Sprintf(clusterStackNameTmpl, c))
+	}
+
+	ui.Spinner.Stop()
+
+	form, selectedPtr := ClusterSelectForm(options, verbose, helpText)
+	if err := form.Run(); err != nil {
+		return err
+	}
+
+	*clusterStackName = *selectedPtr
+
+	return nil
+}
+
+// ClusterSelectForm builds the interactive form for selecting a cluster.
+// Returns the form and a pointer to the selected cluster stack name.
+func ClusterSelectForm(options []huh.Option[string], title, description string) (*huh.Form, *string) {
+	var selected string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(title).
+				Description(description),
+			huh.NewSelect[string]().
+				Title("Cluster").
+				Options(options...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
 }
 
 // waitForCloudformationStack displays the progress of a Stack while it waits for it to complete
@@ -255,18 +281,4 @@ func DeleteStackAndWait(cfg aws.Config, stack Stack) (*types.Stack, error) {
 	}
 
 	return cfnStack, err
-}
-
-// clusterSelectTransform converts `{name}` -> `{stackName}`
-func clusterSelectTransform(ans interface{}) interface{} {
-	o, ok := ans.(core.OptionAnswer)
-	if !ok {
-		return ans
-	}
-
-	if o.Value != "" {
-		o.Value = fmt.Sprintf(clusterStackNameTmpl, o.Value)
-	}
-
-	return o
 }
