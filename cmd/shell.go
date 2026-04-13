@@ -24,12 +24,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/charmbracelet/huh"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
@@ -159,39 +159,27 @@ func interactiveCmd(a *app.App, cmd string) {
 		tasks, err := a.DescribeTasks()
 		checkErr(err)
 
-		var taskList []string
+		options := make([]huh.Option[int], 0, len(tasks))
 
-		for _, t := range tasks {
+		for i, t := range tasks {
 			tag, err := getTag(t.Tags, "apppack:processType")
 			if err != nil {
 				continue
 			}
 
 			arnParts := strings.Split(*t.TaskArn, "/")
-			taskList = append(taskList, fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1]))
-		}
-
-		answers := make(map[string]interface{})
-		questions := []*survey.Question{
-			{
-				Name: "task",
-				Prompt: &survey.Select{
-					Message: "Select task to connect to",
-					Options: taskList,
-				},
-			},
+			options = append(options, huh.NewOption(fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1]), i))
 		}
 
 		ui.Spinner.Stop()
 
-		if err := survey.Ask(questions, &answers); err != nil {
-			checkErr(err)
-		}
+		form, idxPtr := ShellTaskSelectForm(options)
+		checkErr(form.Run())
 
 		ui.StartSpinner()
 
 		ecsSession, err := a.CreateEcsSession(
-			&tasks[answers["task"].(survey.OptionAnswer).Index],
+			&tasks[*idxPtr],
 			exec,
 		)
 		checkErr(err)
@@ -225,6 +213,23 @@ var shellCmd = &cobra.Command{
 		checkErr(err)
 		interactiveCmd(a, "bash -l")
 	},
+}
+
+// ShellTaskSelectForm builds the interactive form for selecting a live ECS task.
+// Returns the form and a pointer to the selected task index.
+func ShellTaskSelectForm(options []huh.Option[int]) (*huh.Form, *int) {
+	var idx int
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[int]().
+				Title("Select task to connect to").
+				Options(options...).
+				Value(&idx),
+		),
+	)
+
+	return form, &idx
 }
 
 func init() {
