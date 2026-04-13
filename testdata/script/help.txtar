@@ -1,0 +1,10 @@
+# Test help output lists key commands
+exec apppack --help
+stdout 'shell'
+stdout 'scheduled-tasks'
+stdout 'version'
+! stderr .
+
+# Test unknown command
+! exec apppack nonexistent-command
+stderr 'unknown command'
