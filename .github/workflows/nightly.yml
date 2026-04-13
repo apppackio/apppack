@@ -1,0 +1,76 @@
+---
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 6am UTC / midnight ET
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for new commits
+        id: check
+        run: |
+          git fetch origin nightly 2>/dev/null || true
+          if git rev-parse nightly >/dev/null 2>&1 && [ "$(git rev-parse nightly)" = "$(git rev-parse HEAD)" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Go
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.25"
+
+      - name: Run GoReleaser (snapshot)
+        if: steps.check.outputs.skip != 'true'
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --clean --snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+
+      - name: Set build date
+        if: steps.check.outputs.skip != 'true'
+        id: date
+        run: echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Move nightly tag to HEAD
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f nightly
+          git push -f origin nightly
+
+      - name: Publish nightly pre-release
+        if: steps.check.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: "Nightly Build (${{ steps.date.outputs.date }})"
+          prerelease: true
+          make_latest: false
+          body: |
+            Automated nightly build from `main`. **Not for production use.**
+
+            Commit: ${{ github.sha }}
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
