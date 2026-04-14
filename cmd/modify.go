@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/apppackio/apppack/stacks"
 	"github.com/apppackio/apppack/ui"
@@ -86,32 +87,45 @@ func modifyAppStack(cfg aws.Config, stack *stacks.AppStack, name string, flags *
 	return nil
 }
 
-func askModifyQuestions(cfg aws.Config, stack *stacks.AppStack) error {
-	var questions []*ui.QuestionExtra
-
+func askModifyQuestions(_ aws.Config, stack *stacks.AppStack) error {
 	// Repository URL
-	questions = append(questions, stacks.BuildRepositoryURLQuestion(&stack.Parameters.RepositoryURL))
-
-	if err := ui.AskQuestions(questions, stack.Parameters); err != nil {
+	repoForm, repoPtr := stacks.AppRepositoryURLForm(stack.Parameters.RepositoryURL)
+	if err := repoForm.Run(); err != nil {
 		return err
 	}
+
+	stack.Parameters.RepositoryURL = *repoPtr
 
 	if err := stack.Parameters.SetRepositoryType(); err != nil {
 		return err
 	}
 
-	questions = []*ui.QuestionExtra{}
-
 	// Branch and Domains (only for non-pipeline apps)
 	if !stack.Pipeline {
-		questions = append(questions, stacks.BuildBranchQuestion(&stack.Parameters.Branch))
-		questions = append(questions, stacks.BuildDomainsQuestion(&stack.Parameters.Domains))
+		branchForm, branchPtr := stacks.AppBranchForm(stack.Parameters.Branch)
+		if err := branchForm.Run(); err != nil {
+			return err
+		}
+
+		stack.Parameters.Branch = *branchPtr
+
+		domainsForm, domainsPtr := stacks.AppDomainsForm(stack.Parameters.Domains)
+		if err := domainsForm.Run(); err != nil {
+			return err
+		}
+
+		stack.Parameters.Domains = strings.Split(*domainsPtr, "\n")
 	}
 
 	// Healthcheck path
-	questions = append(questions, stacks.BuildHealthCheckPathQuestion(&stack.Parameters.HealthCheckPath))
+	healthForm, healthPtr := stacks.AppHealthCheckPathForm(stack.Parameters.HealthCheckPath)
+	if err := healthForm.Run(); err != nil {
+		return err
+	}
 
-	return ui.AskQuestions(questions, stack.Parameters)
+	stack.Parameters.HealthCheckPath = *healthPtr
+
+	return nil
 }
 
 // modifyCmd represents the modify command
