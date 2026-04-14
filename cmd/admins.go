@@ -110,12 +110,13 @@ var adminsAddCmd = &cobra.Command{
 
 // adminsRemoveCmd represents the admins remove command
 var adminsRemoveCmd = &cobra.Command{
-	Use:   "remove <email>",
-	Short: "remove an administrator from the account",
+	Use:   "remove <email>...",
+	Short: "remove administrators from the account",
 	Long: `*Requires admin permissions.*
-Updates the application Cloudformation stack to remove an administrators.`,
+Updates the account Cloudformation stack to remove administrators.`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
+	Example:               "apppack admins remove user1@example.com user2@example.com",
 	Run: func(_ *cobra.Command, args []string) {
 		for _, email := range args {
 			if !validateEmail(email) {
