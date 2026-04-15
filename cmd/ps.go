@@ -182,7 +182,13 @@ var psResizeCmd = &cobra.Command{
 		}
 		_, err = a.DeployStatus.FindProcess(processType)
 		if err != nil {
-			printWarning(fmt.Sprintf("Service %q does not exist. Settings will be used if the service is created later.\n", processType))
+			switch processType {
+			case "release", "scheduler":
+				// These are task-based process types, not ECS services.
+				// They won't appear in the service list but can still be resized.
+			default:
+				printWarning(fmt.Sprintf("Service %q does not exist. Settings will be used if the service is created later.\n", processType))
+			}
 		}
 		size, err := humanToECSSizeConfiguration(scaleCPU, scaleMemory)
 		checkErr(err)
