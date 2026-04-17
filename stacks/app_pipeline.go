@@ -593,12 +593,13 @@ func AppDatabaseForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, 
 
 // AppDatabaseStackForm builds the interactive form for selecting a database stack.
 // Returns the form and a pointer to the selected stack name value.
+//
+// Do NOT pre-seed `selected` with options[0].Value — huh's Select widget
+// positions the cursor on the first option whose Value matches `*value`, and
+// only falls back to the option with `.Selected(true)` if no match is found.
+// Pre-seeding would silently override the caller's pre-selection.
 func AppDatabaseStackForm(options []huh.Option[string], verbose string) (*huh.Form, *string) {
 	var selected string
-	if len(options) > 0 {
-		// Pre-seed with the first option value; actual selection handled by Selected() on options.
-		selected = options[0].Value
-	}
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -636,11 +637,10 @@ func AppRedisForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *st
 
 // AppRedisStackForm builds the interactive form for selecting a Redis stack.
 // Returns the form and a pointer to the selected stack name value.
+//
+// Same rationale as AppDatabaseStackForm: do NOT pre-seed selected.
 func AppRedisStackForm(options []huh.Option[string], verbose string) (*huh.Form, *string) {
 	var selected string
-	if len(options) > 0 {
-		selected = options[0].Value
-	}
 
 	form := huh.NewForm(
 		huh.NewGroup(

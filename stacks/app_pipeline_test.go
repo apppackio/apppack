@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/apppackio/apppack/ui/uitest"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 )
 
@@ -128,13 +129,18 @@ func TestAppPrivateS3Form_DefaultNo(t *testing.T) {
 }
 
 func TestAppPrivateS3Form_SelectYes(t *testing.T) {
+	// Default is "no" which means cursor starts on option[1] ("no").
+	// Press Up to move to option[0] ("yes"), then Enter.
 	form, selectedPtr := AppPrivateS3Form("Private S3?", "Help text.", false)
 	tm := uitest.RunForm(t, form)
-	uitest.SelectFirst(tm)  // pass Note
-	uitest.SelectNth(tm, 0) // move to "yes"
+	uitest.SelectFirst(tm) // pass Note
+	tm.Send(tea.KeyMsg{Type: tea.KeyUp})
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	uitest.WaitDone(t, tm)
 
-	_ = selectedPtr // default behavior verified above; this exercises the path
+	if *selectedPtr != "yes" {
+		t.Errorf("expected 'yes', got %q", *selectedPtr)
+	}
 }
 
 func TestAppPrivateS3Form_DefaultYes(t *testing.T) {
@@ -263,6 +269,27 @@ func TestAppDatabaseStackForm_SelectSecond(t *testing.T) {
 	}
 }
 
+// TestAppDatabaseStackForm_PreservesSelection verifies that when the caller
+// marks a non-first option as pre-selected (via .Selected(true)), the form
+// starts with that option focused. This matches the real-world `modify app`
+// workflow where the existing database is re-presented to the user.
+func TestAppDatabaseStackForm_PreservesSelection(t *testing.T) {
+	options := []huh.Option[string]{
+		huh.NewOption("mydb (postgres)", "apppack-database-mydb"),
+		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb").Selected(true),
+	}
+
+	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?")
+	tm := uitest.RunForm(t, form)
+	uitest.SelectFirst(tm) // pass Note
+	uitest.SelectFirst(tm) // accept currently-focused option (should be the pre-selected second one)
+	uitest.WaitDone(t, tm)
+
+	if *selectedPtr != "apppack-database-otherdb" {
+		t.Errorf("expected pre-selected 'apppack-database-otherdb' to be preserved, got %q", *selectedPtr)
+	}
+}
+
 // --- AppRedisForm ---
 
 func TestAppRedisForm_DefaultNo(t *testing.T) {
@@ -322,6 +349,25 @@ func TestAppRedisStackForm_SelectSecond(t *testing.T) {
 
 	if *selectedPtr != "apppack-redis-otherredis" {
 		t.Errorf("expected 'apppack-redis-otherredis', got %q", *selectedPtr)
+	}
+}
+
+// TestAppRedisStackForm_PreservesSelection verifies the pre-existing selection
+// (via .Selected(true)) is honored, matching the `modify app` flow.
+func TestAppRedisStackForm_PreservesSelection(t *testing.T) {
+	options := []huh.Option[string]{
+		huh.NewOption("myredis", "apppack-redis-myredis"),
+		huh.NewOption("otherredis", "apppack-redis-otherredis").Selected(true),
+	}
+
+	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?")
+	tm := uitest.RunForm(t, form)
+	uitest.SelectFirst(tm) // pass Note
+	uitest.SelectFirst(tm) // accept currently-focused option (should be pre-selected second)
+	uitest.WaitDone(t, tm)
+
+	if *selectedPtr != "apppack-redis-otherredis" {
+		t.Errorf("expected pre-selected 'apppack-redis-otherredis' to be preserved, got %q", *selectedPtr)
 	}
 }
 
@@ -394,21 +440,29 @@ func TestAppUsersForm_EnterUser(t *testing.T) {
 // --- AppDataLossConfirmForm ---
 
 func TestAppDataLossConfirmForm_Confirm(t *testing.T) {
+	// Default is No (false). Press Left to flip focus to Yes, then Enter.
+	// This is safety-critical: the form must only commit true when the user
+	// explicitly moves focus to the affirmative option.
 	form, confirmedPtr := AppDataLossConfirmForm()
 	tm := uitest.RunForm(t, form)
-	uitest.SelectFirst(tm) // confirm Yes (default is No for Confirm widget; Enter accepts the focused option)
+	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	uitest.WaitDone(t, tm)
 
-	// Result depends on default focused option — just verify the form runs without error.
-	_ = confirmedPtr
+	if !*confirmedPtr {
+		t.Error("expected confirmed=true when user selects Yes, got false")
+	}
 }
 
 func TestAppDataLossConfirmForm_Reject(t *testing.T) {
+	// Default is No (false). Pressing Enter should commit that without
+	// requiring any focus change.
 	form, confirmedPtr := AppDataLossConfirmForm()
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // accept the default (No)
 	uitest.WaitDone(t, tm)
 
-	// Confirm that the result is a bool (may be true or false depending on focus default).
-	_ = *confirmedPtr
+	if *confirmedPtr {
+		t.Error("expected confirmed=false when user accepts default (No), got true")
+	}
 }
