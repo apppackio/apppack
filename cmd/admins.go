@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -58,7 +59,7 @@ func updateAdministrators(cfg aws.Config, stack *stacks.AccountStack, name *stri
 	return nil
 }
 
-// accessCmd represents the access command
+// adminsCmd represents the admins command
 var adminsCmd = &cobra.Command{
 	Use:                   "admins",
 	Short:                 "list the administrators for an account",
@@ -72,6 +73,20 @@ var adminsCmd = &cobra.Command{
 		stack, err := accountStack(cfg)
 		checkErr(err)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			admins := stack.Parameters.Administrators
+			if admins == nil {
+				admins = []string{}
+			}
+
+			out, err := json.MarshalIndent(admins, "", "  ")
+			checkErr(err)
+			fmt.Println(string(out))
+
+			return
+		}
+
 		for _, u := range stack.Parameters.Administrators {
 			fmt.Println(u)
 		}

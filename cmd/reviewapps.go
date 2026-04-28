@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -49,6 +50,15 @@ var reviewappsCmd = &cobra.Command{
 		reviewApps, err := a.GetReviewApps()
 		checkErr(err)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			out, err := json.MarshalIndent(reviewApps, "", "  ")
+			checkErr(err)
+			fmt.Println(string(out))
+
+			return
+		}
+
 		ui.PrintHeaderln(a.Name + " review apps")
 		for _, r := range reviewApps {
 			if r.Status == "created" {

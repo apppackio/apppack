@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -119,6 +120,16 @@ var appsCmd = &cobra.Command{
 		ui.StartSpinner()
 		apps, err := auth.AppList()
 		checkErr(err)
+		ui.Spinner.Stop()
+
+		if AsJSON {
+			out, err := json.MarshalIndent(apps, "", "  ")
+			checkErr(err)
+			fmt.Println(string(out))
+
+			return
+		}
+
 		appGroups := make(map[string][]*auth.AppRole)
 		pipelineGroups := make(map[string][]*auth.AppRole)
 		for _, app := range apps {
@@ -139,7 +150,6 @@ var appsCmd = &cobra.Command{
 				}
 			}
 		}
-		ui.Spinner.Stop()
 		if len(appGroups) > 0 {
 			ui.PrintHeaderln("Apps")
 			for _, group := range appGroups {

@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -33,9 +34,9 @@ import (
 )
 
 type stackHumanize struct {
-	Name    string
-	Type    string
-	Cluster string
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Cluster string `json:"cluster,omitempty"`
 }
 
 func stackName(stack *types.Stack) (*stackHumanize, error) {
@@ -76,38 +77,52 @@ var stacksCmd = &cobra.Command{
 		ui.StartSpinner()
 		cfg, err := adminSession(SessionDurationSeconds)
 		checkErr(err)
-		stacks, err := bridge.ApppackStacks(cfg)
+		cfnStacks, err := bridge.ApppackStacks(cfg)
 		checkErr(err)
-		sort.Slice(stacks, func(i, j int) bool {
-			return *stacks[i].StackName < *stacks[j].StackName
+		sort.Slice(cfnStacks, func(i, j int) bool {
+			return *cfnStacks[i].StackName < *cfnStacks[j].StackName
 		})
 		ui.Spinner.Stop()
+
+		var humanStacks []*stackHumanize
+		for _, stack := range cfnStacks {
+			if *stack.StackName == "apppack-account" || strings.HasPrefix(*stack.StackName, "apppack-region-") {
+				continue
+			}
+			hs, err := stackName(&stack)
+			checkErr(err)
+			humanStacks = append(humanStacks, hs)
+		}
+
+		if AsJSON {
+			out, err := json.MarshalIndent(humanStacks, "", "  ")
+			checkErr(err)
+			fmt.Println(string(out))
+
+			return
+		}
+
 		currentGroup := ""
 		w := new(tabwriter.Writer)
 		// minwidth, tabwidth, padding, padchar, flags
 		w.Init(os.Stdout, 8, 8, 0, '\t', 0)
-		for _, stack := range stacks {
-			if *stack.StackName == "apppack-account" || strings.HasPrefix(*stack.StackName, "apppack-region-") {
-				continue
-			}
-			humanStack, err := stackName(&stack)
-			checkErr(err)
-			if currentGroup != humanStack.Type {
+		for _, hs := range humanStacks {
+			if currentGroup != hs.Type {
 				w.Flush()
-				currentGroup = humanStack.Type
+				currentGroup = hs.Type
 				fmt.Println()
 				caser := cases.Title(language.English)
 				ui.PrintHeaderln(caser.String(currentGroup + " Stacks"))
-				if humanStack.Cluster != "" {
+				if hs.Cluster != "" {
 					fmt.Fprintf(w, "%s\t%s\t\n", aurora.Faint("Name"), aurora.Faint("Cluster"))
 				} else {
 					fmt.Fprintf(w, "%s\t\n", aurora.Faint("Name"))
 				}
 			}
 
-			fmt.Fprint(w, humanStack.Name)
-			if humanStack.Cluster != "" {
-				fmt.Fprintf(w, "\t%s\t\n", humanStack.Cluster)
+			fmt.Fprint(w, hs.Name)
+			if hs.Cluster != "" {
+				fmt.Fprintf(w, "\t%s\t\n", hs.Cluster)
 			} else {
 				fmt.Fprintf(w, "\t\n")
 			}

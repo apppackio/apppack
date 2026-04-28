@@ -118,6 +118,7 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
+	rootCmd.PersistentFlags().BoolVarP(&AsJSON, "json", "j", false, "output as JSON")
 }
 
 func checkErr(err error) {

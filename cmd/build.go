@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -842,10 +843,54 @@ var buildListCmd = &cobra.Command{
 		builds, err := a.RecentBuilds(15)
 		checkErr(err)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			out, err := json.MarshalIndent(builds, "", "  ")
+			checkErr(err)
+			fmt.Println(string(out))
+
+			return
+		}
+
 		for i := range builds {
 			printBuild(&builds[i])
 			printCommitLog(a.Session, &builds[i])
 		}
+	},
+}
+
+// buildStatusCmd represents the status command
+var buildStatusCmd = &cobra.Command{
+	Use:                   "status [<build-number>]",
+	Short:                 "show the status of the most recent build",
+	Args:                  cobra.MaximumNArgs(1),
+	DisableFlagsInUseLine: true,
+	Run: func(_ *cobra.Command, args []string) {
+		ui.StartSpinner()
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		checkErr(err)
+		var build *app.BuildStatus
+		var buildNumber int
+		if len(args) > 0 {
+			buildNumber, err = strconv.Atoi(args[0])
+			checkErr(err)
+			build, err = a.GetBuildStatus(buildNumber)
+		} else {
+			build, err = a.GetBuildStatus(-1)
+		}
+		checkErr(err)
+		ui.Spinner.Stop()
+
+		if AsJSON {
+			out, err := json.MarshalIndent(build, "", "  ")
+			checkErr(err)
+			fmt.Println(string(out))
+
+			return
+		}
+
+		printBuild(build)
+		printCommitLog(a.Session, build)
 	},
 }
 
@@ -866,6 +911,7 @@ func init() {
 	buildStartCmd.Flags().MarkDeprecated("wait", "please use --watch instead")
 	buildStartCmd.Flags().StringVar(&refFlag, "ref", "", "git reference (branch, tag, or commit hash) to build")
 	buildCmd.AddCommand(buildListCmd)
+	buildCmd.AddCommand(buildStatusCmd)
 
 	buildCmd.AddCommand(buildWaitCmd)
 	buildCmd.AddCommand(buildWatchCmd)

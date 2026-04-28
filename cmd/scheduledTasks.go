@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -58,6 +59,15 @@ var scheduledTasksCmd = &cobra.Command{
 		tasks, err := a.ScheduledTasks()
 		ui.Spinner.Stop()
 		checkErr(err)
+
+		if AsJSON {
+			out, err := json.MarshalIndent(tasks, "", "  ")
+			checkErr(err)
+			fmt.Println(string(out))
+
+			return
+		}
+
 		printTasks(tasks)
 	},
 }
