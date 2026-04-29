@@ -13,6 +13,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Remove nightly tag locally
+        # The nightly workflow creates a `nightly` tag at HEAD daily. In snapshot
+        # mode, goreleaser picks it up as the current tag and fails because it
+        # isn't valid semver. Deleting it locally lets goreleaser fall back to
+        # the latest v* tag. No effect on tagged release runs.
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: git tag -d nightly 2>/dev/null || true
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
