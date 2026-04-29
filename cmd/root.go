@@ -156,7 +156,7 @@ func printUpdateMessage(newRelease *version.ReleaseInfo) {
 	appPath, err := exec.LookPath(os.Args[0])
 	checkErr(err)
 
-	isHomebrew := isUnderHomebrew(appPath)
+	isHomebrew := IsUnderHomebrew(appPath)
 
 	fmt.Fprintf(os.Stderr, "\n\n%s %s → %s\n",
 		aurora.Yellow("A new release of apppack is available:"),
@@ -184,8 +184,8 @@ func confirmAction(message, text string) {
 	}
 }
 
-// Check whether the apppack binary was found under the Homebrew prefix
-func isUnderHomebrew(apppackBinary string) bool {
+// IsUnderHomebrew checks whether the apppack binary was found under the Homebrew prefix.
+func IsUnderHomebrew(apppackBinary string) bool {
 	brewExe, err := safeexec.LookPath("brew")
 	if err != nil {
 		return false

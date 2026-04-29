@@ -47,7 +47,7 @@ func CheckForUpdate(ctx context.Context, client *http.Client, stateFilePath, rep
 		return nil, nil
 	}
 
-	releaseInfo, err := getLatestReleaseInfo(ctx, client, repo)
+	releaseInfo, err := GetLatestReleaseInfo(ctx, client, repo)
 	if err != nil {
 		return nil, err
 	}
@@ -57,14 +57,15 @@ func CheckForUpdate(ctx context.Context, client *http.Client, stateFilePath, rep
 		return nil, err
 	}
 
-	if versionGreaterThan(releaseInfo.Version, currentVersion) {
+	if VersionGreaterThan(releaseInfo.Version, currentVersion) {
 		return releaseInfo, nil
 	}
 
 	return nil, nil
 }
 
-func getLatestReleaseInfo(ctx context.Context, client *http.Client, repo string) (*ReleaseInfo, error) {
+// GetLatestReleaseInfo fetches the latest release information from GitHub.
+func GetLatestReleaseInfo(ctx context.Context, client *http.Client, repo string) (*ReleaseInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo), http.NoBody)
 	if err != nil {
 		return nil, err
@@ -129,7 +130,8 @@ func setStateEntry(stateFilePath string, t time.Time, r ReleaseInfo) error {
 	return err
 }
 
-func versionGreaterThan(v, w string) bool {
+// VersionGreaterThan returns true if version v is greater than version w.
+func VersionGreaterThan(v, w string) bool {
 	w = gitDescribeSuffixRE.ReplaceAllStringFunc(w, func(m string) string {
 		idx := strings.IndexRune(m, '-')
 		n, _ := strconv.Atoi(m[0:idx])

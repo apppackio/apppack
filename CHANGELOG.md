@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* `version check` command to check if a newer CLI version is available.
+* `version update` command to download and install the latest CLI version from GitHub releases.
 * `build start` command now accepts optional `--ref` flag to build from specific git references (branches, tags, or commit hashes).
 * `modify app` command to update some parameters of application/pipeline stacks.
 
