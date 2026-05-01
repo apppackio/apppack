@@ -58,7 +58,7 @@ func updateAdministrators(cfg aws.Config, stack *stacks.AccountStack, name *stri
 	return nil
 }
 
-// accessCmd represents the access command
+// adminsCmd represents the admins command
 var adminsCmd = &cobra.Command{
 	Use:                   "admins",
 	Short:                 "list the administrators for an account",
@@ -72,6 +72,13 @@ var adminsCmd = &cobra.Command{
 		stack, err := accountStack(cfg)
 		checkErr(err)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			checkErr(printJSON(stack.Parameters.Administrators))
+
+			return
+		}
+
 		for _, u := range stack.Parameters.Administrators {
 			fmt.Println(u)
 		}

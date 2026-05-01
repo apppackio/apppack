@@ -22,12 +22,32 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// versionInfo is a JSON-serializable representation of version information.
+type versionInfo struct {
+	Version     string `json:"version"`
+	Commit      string `json:"commit"`
+	BuildDate   string `json:"build_date"`
+	Environment string `json:"environment"`
+}
+
 // versionCmd represents the version command
 var versionCmd = &cobra.Command{
 	Use:                   "version",
 	Short:                 "show the version of the apppack command",
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, _ []string) {
+		if AsJSON {
+			info := versionInfo{
+				Version:     version.Version,
+				Commit:      version.Commit,
+				BuildDate:   version.BuildDate,
+				Environment: version.Environment,
+			}
+			checkErr(printJSON(info))
+
+			return
+		}
+
 		if version.Environment != "production" {
 			fmt.Println(version.Environment)
 		} else {

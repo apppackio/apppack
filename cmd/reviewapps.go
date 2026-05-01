@@ -29,6 +29,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// reviewAppJSON is a JSON-serializable representation of a ReviewApp.
+// Using an explicit wrapper decouples the JSON contract from internal struct tags.
+type reviewAppJSON struct {
+	PullRequest string `json:"pull_request"`
+	Status      string `json:"status"`
+	Branch      string `json:"branch"`
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+}
+
+func toReviewAppJSON(r *app.ReviewApp) reviewAppJSON {
+	return reviewAppJSON{
+		PullRequest: r.PullRequest,
+		Status:      r.Status,
+		Branch:      r.Branch,
+		Title:       r.Title,
+		URL:         r.URL,
+	}
+}
+
 func accountFlagIgnoredWarning() {
 	if AccountIDorAlias != "" {
 		fmt.Println(aurora.Yellow("Warning: The 'account' flag is ignored for reviewapps and all its subcommands. Reviewapps depend on access to the pipeline rather than access to the account."))
@@ -49,6 +69,17 @@ var reviewappsCmd = &cobra.Command{
 		reviewApps, err := a.GetReviewApps()
 		checkErr(err)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			wrapped := make([]reviewAppJSON, 0, len(reviewApps))
+			for _, r := range reviewApps {
+				wrapped = append(wrapped, toReviewAppJSON(r))
+			}
+			checkErr(printJSON(wrapped))
+
+			return
+		}
+
 		ui.PrintHeaderln(a.Name + " review apps")
 		for _, r := range reviewApps {
 			if r.Status == "created" {

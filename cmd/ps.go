@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
@@ -30,6 +31,51 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
+
+// taskJSON is a JSON-serializable representation of a running ECS task.
+type taskJSON struct {
+	Name        string     `json:"name"`
+	Status      string     `json:"status"`
+	CPU         float64    `json:"cpu"`
+	Memory      string     `json:"memory"`
+	BuildNumber string     `json:"build_number"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	StartedBy   string     `json:"started_by,omitempty"`
+	TaskARN     string     `json:"task_arn"`
+}
+
+func taskToJSON(t *ecstypes.Task) (*taskJSON, error) {
+	processType, err := getTag(t.Tags, "apppack:processType")
+	if err != nil {
+		return nil, err
+	}
+
+	buildNumber, err := getTag(t.Tags, "apppack:buildNumber")
+	if err != nil {
+		return nil, err
+	}
+
+	cpu, err := strconv.ParseFloat(*t.Cpu, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parsing cpu: %w", err)
+	}
+
+	tj := &taskJSON{
+		Name:        *processType,
+		Status:      strings.ToLower(*t.LastStatus),
+		CPU:         cpu / 1024.0,
+		Memory:      *t.Memory,
+		BuildNumber: *buildNumber,
+		StartedAt:   t.StartedAt,
+		TaskARN:     *t.TaskArn,
+	}
+
+	if t.StartedBy != nil {
+		tj.StartedBy = *t.StartedBy
+	}
+
+	return tj, nil
+}
 
 func getTag(tags []ecstypes.Tag, key string) (*string, error) {
 	for _, tag := range tags {
@@ -90,6 +136,25 @@ var psCmd = &cobra.Command{
 		tasks, err := a.DescribeTasks()
 		ui.Spinner.Stop()
 		checkErr(err)
+
+		if AsJSON {
+			jsonTasks := make([]*taskJSON, 0, len(tasks))
+			for i := range tasks {
+				tj, err := taskToJSON(&tasks[i])
+				if err != nil {
+					logrus.WithFields(logrus.Fields{"err": err}).Warn("skipping task with missing tag")
+
+					continue
+				}
+
+				jsonTasks = append(jsonTasks, tj)
+			}
+
+			checkErr(printJSON(jsonTasks))
+
+			return
+		}
+
 		// group tasks by process type
 		grouped := map[string][]ecstypes.Task{}
 		for _, t := range tasks {

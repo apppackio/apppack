@@ -28,6 +28,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// scheduledTaskJSON is a JSON-serializable representation of a ScheduledTask.
+// Using an explicit wrapper decouples the JSON contract from internal struct tags.
+type scheduledTaskJSON struct {
+	Schedule string `json:"schedule"`
+	Command  string `json:"command"`
+}
+
+func toScheduledTaskJSON(t *app.ScheduledTask) scheduledTaskJSON {
+	return scheduledTaskJSON{
+		Schedule: t.Schedule,
+		Command:  t.Command,
+	}
+}
+
 func printTasks(tasks []*app.ScheduledTask) {
 	if len(tasks) == 0 {
 		fmt.Printf("%s\n", aurora.Yellow("no scheduled tasks defined"))
@@ -58,6 +72,17 @@ var scheduledTasksCmd = &cobra.Command{
 		tasks, err := a.ScheduledTasks()
 		ui.Spinner.Stop()
 		checkErr(err)
+
+		if AsJSON {
+			wrapped := make([]scheduledTaskJSON, 0, len(tasks))
+			for _, t := range tasks {
+				wrapped = append(wrapped, toScheduledTaskJSON(t))
+			}
+			checkErr(printJSON(wrapped))
+
+			return
+		}
+
 		printTasks(tasks)
 	},
 }

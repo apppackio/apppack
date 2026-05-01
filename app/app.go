@@ -830,6 +830,10 @@ func (a *App) GetBuildStatus(buildNumber int) (*BuildStatus, error) {
 			return nil, err
 		}
 
+		if len(builds) == 0 {
+			return nil, errors.New("no builds found")
+		}
+
 		build = builds[0]
 	} else {
 		item, err := a.ddbItem(fmt.Sprintf("BUILD#%010d", buildNumber))
