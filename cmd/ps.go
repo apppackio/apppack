@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -143,7 +142,7 @@ var psCmd = &cobra.Command{
 			for i := range tasks {
 				tj, err := taskToJSON(&tasks[i])
 				if err != nil {
-					logrus.WithFields(logrus.Fields{"err": err}).Debug("skipping task with missing tag")
+					logrus.WithFields(logrus.Fields{"err": err}).Warn("skipping task with missing tag")
 
 					continue
 				}
@@ -151,9 +150,7 @@ var psCmd = &cobra.Command{
 				jsonTasks = append(jsonTasks, tj)
 			}
 
-			out, err := json.MarshalIndent(jsonTasks, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			checkErr(printJSON(jsonTasks))
 
 			return
 		}

@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -43,6 +42,36 @@ const (
 	indentStr = "    "
 	Started   = "started"
 )
+
+// buildStatusJSON is a JSON-serializable representation of a BuildStatus.
+// Using an explicit wrapper decouples the JSON contract from internal DynamoDB tags.
+type buildStatusJSON struct {
+	AppName     string               `json:"app"`
+	BuildNumber int                  `json:"build_number"`
+	PRNumber    string               `json:"pr_number"`
+	Commit      string               `json:"commit"`
+	Build       app.BuildPhaseDetail `json:"build"`
+	Test        app.BuildPhaseDetail `json:"test"`
+	Finalize    app.BuildPhaseDetail `json:"finalize"`
+	Release     app.BuildPhaseDetail `json:"release"`
+	Postdeploy  app.BuildPhaseDetail `json:"postdeploy"`
+	Deploy      app.BuildPhaseDetail `json:"deploy"`
+}
+
+func toBuildStatusJSON(b *app.BuildStatus) buildStatusJSON {
+	return buildStatusJSON{
+		AppName:     b.AppName,
+		BuildNumber: b.BuildNumber,
+		PRNumber:    b.PRNumber,
+		Commit:      b.Commit,
+		Build:       b.Build,
+		Test:        b.Test,
+		Finalize:    b.Finalize,
+		Release:     b.Release,
+		Postdeploy:  b.Postdeploy,
+		Deploy:      b.Deploy,
+	}
+}
 
 func indent(text, indent string) string {
 	if text == "" {
@@ -845,9 +874,11 @@ var buildListCmd = &cobra.Command{
 		ui.Spinner.Stop()
 
 		if AsJSON {
-			out, err := json.MarshalIndent(builds, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			wrapped := make([]buildStatusJSON, 0, len(builds))
+			for i := range builds {
+				wrapped = append(wrapped, toBuildStatusJSON(&builds[i]))
+			}
+			checkErr(printJSON(wrapped))
 
 			return
 		}
@@ -882,9 +913,7 @@ var buildStatusCmd = &cobra.Command{
 		ui.Spinner.Stop()
 
 		if AsJSON {
-			out, err := json.MarshalIndent(build, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			checkErr(printJSON(toBuildStatusJSON(build)))
 
 			return
 		}

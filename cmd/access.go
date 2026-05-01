@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -146,14 +145,7 @@ var accessCmd = &cobra.Command{
 		ui.Spinner.Stop()
 
 		if AsJSON {
-			users := stack.Parameters.AllowedUsers
-			if users == nil {
-				users = []string{}
-			}
-
-			out, err := json.MarshalIndent(users, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			checkErr(printJSON(stack.Parameters.AllowedUsers))
 
 			return
 		}

@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/apppackio/apppack/version"
@@ -44,10 +43,7 @@ var versionCmd = &cobra.Command{
 				BuildDate:   version.BuildDate,
 				Environment: version.Environment,
 			}
-
-			out, err := json.MarshalIndent(info, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			checkErr(printJSON(info))
 
 			return
 		}

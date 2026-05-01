@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -95,9 +94,7 @@ var stacksCmd = &cobra.Command{
 		}
 
 		if AsJSON {
-			out, err := json.MarshalIndent(humanStacks, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			checkErr(printJSON(humanStacks))
 
 			return
 		}

@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -75,14 +74,7 @@ var adminsCmd = &cobra.Command{
 		ui.Spinner.Stop()
 
 		if AsJSON {
-			admins := stack.Parameters.Administrators
-			if admins == nil {
-				admins = []string{}
-			}
-
-			out, err := json.MarshalIndent(admins, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			checkErr(printJSON(stack.Parameters.Administrators))
 
 			return
 		}

@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -28,6 +27,20 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
+
+// scheduledTaskJSON is a JSON-serializable representation of a ScheduledTask.
+// Using an explicit wrapper decouples the JSON contract from internal struct tags.
+type scheduledTaskJSON struct {
+	Schedule string `json:"schedule"`
+	Command  string `json:"command"`
+}
+
+func toScheduledTaskJSON(t *app.ScheduledTask) scheduledTaskJSON {
+	return scheduledTaskJSON{
+		Schedule: t.Schedule,
+		Command:  t.Command,
+	}
+}
 
 func printTasks(tasks []*app.ScheduledTask) {
 	if len(tasks) == 0 {
@@ -61,9 +74,11 @@ var scheduledTasksCmd = &cobra.Command{
 		checkErr(err)
 
 		if AsJSON {
-			out, err := json.MarshalIndent(tasks, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			wrapped := make([]scheduledTaskJSON, 0, len(tasks))
+			for _, t := range tasks {
+				wrapped = append(wrapped, toScheduledTaskJSON(t))
+			}
+			checkErr(printJSON(wrapped))
 
 			return
 		}

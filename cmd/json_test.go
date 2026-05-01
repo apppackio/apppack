@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -249,9 +253,87 @@ func TestRootJSONPersistentFlag(t *testing.T) {
 	flag := rootCmd.PersistentFlags().Lookup("json")
 	if flag == nil {
 		t.Fatal("expected --json persistent flag on rootCmd, not found")
+
+		return
 	}
 
 	if flag.Shorthand != "j" {
 		t.Errorf("expected shorthand -j, got %q", flag.Shorthand)
+	}
+}
+
+// captureStdout redirects os.Stdout to a pipe, runs fn, then restores stdout
+// and returns what was written.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Errorf("w.Close: %v", err)
+	}
+
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("io.Copy: %v", err)
+	}
+
+	return buf.String()
+}
+
+// TestPrintJSONEmptyList verifies that a nil slice marshals as "[]" — not "null" —
+// so jq pipelines receive a valid JSON array.
+// NOTE: not parallel — captureStdout redirects the process-wide os.Stdout.
+func TestPrintJSONEmptyList(t *testing.T) {
+	got := captureStdout(t, func() {
+		if err := printJSON([]string(nil)); err != nil {
+			t.Errorf("printJSON returned error: %v", err)
+		}
+	})
+
+	if strings.TrimSpace(got) != "[]" {
+		t.Errorf("expected output [], got %q", strings.TrimSpace(got))
+	}
+}
+
+// TestPrintJSONEmptySliceOfPointers verifies that a nil slice of struct pointers
+// also marshals as "[]".
+// NOTE: not parallel — captureStdout redirects the process-wide os.Stdout.
+func TestPrintJSONEmptySliceOfPointers(t *testing.T) {
+	got := captureStdout(t, func() {
+		if err := printJSON([]*versionInfo(nil)); err != nil {
+			t.Errorf("printJSON returned error: %v", err)
+		}
+	})
+
+	if strings.TrimSpace(got) != "[]" {
+		t.Errorf("expected output [], got %q", strings.TrimSpace(got))
+	}
+}
+
+// TestPrintJSONNilStructPointer verifies that a nil pointer to a struct marshals
+// as "null" without panicking — coerceNilSlice must not touch non-slice types.
+// NOTE: not parallel — captureStdout redirects the process-wide os.Stdout.
+func TestPrintJSONNilStructPointer(t *testing.T) {
+	var v *versionInfo // nil pointer
+
+	got := captureStdout(t, func() {
+		if err := printJSON(v); err != nil {
+			t.Errorf("printJSON returned error: %v", err)
+		}
+	})
+
+	if strings.TrimSpace(got) != "null" {
+		t.Errorf("expected output null, got %q", strings.TrimSpace(got))
 	}
 }

@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -28,6 +27,26 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
+
+// appRoleJSON is a JSON-serializable representation of an AppRole.
+// Using an explicit wrapper decouples the JSON contract from internal DynamoDB tags.
+type appRoleJSON struct {
+	RoleARN   string `json:"role_arn"`
+	AccountID string `json:"account_id"`
+	Name      string `json:"name"`
+	Region    string `json:"region"`
+	Pipeline  bool   `json:"pipeline"`
+}
+
+func toAppRoleJSON(r *auth.AppRole) appRoleJSON {
+	return appRoleJSON{
+		RoleARN:   r.RoleARN,
+		AccountID: r.AccountID,
+		Name:      r.AppName,
+		Region:    r.Region,
+		Pipeline:  r.Pipeline,
+	}
+}
 
 // noBrowser is a flag to disable opening a browser
 var noBrowser bool
@@ -123,9 +142,11 @@ var appsCmd = &cobra.Command{
 		ui.Spinner.Stop()
 
 		if AsJSON {
-			out, err := json.MarshalIndent(apps, "", "  ")
-			checkErr(err)
-			fmt.Println(string(out))
+			wrapped := make([]appRoleJSON, 0, len(apps))
+			for _, a := range apps {
+				wrapped = append(wrapped, toAppRoleJSON(a))
+			}
+			checkErr(printJSON(wrapped))
 
 			return
 		}
