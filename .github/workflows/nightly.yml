@@ -34,6 +34,13 @@ jobs:
         with:
           go-version: "1.25"
 
+      - name: Remove local nightly tag
+        if: steps.check.outputs.skip != 'true'
+        # GoReleaser auto-detects the nearest reachable tag and tries to parse
+        # it as semver. The `nightly` tag from the previous run is non-semver,
+        # so delete it locally before GoReleaser runs (it gets re-pushed below).
+        run: git tag -d nightly || true
+
       - name: Run GoReleaser (snapshot)
         if: steps.check.outputs.skip != 'true'
         uses: goreleaser/goreleaser-action@v5
