@@ -9,8 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/AlecAivazis/survey/v2/core"
 	"github.com/apppackio/apppack/auth"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ddb"
@@ -19,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/codebuild"
 	codebuildtypes "github.com/aws/aws-sdk-go-v2/service/codebuild/types"
+	"github.com/charmbracelet/huh"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-isatty"
@@ -178,34 +177,25 @@ func (a *AppStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 func (a *AppStack) AskForDatabase(cfg aws.Config) error {
 	enable := a.Parameters.DatabaseStackName != ""
 
+	var verbose string
 	var helpText string
 	if a.Pipeline {
+		verbose = fmt.Sprintf("Should a database be created for this %s?", a.StackType())
 		helpText = "Review apps will create databases on a database instance in the cluster. " +
 			"See https://docs.apppack.io/how-to/using-databases/ for more info."
 	} else {
+		verbose = fmt.Sprintf("Should a database be created for this %s?", a.StackType())
 		helpText = "Create a database for the app on a database instance in the cluster. " +
 			"Answering yes will create a user and database and provide the credentials to the app as a config variable. " +
 			"See https://docs.apppack.io/how-to/using-databases/ for more info."
 	}
 
-	err := ui.AskQuestions([]*ui.QuestionExtra{
-		{
-			Verbose:  fmt.Sprintf("Should a database be created for this %s?", a.StackType()),
-			HelpText: helpText,
-			WriteTo:  &ui.BooleanOptionProxy{Value: &enable},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "Database",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(enable),
-				},
-			},
-		},
-	}, a.Parameters)
-	if err != nil {
+	form, selectedPtr := AppDatabaseForm(verbose, helpText, enable)
+	if err := form.Run(); err != nil {
 		return err
 	}
+
+	enable = ui.YesNoToBool(*selectedPtr)
 
 	if enable {
 		canChange, err := a.CanChangeParameter("DatabaseStackName")
@@ -225,21 +215,6 @@ func (a *AppStack) AskForDatabase(cfg aws.Config) error {
 	return nil
 }
 
-// DatabaseStackParameters converts `{name} ({Engine})` -> `{stackName}`
-func databaseSelectTransform(ans interface{}) interface{} {
-	o, ok := ans.(core.OptionAnswer)
-	if !ok {
-		return ans
-	}
-
-	if o.Value != "" {
-		parts := strings.Split(o.Value, " ")
-		o.Value = fmt.Sprintf(databaseStackNameTmpl, parts[0])
-	}
-
-	return o
-}
-
 // AskForDatabaseStack gives the user a choice of available database stacks
 func (a *AppStack) AskForDatabaseStack(cfg aws.Config) error {
 	clusterName := a.ClusterName()
@@ -252,18 +227,17 @@ func (a *AppStack) AskForDatabaseStack(cfg aws.Config) error {
 	if len(databases) == 0 {
 		return fmt.Errorf("no AppPack databases are setup on %s cluster", clusterName)
 	}
-	// set the current database as default
-	defaultDatabaseIdx := 0
 
-	if a.Parameters.DatabaseStackName != "" {
-		for i, db := range databases {
-			name := strings.Split(db, " ")[0]
-			if fmt.Sprintf(databaseStackNameTmpl, name) == a.Parameters.DatabaseStackName {
-				defaultDatabaseIdx = i
-
-				break
-			}
+	// Build typed options: display is "{name} ({engine})", value is the full stack name.
+	options := make([]huh.Option[string], len(databases))
+	for i, db := range databases {
+		parts := strings.Split(db, " ")
+		stackName := fmt.Sprintf(databaseStackNameTmpl, parts[0])
+		opt := huh.NewOption(db, stackName)
+		if stackName == a.Parameters.DatabaseStackName {
+			opt = opt.Selected(true)
 		}
+		options[i] = opt
 	}
 
 	var verbose string
@@ -273,46 +247,20 @@ func (a *AppStack) AskForDatabaseStack(cfg aws.Config) error {
 		verbose = "Which database cluster should this app's database be setup on?"
 	}
 
-	err = ui.AskQuestions([]*ui.QuestionExtra{
-		{
-			Verbose: verbose,
-			Question: &survey.Question{
-				Name: "DatabaseStackName",
-				Prompt: &survey.Select{
-					Message: "Database Cluster",
-					Options: databases,
-					Default: databases[defaultDatabaseIdx],
-				},
-				Transform: databaseSelectTransform,
-			},
-		},
-	}, a.Parameters)
-	if err != nil {
+	form, selectedPtr := AppDatabaseStackForm(options, verbose)
+	if err := form.Run(); err != nil {
 		return err
 	}
 
+	a.Parameters.DatabaseStackName = *selectedPtr
+
 	return nil
-}
-
-// RedisStackParameters converts `{name}` -> `{stackName}`
-func redisSelectTransform(ans interface{}) interface{} {
-	o, ok := ans.(core.OptionAnswer)
-	if !ok {
-		return ans
-	}
-
-	if o.Value != "" {
-		o.Value = fmt.Sprintf(redisStackNameTmpl, o.Value)
-	}
-
-	return o
 }
 
 func (a *AppStack) AskForRedis(cfg aws.Config) error {
 	enable := a.Parameters.RedisStackName != ""
 
 	var verbose string
-
 	var helpText string
 
 	if a.Pipeline {
@@ -326,24 +274,12 @@ func (a *AppStack) AskForRedis(cfg aws.Config) error {
 			"See https://docs.apppack.io/how-to/using-redis/ for more info."
 	}
 
-	err := ui.AskQuestions([]*ui.QuestionExtra{
-		{
-			Verbose:  verbose,
-			HelpText: helpText,
-			WriteTo:  &ui.BooleanOptionProxy{Value: &enable},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "Redis",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(enable),
-				},
-			},
-		},
-	}, a.Parameters)
-	if err != nil {
+	form, selectedPtr := AppRedisForm(verbose, helpText, enable)
+	if err := form.Run(); err != nil {
 		return err
 	}
+
+	enable = ui.YesNoToBool(*selectedPtr)
 
 	if enable {
 		canChange, err := a.CanChangeParameter("RedisStackName")
@@ -375,17 +311,16 @@ func (a *AppStack) AskForRedisStack(cfg aws.Config) error {
 	if len(redises) == 0 {
 		return fmt.Errorf("no AppPack Redis instances are setup on %s cluster", clusterName)
 	}
-	// set the current database as default
-	defaultRedisIdx := 0
 
-	if a.Parameters.RedisStackName != "" {
-		for i, r := range redises {
-			if fmt.Sprintf(databaseStackNameTmpl, r) == a.Parameters.RedisStackName {
-				defaultRedisIdx = i
-
-				break
-			}
+	// Build typed options: display is the Redis name, value is the full stack name.
+	options := make([]huh.Option[string], len(redises))
+	for i, r := range redises {
+		stackName := fmt.Sprintf(redisStackNameTmpl, r)
+		opt := huh.NewOption(r, stackName)
+		if stackName == a.Parameters.RedisStackName {
+			opt = opt.Selected(true)
 		}
+		options[i] = opt
 	}
 
 	var verbose string
@@ -395,23 +330,12 @@ func (a *AppStack) AskForRedisStack(cfg aws.Config) error {
 		verbose = "Which Redis instance should this app's user be setup on?"
 	}
 
-	err = ui.AskQuestions([]*ui.QuestionExtra{
-		{
-			Verbose: verbose,
-			Question: &survey.Question{
-				Name: "RedisStackName",
-				Prompt: &survey.Select{
-					Message: "Redis Cluster",
-					Options: redises,
-					Default: redises[defaultRedisIdx],
-				},
-				Transform: redisSelectTransform,
-			},
-		},
-	}, a.Parameters)
-	if err != nil {
+	form, selectedPtr := AppRedisStackForm(options, verbose)
+	if err := form.Run(); err != nil {
 		return err
 	}
+
+	a.Parameters.RedisStackName = *selectedPtr
 
 	return nil
 }
@@ -420,7 +344,6 @@ func (a *AppStack) AskForSES() error {
 	enable := a.Parameters.SESDomain != ""
 
 	var verbose string
-
 	var helpText string
 
 	if a.Pipeline {
@@ -431,26 +354,12 @@ func (a *AppStack) AskForSES() error {
 		helpText = "Allow this app to send email via SES. See https://docs.apppack.io/how-to/sending-email/ for more info."
 	}
 
-	err := ui.AskQuestions([]*ui.QuestionExtra{
-		{
-			Verbose:  verbose,
-			HelpText: helpText,
-			WriteTo:  &ui.BooleanOptionProxy{Value: &enable},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "SES (email)",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(enable),
-				},
-			},
-		},
-	}, a.Parameters)
-	if err != nil {
+	form, selectedPtr := AppSESForm(verbose, helpText, enable)
+	if err := form.Run(); err != nil {
 		return err
 	}
 
-	if enable {
+	if ui.YesNoToBool(*selectedPtr) {
 		return a.AskForSESDomain()
 	}
 
@@ -459,7 +368,7 @@ func (a *AppStack) AskForSES() error {
 	return nil
 }
 
-// AskForRedisStack gives the user a choice of available Redis stacks
+// AskForSESDomain prompts the user to enter the SES approved domain
 func (a *AppStack) AskForSESDomain() error {
 	var verbose string
 	if a.Pipeline {
@@ -468,20 +377,12 @@ func (a *AppStack) AskForSESDomain() error {
 		verbose = "Which domain should this app be allowed to send from?"
 	}
 
-	err := ui.AskQuestions([]*ui.QuestionExtra{
-		{
-			Verbose:  verbose,
-			HelpText: "Only allow outbound email via SES from a specific domain (e.g., example.com). Use `*` to allow sending on any domain approved for sending in SES.",
-			Question: &survey.Question{
-				Name:     "SESDomain",
-				Prompt:   &survey.Input{Message: "SES Approved Domain", Default: a.Parameters.SESDomain},
-				Validate: survey.Required,
-			},
-		},
-	}, a.Parameters)
-	if err != nil {
+	form, domainPtr := AppSESDomainForm(verbose, a.Parameters.SESDomain)
+	if err := form.Run(); err != nil {
 		return err
 	}
+
+	a.Parameters.SESDomain = *domainPtr
 
 	return nil
 }
@@ -501,70 +402,352 @@ func (a *AppStack) CanChangeParameter(name string) (bool, error) {
 	return *currentVal == "", nil
 }
 
-// BuildRepositoryURLQuestion creates the repository URL question
-func BuildRepositoryURLQuestion(valuePtr *string) *ui.QuestionExtra {
-	return &ui.QuestionExtra{
-		Verbose:  "What code repository should this app build from?",
-		HelpText: "Use the HTTP URL (e.g., https://github.com/{org}/{repo}.git). BitBucket and Github repositories are supported.",
-		WriteTo:  &ui.StringValueProxy{Value: valuePtr},
-		Question: &survey.Question{
-			Prompt:   &survey.Input{Message: "Repository URL", Default: *valuePtr},
-			Validate: survey.Required,
-		},
-	}
+// AppRepositoryURLForm builds the interactive form for entering the repository URL.
+// Returns the form and a pointer to the entered URL value.
+func AppRepositoryURLForm(defaultURL string) (*huh.Form, *string) {
+	url := defaultURL
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("What code repository should this app build from?").
+				Description("Use the HTTP URL (e.g., https://github.com/{org}/{repo}.git). BitBucket and Github repositories are supported."),
+			huh.NewInput().
+				Title("Repository URL").
+				Value(&url).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("repository URL is required")
+					}
+
+					return nil
+				}),
+		),
+	)
+
+	return form, &url
 }
 
-// BuildBranchQuestion creates the branch question for non-pipeline apps
-func BuildBranchQuestion(valuePtr *string) *ui.QuestionExtra {
-	return &ui.QuestionExtra{
-		Verbose:  "What branch should this app build from?",
-		HelpText: "The deployment pipeline will be triggered on new pushes to this branch.",
-		WriteTo:  &ui.StringValueProxy{Value: valuePtr},
-		Question: &survey.Question{
-			Prompt:   &survey.Input{Message: "Branch", Default: *valuePtr},
-			Validate: survey.Required,
-		},
-	}
+// AppBranchForm builds the interactive form for entering the deployment branch.
+// Returns the form and a pointer to the entered branch value.
+func AppBranchForm(defaultBranch string) (*huh.Form, *string) {
+	branch := defaultBranch
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("What branch should this app build from?").
+				Description("The deployment pipeline will be triggered on new pushes to this branch."),
+			huh.NewInput().
+				Title("Branch").
+				Value(&branch).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("branch is required")
+					}
+
+					return nil
+				}),
+		),
+	)
+
+	return form, &branch
 }
 
-// BuildDomainsQuestion creates the custom domains question for non-pipeline apps
-func BuildDomainsQuestion(domainsPtr *[]string) *ui.QuestionExtra {
-	return &ui.QuestionExtra{
-		Verbose:  "Should the app be served on a custom domain? (Optional)",
-		HelpText: "By default, the app will automatically be assigned a domain within the cluster. If you'd like it to respond on other domain(s), enter them here (one-per-line). See https://docs.apppack.io/how-to/custom-domains/ for more info.",
-		WriteTo:  &ui.MultiLineValueProxy{Value: domainsPtr},
-		Question: &survey.Question{
-			Prompt: &survey.Multiline{
-				Message: "Custom Domain(s)",
-				Default: strings.Join(*domainsPtr, "\n"),
-			},
-			Validate: func(val interface{}) error {
-				domains := strings.Split(val.(string), "\n")
-				if len(domains) > 4 {
-					return errors.New("limit of 4 custom domains exceeded")
-				}
-				return nil
-			},
-		},
-	}
+// AppDomainsForm builds the interactive form for entering custom domains.
+// Returns the form and a pointer to the raw newline-separated domains string.
+func AppDomainsForm(defaultDomains []string) (*huh.Form, *string) {
+	domainsStr := strings.Join(defaultDomains, "\n")
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Should the app be served on a custom domain? (Optional)").
+				Description("By default, the app will automatically be assigned a domain within the cluster. If you'd like it to respond on other domain(s), enter them here (one-per-line). See https://docs.apppack.io/how-to/custom-domains/ for more info."),
+			huh.NewText().
+				Title("Custom Domain(s)").
+				Value(&domainsStr).
+				Validate(func(s string) error {
+					if s == "" {
+						return nil
+					}
+
+					domains := strings.Split(s, "\n")
+					if len(domains) > 4 {
+						return errors.New("limit of 4 custom domains exceeded")
+					}
+
+					return nil
+				}),
+		),
+	)
+
+	return form, &domainsStr
 }
 
-// BuildHealthCheckPathQuestion creates the healthcheck path question
-func BuildHealthCheckPathQuestion(valuePtr *string) *ui.QuestionExtra {
-	return &ui.QuestionExtra{
-		Verbose:  "What path should be used for healthchecks?",
-		HelpText: "Enter a path (e.g., `/-/alive/`) that will always serve a 200 status code when the application is healthy.",
-		WriteTo:  &ui.StringValueProxy{Value: valuePtr},
-		Question: &survey.Question{
-			Prompt:   &survey.Input{Message: "Healthcheck Path", Default: *valuePtr},
-			Validate: survey.Required,
-		},
-	}
+// AppHealthCheckPathForm builds the interactive form for entering the health check path.
+// Returns the form and a pointer to the entered path value.
+func AppHealthCheckPathForm(defaultPath string) (*huh.Form, *string) {
+	path := defaultPath
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("What path should be used for healthchecks?").
+				Description("Enter a path (e.g., `/-/alive/`) that will always serve a 200 status code when the application is healthy."),
+			huh.NewInput().
+				Title("Healthcheck Path").
+				Value(&path).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("healthcheck path is required")
+					}
+
+					return nil
+				}),
+		),
+	)
+
+	return form, &path
+}
+
+// AppPrivateS3Form builds the interactive form for enabling/disabling a private S3 bucket.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func AppPrivateS3Form(verbose, helpText string, defaultEnabled bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultEnabled)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose).
+				Description(helpText),
+			huh.NewSelect[string]().
+				Title("Private S3 Bucket").
+				Options(ui.YesNoOptions(defaultEnabled)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppPublicS3Form builds the interactive form for enabling/disabling a public S3 bucket.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func AppPublicS3Form(verbose, helpText string, defaultEnabled bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultEnabled)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose).
+				Description(helpText),
+			huh.NewSelect[string]().
+				Title("Public S3 Bucket").
+				Options(ui.YesNoOptions(defaultEnabled)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppSQSForm builds the interactive form for enabling/disabling an SQS queue.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func AppSQSForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultEnabled)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose).
+				Description(helpText),
+			huh.NewSelect[string]().
+				Title("SQS Queue").
+				Options(ui.YesNoOptions(defaultEnabled)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppDatabaseForm builds the interactive yes/no form for enabling/disabling a database.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func AppDatabaseForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultEnabled)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose).
+				Description(helpText),
+			huh.NewSelect[string]().
+				Title("Database").
+				Options(ui.YesNoOptions(defaultEnabled)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppDatabaseStackForm builds the interactive form for selecting a database stack.
+// Returns the form and a pointer to the selected stack name value.
+//
+// Do NOT pre-seed `selected` with options[0].Value — huh's Select widget
+// positions the cursor on the first option whose Value matches `*value`, and
+// only falls back to the option with `.Selected(true)` if no match is found.
+// Pre-seeding would silently override the caller's pre-selection.
+func AppDatabaseStackForm(options []huh.Option[string], verbose string) (*huh.Form, *string) {
+	var selected string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose),
+			huh.NewSelect[string]().
+				Title("Database Cluster").
+				Options(options...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppRedisForm builds the interactive yes/no form for enabling/disabling Redis.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func AppRedisForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultEnabled)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose).
+				Description(helpText),
+			huh.NewSelect[string]().
+				Title("Redis").
+				Options(ui.YesNoOptions(defaultEnabled)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppRedisStackForm builds the interactive form for selecting a Redis stack.
+// Returns the form and a pointer to the selected stack name value.
+//
+// Same rationale as AppDatabaseStackForm: do NOT pre-seed selected.
+func AppRedisStackForm(options []huh.Option[string], verbose string) (*huh.Form, *string) {
+	var selected string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose),
+			huh.NewSelect[string]().
+				Title("Redis Cluster").
+				Options(options...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppSESForm builds the interactive yes/no form for enabling/disabling SES email.
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func AppSESForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultEnabled)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose).
+				Description(helpText),
+			huh.NewSelect[string]().
+				Title("SES (email)").
+				Options(ui.YesNoOptions(defaultEnabled)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppSESDomainForm builds the interactive form for entering the SES approved domain.
+// Returns the form and a pointer to the entered domain value.
+func AppSESDomainForm(verbose, defaultDomain string) (*huh.Form, *string) {
+	domain := defaultDomain
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose).
+				Description("Only allow outbound email via SES from a specific domain (e.g., example.com). Use `*` to allow sending on any domain approved for sending in SES."),
+			huh.NewInput().
+				Title("SES Approved Domain").
+				Value(&domain).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("SES domain is required")
+					}
+
+					return nil
+				}),
+		),
+	)
+
+	return form, &domain
+}
+
+// AppUsersForm builds the interactive form for entering allowed users (one per line).
+// Returns the form and a pointer to the raw newline-separated users string.
+func AppUsersForm(stackType string) (*huh.Form, *string) {
+	var users string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(fmt.Sprintf("Who can manage this %s?", stackType)).
+				Description(fmt.Sprintf("A list of email addresses (one per line) who have access to manage this %s via AppPack.", stackType)),
+			huh.NewText().
+				Title("Users").
+				Value(&users).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("at least one user email is required")
+					}
+
+					return nil
+				}),
+		),
+	)
+
+	return form, &users
+}
+
+// AppDataLossConfirmForm builds the confirmation form displayed when a stack update
+// would result in permanent data loss.
+// Returns the form and a pointer to the confirmed bool value.
+func AppDataLossConfirmForm() (*huh.Form, *bool) {
+	confirmed := false
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Are you sure you want to continue?").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&confirmed),
+		),
+	)
+
+	return form, &confirmed
 }
 
 func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
-	var questions []*ui.QuestionExtra
-
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(
@@ -580,12 +763,14 @@ func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 
 	sort.Strings(a.Parameters.AllowedUsers)
 
-	questions = append(questions, BuildRepositoryURLQuestion(&a.Parameters.RepositoryURL))
-	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
+	// Repository URL
+	ui.Spinner.Stop()
+	repoForm, repoPtr := AppRepositoryURLForm(a.Parameters.RepositoryURL)
+	if err = repoForm.Run(); err != nil {
 		return err
 	}
 
-	questions = []*ui.QuestionExtra{}
+	a.Parameters.RepositoryURL = *repoPtr
 
 	if err := a.Parameters.SetRepositoryType(); err != nil {
 		return err
@@ -596,71 +781,78 @@ func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 	}
 
 	if !a.Pipeline {
-		questions = append(questions, BuildBranchQuestion(&a.Parameters.Branch))
-		questions = append(questions, BuildDomainsQuestion(&a.Parameters.Domains))
+		// Branch
+		branchForm, branchPtr := AppBranchForm(a.Parameters.Branch)
+		if err = branchForm.Run(); err != nil {
+			return err
+		}
+
+		a.Parameters.Branch = *branchPtr
+
+		// Custom domains
+		domainsForm, domainsPtr := AppDomainsForm(a.Parameters.Domains)
+		if err = domainsForm.Run(); err != nil {
+			return err
+		}
+
+		a.Parameters.Domains = strings.Split(*domainsPtr, "\n")
 	}
 
-	var sqsVerbose string
+	// Healthcheck path
+	healthForm, healthPtr := AppHealthCheckPathForm(a.Parameters.HealthCheckPath)
+	if err = healthForm.Run(); err != nil {
+		return err
+	}
 
-	var sqsHelpText string
+	a.Parameters.HealthCheckPath = *healthPtr
 
+	// Private S3 bucket
 	var bucketHelpTextApp string
-
 	if a.Pipeline {
-		sqsVerbose = "Should an SQS Queue be created for review apps on this pipeline?"
-		sqsHelpText = "The SQS Queue can be used to queue up messages between processes. Answering yes will create the queue for each review app and provide its name to the app as a config variable. See https://docs.apppack.io/how-to/using-sqs/ for more info."
 		bucketHelpTextApp = "review apps"
 	} else {
-		sqsVerbose = "Should an SQS Queue be created for this app?"
-		sqsHelpText = "The SQS Queue can be used to queue up messages between processes. Answering yes will create the queue and provide its name to the app as a config variable. See https://docs.apppack.io/how-to/using-sqs/ for more info."
 		bucketHelpTextApp = "the app"
 	}
 
-	questions = append(questions, BuildHealthCheckPathQuestion(&a.Parameters.HealthCheckPath))
-	questions = append(questions, []*ui.QuestionExtra{
-		{
-			Verbose:  fmt.Sprintf("Should a private S3 Bucket be created for this %s?", a.StackType()),
-			HelpText: fmt.Sprintf("The S3 Bucket can be used to store files that should not be publicly accessible. Answering yes will create the bucket and provide its name to %s as a config variable. See https://docs.apppack.io/how-to/using-s3/ for more info.", bucketHelpTextApp),
-			WriteTo:  &ui.BooleanOptionProxy{Value: &a.Parameters.PrivateS3BucketEnabled},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "Private S3 Bucket",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(a.Parameters.PrivateS3BucketEnabled),
-				},
-			},
-		},
-		{
-			Verbose:  fmt.Sprintf("Should a public S3 Bucket be created for this %s?", a.StackType()),
-			HelpText: fmt.Sprintf("The S3 Bucket can be used to store files that should be publicly accessible. Answering yes will create the bucket and provide its name to %s as a config variable. See https://docs.apppack.io/how-to/using-s3/ for more info.", bucketHelpTextApp),
-			WriteTo:  &ui.BooleanOptionProxy{Value: &a.Parameters.PublicS3BucketEnabled},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "Public S3 Bucket",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(a.Parameters.PublicS3BucketEnabled),
-				},
-			},
-		},
-		{
-			Verbose:  sqsVerbose,
-			HelpText: sqsHelpText,
-			WriteTo:  &ui.BooleanOptionProxy{Value: &a.Parameters.SQSQueueEnabled},
-			Question: &survey.Question{
-				Prompt: &survey.Select{
-					Message:       "SQS Queue",
-					Options:       []string{"yes", "no"},
-					FilterMessage: "",
-					Default:       ui.BooleanAsYesNo(a.Parameters.SQSQueueEnabled),
-				},
-			},
-		},
-	}...)
-	if err = ui.AskQuestions(questions, a.Parameters); err != nil {
+	privateS3Form, privateS3Ptr := AppPrivateS3Form(
+		fmt.Sprintf("Should a private S3 Bucket be created for this %s?", a.StackType()),
+		fmt.Sprintf("The S3 Bucket can be used to store files that should not be publicly accessible. Answering yes will create the bucket and provide its name to %s as a config variable. See https://docs.apppack.io/how-to/using-s3/ for more info.", bucketHelpTextApp),
+		a.Parameters.PrivateS3BucketEnabled,
+	)
+	if err = privateS3Form.Run(); err != nil {
 		return err
 	}
+
+	a.Parameters.PrivateS3BucketEnabled = ui.YesNoToBool(*privateS3Ptr)
+
+	// Public S3 bucket
+	publicS3Form, publicS3Ptr := AppPublicS3Form(
+		fmt.Sprintf("Should a public S3 Bucket be created for this %s?", a.StackType()),
+		fmt.Sprintf("The S3 Bucket can be used to store files that should be publicly accessible. Answering yes will create the bucket and provide its name to %s as a config variable. See https://docs.apppack.io/how-to/using-s3/ for more info.", bucketHelpTextApp),
+		a.Parameters.PublicS3BucketEnabled,
+	)
+	if err = publicS3Form.Run(); err != nil {
+		return err
+	}
+
+	a.Parameters.PublicS3BucketEnabled = ui.YesNoToBool(*publicS3Ptr)
+
+	// SQS queue
+	var sqsVerbose, sqsHelpText string
+	if a.Pipeline {
+		sqsVerbose = "Should an SQS Queue be created for review apps on this pipeline?"
+		sqsHelpText = "The SQS Queue can be used to queue up messages between processes. Answering yes will create the queue for each review app and provide its name to the app as a config variable. See https://docs.apppack.io/how-to/using-sqs/ for more info."
+	} else {
+		sqsVerbose = "Should an SQS Queue be created for this app?"
+		sqsHelpText = "The SQS Queue can be used to queue up messages between processes. Answering yes will create the queue and provide its name to the app as a config variable. See https://docs.apppack.io/how-to/using-sqs/ for more info."
+	}
+
+	sqsForm, sqsPtr := AppSQSForm(sqsVerbose, sqsHelpText, a.Parameters.SQSQueueEnabled)
+	if err = sqsForm.Run(); err != nil {
+		return err
+	}
+
+	a.Parameters.SQSQueueEnabled = ui.YesNoToBool(*sqsPtr)
 
 	if err := a.AskForDatabase(cfg); err != nil {
 		return err
@@ -675,20 +867,12 @@ func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
 	}
 
 	if a.Stack == nil {
-		err = ui.AskQuestions([]*ui.QuestionExtra{
-			{
-				Verbose:  fmt.Sprintf("Who can manage this %s?", a.StackType()),
-				HelpText: fmt.Sprintf("A list of email addresses (one per line) who have access to manage this %s via AppPack.", a.StackType()),
-				WriteTo:  &ui.MultiLineValueProxy{Value: &a.Parameters.AllowedUsers},
-				Question: &survey.Question{
-					Prompt:   &survey.Multiline{Message: "Users"},
-					Validate: survey.Required,
-				},
-			},
-		}, a.Parameters)
-		if err != nil {
+		usersForm, usersPtr := AppUsersForm(a.StackType())
+		if err = usersForm.Run(); err != nil {
 			return err
 		}
+
+		a.Parameters.AllowedUsers = strings.Split(strings.TrimSpace(*usersPtr), "\n")
 	} else if err = a.WarnIfDataLoss(); err != nil {
 		return err
 	}
@@ -736,19 +920,12 @@ func (a *AppStack) WarnIfDataLoss() error {
 	}
 
 	if privateS3BucketDestroy || publicS3BucketDestroy || databaseDestroy || redisDestroy {
-		var verify string
-
-		err := survey.AskOne(&survey.Select{
-			Message:       "Are you sure you want to continue?",
-			Options:       []string{"yes", "no"},
-			FilterMessage: "",
-			Default:       "no",
-		}, &verify, nil)
-		if err != nil {
+		form, confirmedPtr := AppDataLossConfirmForm()
+		if err := form.Run(); err != nil {
 			return err
 		}
 
-		if verify != "yes" {
+		if !*confirmedPtr {
 			return errors.New("aborted due to user input")
 		}
 	}
