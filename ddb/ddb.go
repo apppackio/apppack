@@ -14,17 +14,21 @@ import (
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+// AWS SDK v2's `attributevalue` package only honors `dynamodbav` tags. SDK v1's
+// `dynamodbattribute` honored `json` tags as a fallback, which masked the
+// missing tags here until the v2 migration in #106. Without these, all
+// UnmarshalMap / UnmarshalListOfMaps calls return zero-valued structs.
 type stackItem struct {
-	PrimaryID   string `json:"primary_id"`
-	SecondaryID string `json:"secondary_id"`
-	Stack       Stack  `json:"value"`
+	PrimaryID   string `dynamodbav:"primary_id"`
+	SecondaryID string `dynamodbav:"secondary_id"`
+	Stack       Stack  `dynamodbav:"value"`
 }
 
 type Stack struct {
-	StackID        string `json:"stack_id"`
-	StackName      string `json:"stack_name"`
-	Name           string `json:"name"`
-	DatabaseEngine string `json:"engine"`
+	StackID        string `dynamodbav:"stack_id"`
+	StackName      string `dynamodbav:"stack_name"`
+	Name           string `dynamodbav:"name"`
+	DatabaseEngine string `dynamodbav:"engine"`
 }
 
 func GetClusterItem(cfg aws.Config, cluster *string, addon string, name *string) (*Stack, error) {
