@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -67,6 +68,13 @@ type App struct {
 	DeployStatus          *DeployStatus
 	PendingDeployStatuses []*DeployStatus
 	AWS                   apppackaws.Interface
+
+	shellOnce sync.Once
+	shellTask struct {
+		taskFamily string
+		tags       []ecstypes.Tag
+		err        error
+	}
 }
 
 // ReviewApp is a representation of a AppPack review app
@@ -343,27 +351,43 @@ func (a *App) TaskDefinition(name string) (*ecstypes.TaskDefinition, []ecstypes.
 	return task.TaskDefinition, task.Tags, nil
 }
 
-func buildSystemFromTaskTags(tags []ecstypes.Tag) *string {
-	for _, tag := range tags {
-		if *tag.Key == "apppack:buildSystem" {
-			return tag.Value
+// loadShellTask fetches and caches the shell task definition's family and tags.
+// The underlying AWS call runs at most once per App.
+func (a *App) loadShellTask() error {
+	a.shellOnce.Do(func() {
+		taskDefn, tags, err := a.TaskDefinition("shell")
+		if err != nil {
+			a.shellTask.err = err
+			return
 		}
-	}
-
-	emptyString := ""
-	return &emptyString
+		a.shellTask.taskFamily = *taskDefn.Family
+		a.shellTask.tags = tags
+	})
+	return a.shellTask.err
 }
 
-func (a *App) ShellTaskFamily() (*string, *string, error) {
-	taskDefn, tags, err := a.TaskDefinition("shell")
-
-	buildSystem := buildSystemFromTaskTags(tags)
-
-	if err != nil {
-		return nil, nil, err
+func (a *App) ShellTaskFamily() (*string, error) {
+	if err := a.loadShellTask(); err != nil {
+		return nil, err
 	}
+	return &a.shellTask.taskFamily, nil
+}
 
-	return taskDefn.Family, buildSystem, nil
+// IsBuildpack reports whether the app's shell runs on the buildpack build
+// system. A missing or empty build system tag is treated as buildpacks for
+// backwards compatibility with apps provisioned before the tag existed.
+func (a *App) IsBuildpack() (bool, error) {
+	if err := a.loadShellTask(); err != nil {
+		return false, err
+	}
+	buildSystem := ""
+	for _, tag := range a.shellTask.tags {
+		if *tag.Key == "apppack:buildSystem" {
+			buildSystem = *tag.Value
+			break
+		}
+	}
+	return buildSystem == "buildpacks" || buildSystem == "", nil
 }
 
 // URL is used to lookup the app url from settings
