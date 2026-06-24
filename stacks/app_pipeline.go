@@ -1039,30 +1039,28 @@ func VerifySourceCredentials(cfg aws.Config, repositoryType string) error {
 		}
 
 		ui.Spinner.Stop()
-		ui.PrintWarning("CodeBuild needs to be authenticated to access your repository at " + friendlySourceName)
-		fmt.Println("On the CodeBuild new project page:")
-		fmt.Printf("    1. Scroll to the %s section\n", aurora.Bold("Source"))
-		fmt.Printf("    2. Select %s for the %s\n", aurora.Bold(friendlySourceName), aurora.Bold("Source provider"))
-		fmt.Printf("    3. Keep the default %s\n", aurora.Bold("Connect using OAuth"))
-		fmt.Printf("    4. Click %s\n", aurora.Bold("Connect to "+friendlySourceName))
-		fmt.Printf("    5. Click %s in the popup window\n", aurora.Bold("Confirm"))
-		fmt.Printf("    6. %s You can close the browser window and continue with app setup here.\n\n", aurora.Bold("That's it!"))
-		newProjectURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/project/new", cfg.Region)
+		ui.PrintWarning("AppPack needs a connection to your repository at " + friendlySourceName)
+		fmt.Println("On the CodeBuild default source credentials page that opens:")
+		fmt.Printf("    1. Choose %s for %s\n", aurora.Bold("Manage default source credential"), aurora.Bold(friendlySourceName))
+		fmt.Printf("    2. Create (or select) a %s and finish authorizing it in your browser\n", aurora.Bold("connection"))
+		fmt.Printf("    3. Save it as the %s for %s\n", aurora.Bold("default source credential"), aurora.Bold(friendlySourceName))
+		fmt.Printf("    4. %s Close the browser window and continue with app setup here.\n\n", aurora.Bold("That's it!"))
+		defaultCredentialsURL := fmt.Sprintf("https://%s.console.aws.amazon.com/codesuite/codebuild/sourceCredentials/default", cfg.Region)
 
-		url, err := auth.GetConsoleURL(cfg, newProjectURL)
+		url, err := auth.GetConsoleURL(cfg, defaultCredentialsURL)
 		if err == nil && isatty.IsTerminal(os.Stdin.Fd()) {
-			fmt.Println("Opening the CodeBuild new project page now...")
+			fmt.Println("Opening the CodeBuild default source credentials page now...")
 
 			err = browser.OpenURL(*url)
 			if err != nil {
-				fmt.Println("Open this URL in your browser to view logs:")
+				fmt.Println("Open this URL in your browser:")
 				fmt.Println(*url)
 			}
 		} else {
-			fmt.Printf("Visit the following URL to authenticate: %s", newProjectURL)
+			fmt.Printf("Visit the following URL to authenticate: %s", defaultCredentialsURL)
 		}
 
-		ui.PauseUntilEnter("Finish authentication in your web browser then press ENTER to continue.")
+		ui.PauseUntilEnter("Finish connecting in your web browser then press ENTER to continue.")
 
 		return VerifySourceCredentials(cfg, repositoryType)
 	}
