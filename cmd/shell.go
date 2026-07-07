@@ -139,6 +139,37 @@ func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfig
 	return nil, errors.New("unexpected memory format -- it must end in 'M' (for MB) or 'G' (for GB)")
 }
 
+// formatTaskSize returns a human-readable string of a task's CPU and memory
+// allocation, e.g. "0.25 vCPU / 512 MB" or "1 vCPU / 2 GB".
+// It returns an empty string when the task's Cpu or Memory fields are absent
+// or cannot be parsed.
+func formatTaskSize(t *ecstypes.Task) string {
+	if t.Cpu == nil || t.Memory == nil {
+		return ""
+	}
+
+	cpuUnits, err := strconv.ParseFloat(*t.Cpu, 64)
+	if err != nil {
+		return ""
+	}
+
+	memMB, err := strconv.Atoi(*t.Memory)
+	if err != nil {
+		return ""
+	}
+
+	cpuStr := strconv.FormatFloat(cpuUnits/1024.0, 'f', -1, 64)
+
+	var memStr string
+	if memMB >= 1024 && memMB%1024 == 0 {
+		memStr = fmt.Sprintf("%d GB", memMB/1024)
+	} else {
+		memStr = fmt.Sprintf("%d MB", memMB)
+	}
+
+	return fmt.Sprintf("%s vCPU / %s", cpuStr, memStr)
+}
+
 func interactiveCmd(a *app.App, cmd string) {
 	taskFamily, err := a.ShellTaskFamily()
 	checkErr(err)
@@ -169,7 +200,11 @@ func interactiveCmd(a *app.App, cmd string) {
 			}
 
 			arnParts := strings.Split(*t.TaskArn, "/")
-			options = append(options, huh.NewOption(fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1]), i))
+			label := fmt.Sprintf("%s: %s", *tag, arnParts[len(arnParts)-1])
+			if sizeStr := formatTaskSize(&t); sizeStr != "" {
+				label = fmt.Sprintf("%s: %s  (%s)", *tag, arnParts[len(arnParts)-1], sizeStr)
+			}
+			options = append(options, huh.NewOption(label, i))
 		}
 
 		ui.Spinner.Stop()
@@ -179,15 +214,25 @@ func interactiveCmd(a *app.App, cmd string) {
 
 		ui.StartSpinner()
 
-		ecsSession, err := a.CreateEcsSession(
-			&tasks[*idxPtr],
-			exec,
-		)
+		selectedTask := &tasks[*idxPtr]
+		ecsSession, err := a.CreateEcsSession(selectedTask, exec)
 		checkErr(err)
 		ui.Spinner.Stop()
 
+		// Surface the live container's size before handing off the terminal.
+		if sizeStr := formatTaskSize(selectedTask); sizeStr != "" {
+			if processType, tagErr := getTag(selectedTask.Tags, "apppack:processType"); tagErr == nil {
+				fmt.Println(aurora.Faint(fmt.Sprintf(
+					"Attached to %s (%s). This is the live process's container — heavy commands may exhaust it. For a dedicated, right-sizable shell, use `apppack shell --cpu <n> --memory <n>`.",
+					*processType, sizeStr,
+				)))
+			}
+		}
+
 		err = a.ConnectToEcsSession(ecsSession)
 		checkErr(err)
+
+		return
 	}
 
 	var taskCommandPrefix []string
