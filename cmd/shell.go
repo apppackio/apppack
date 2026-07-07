@@ -140,13 +140,14 @@ func humanToECSSizeConfiguration(cpu float64, memory string) (*app.ECSSizeConfig
 }
 
 func interactiveCmd(a *app.App, cmd string) {
-	taskFamily, buildSystem, err := a.ShellTaskFamily()
+	taskFamily, err := a.ShellTaskFamily()
 	checkErr(err)
 	size, err := humanToECSSizeConfiguration(shellCPU, shellMem)
 	checkErr(err)
 	checkErr(a.ValidateECSTaskSize(*size))
 
-	isBuildpack := *buildSystem == "buildpacks" || *buildSystem == ""
+	isBuildpack, err := a.IsBuildpack()
+	checkErr(err)
 	exec := cmd
 
 	if isBuildpack && !shellRoot {
@@ -211,7 +212,13 @@ var shellCmd = &cobra.Command{
 		ui.StartSpinner()
 		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
-		interactiveCmd(a, "bash -l")
+		isBuildpack, err := a.IsBuildpack()
+		checkErr(err)
+		shell := "bash"
+		if isBuildpack {
+			shell = "bash -l"
+		}
+		interactiveCmd(a, shell)
 	},
 }
 
