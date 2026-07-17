@@ -242,7 +242,6 @@ func init() {
 	configCmd.AddCommand(setCmd)
 	configCmd.AddCommand(unsetCmd)
 	configCmd.AddCommand(configListCmd)
-	configListCmd.Flags().BoolVarP(&AsJSON, "json", "j", false, "output as JSON")
 	configCmd.AddCommand(configExportCmd)
 	configExportCmd.Flags().BoolVar(&includeManagedVars,
 		"all",

@@ -1,0 +1,12 @@
+# Test scheduled-tasks help
+exec apppack scheduled-tasks --help
+stdout 'list scheduled tasks'
+! stderr .
+
+# Test create subcommand help
+exec apppack scheduled-tasks create --help
+stdout 'Schedule a command to run'
+
+# Test delete subcommand help
+exec apppack scheduled-tasks delete --help
+stdout 'Delete the scheduled task'

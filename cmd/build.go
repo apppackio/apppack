@@ -43,6 +43,36 @@ const (
 	Started   = "started"
 )
 
+// buildStatusJSON is a JSON-serializable representation of a BuildStatus.
+// Using an explicit wrapper decouples the JSON contract from internal DynamoDB tags.
+type buildStatusJSON struct {
+	AppName     string               `json:"app"`
+	BuildNumber int                  `json:"build_number"`
+	PRNumber    string               `json:"pr_number"`
+	Commit      string               `json:"commit"`
+	Build       app.BuildPhaseDetail `json:"build"`
+	Test        app.BuildPhaseDetail `json:"test"`
+	Finalize    app.BuildPhaseDetail `json:"finalize"`
+	Release     app.BuildPhaseDetail `json:"release"`
+	Postdeploy  app.BuildPhaseDetail `json:"postdeploy"`
+	Deploy      app.BuildPhaseDetail `json:"deploy"`
+}
+
+func toBuildStatusJSON(b *app.BuildStatus) buildStatusJSON {
+	return buildStatusJSON{
+		AppName:     b.AppName,
+		BuildNumber: b.BuildNumber,
+		PRNumber:    b.PRNumber,
+		Commit:      b.Commit,
+		Build:       b.Build,
+		Test:        b.Test,
+		Finalize:    b.Finalize,
+		Release:     b.Release,
+		Postdeploy:  b.Postdeploy,
+		Deploy:      b.Deploy,
+	}
+}
+
 func indent(text, indent string) string {
 	if text == "" {
 		return indent
@@ -842,10 +872,54 @@ var buildListCmd = &cobra.Command{
 		builds, err := a.RecentBuilds(15)
 		checkErr(err)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			wrapped := make([]buildStatusJSON, 0, len(builds))
+			for i := range builds {
+				wrapped = append(wrapped, toBuildStatusJSON(&builds[i]))
+			}
+			checkErr(printJSON(wrapped))
+
+			return
+		}
+
 		for i := range builds {
 			printBuild(&builds[i])
 			printCommitLog(a.Session, &builds[i])
 		}
+	},
+}
+
+// buildStatusCmd represents the status command
+var buildStatusCmd = &cobra.Command{
+	Use:                   "status [<build-number>]",
+	Short:                 "show the status of the most recent build",
+	Args:                  cobra.MaximumNArgs(1),
+	DisableFlagsInUseLine: true,
+	Run: func(_ *cobra.Command, args []string) {
+		ui.StartSpinner()
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		checkErr(err)
+		var build *app.BuildStatus
+		var buildNumber int
+		if len(args) > 0 {
+			buildNumber, err = strconv.Atoi(args[0])
+			checkErr(err)
+			build, err = a.GetBuildStatus(buildNumber)
+		} else {
+			build, err = a.GetBuildStatus(-1)
+		}
+		checkErr(err)
+		ui.Spinner.Stop()
+
+		if AsJSON {
+			checkErr(printJSON(toBuildStatusJSON(build)))
+
+			return
+		}
+
+		printBuild(build)
+		printCommitLog(a.Session, build)
 	},
 }
 
@@ -866,6 +940,7 @@ func init() {
 	buildStartCmd.Flags().MarkDeprecated("wait", "please use --watch instead")
 	buildStartCmd.Flags().StringVar(&refFlag, "ref", "", "git reference (branch, tag, or commit hash) to build")
 	buildCmd.AddCommand(buildListCmd)
+	buildCmd.AddCommand(buildStatusCmd)
 
 	buildCmd.AddCommand(buildWaitCmd)
 	buildCmd.AddCommand(buildWatchCmd)

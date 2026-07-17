@@ -1,0 +1,12 @@
+# Test shell help output
+exec apppack shell --help
+stdout 'Open an interactive shell'
+stdout '\-\-live'
+stdout '\-\-root'
+stdout '\-\-cpu'
+stdout '\-\-memory'
+! stderr .
+
+# Test shell requires app-name flag
+! exec apppack shell
+stderr 'required flag.*app-name'

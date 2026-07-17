@@ -143,6 +143,13 @@ var accessCmd = &cobra.Command{
 		checkErr(err)
 		sort.Strings(stack.Parameters.AllowedUsers)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			checkErr(printJSON(stack.Parameters.AllowedUsers))
+
+			return
+		}
+
 		for _, u := range stack.Parameters.AllowedUsers {
 			fmt.Printf("  • %s\n", u)
 		}

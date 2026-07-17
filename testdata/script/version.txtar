@@ -1,0 +1,4 @@
+# Test version command outputs version info
+exec apppack version
+stdout 'development'
+! stderr .

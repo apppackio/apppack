@@ -58,7 +58,7 @@ func updateAdministrators(cfg aws.Config, stack *stacks.AccountStack, name *stri
 	return nil
 }
 
-// accessCmd represents the access command
+// adminsCmd represents the admins command
 var adminsCmd = &cobra.Command{
 	Use:                   "admins",
 	Short:                 "list the administrators for an account",
@@ -72,6 +72,13 @@ var adminsCmd = &cobra.Command{
 		stack, err := accountStack(cfg)
 		checkErr(err)
 		ui.Spinner.Stop()
+
+		if AsJSON {
+			checkErr(printJSON(stack.Parameters.Administrators))
+
+			return
+		}
+
 		for _, u := range stack.Parameters.Administrators {
 			fmt.Println(u)
 		}
@@ -110,12 +117,13 @@ var adminsAddCmd = &cobra.Command{
 
 // adminsRemoveCmd represents the admins remove command
 var adminsRemoveCmd = &cobra.Command{
-	Use:   "remove <email>",
-	Short: "remove an administrator from the account",
+	Use:   "remove <email>...",
+	Short: "remove administrators from the account",
 	Long: `*Requires admin permissions.*
-Updates the application Cloudformation stack to remove an administrators.`,
+Updates the account Cloudformation stack to remove administrators.`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
+	Example:               "apppack admins remove user1@example.com user2@example.com",
 	Run: func(_ *cobra.Command, args []string) {
 		for _, email := range args {
 			if !validateEmail(email) {

@@ -1,0 +1,8 @@
+# Test create database help output
+exec apppack create database --help
+stdout 'Creates an AppPack Database'
+stdout '\-\-cluster'
+stdout '\-\-engine'
+stdout '\-\-instance-class'
+stdout '\-\-multi-az'
+! stderr .

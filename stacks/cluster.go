@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
@@ -19,6 +18,7 @@ import (
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	route53types "github.com/aws/aws-sdk-go-v2/service/route53/types"
+	"github.com/charmbracelet/huh"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -216,7 +216,6 @@ func (a *ClusterStack) SetDeletionProtection(cfg aws.Config, value bool) error {
 				},
 			},
 		})
-
 		if err != nil {
 			// If load balancer doesn't exist and we're turning deletion protection off,
 			// just log and continue (load balancer may have been manually deleted)
@@ -261,28 +260,40 @@ func (a *ClusterStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 }
 
 func (a *ClusterStack) AskQuestions(_ aws.Config) error {
-	var questions []*ui.QuestionExtra
-
-	var err error
-
 	if a.Stack == nil {
-		questions = append(questions, []*ui.QuestionExtra{
-			{
-				Verbose:  "What domain should be associated with this cluster?",
-				HelpText: "Apps installed to this cluster will automatically get assigned a subdomain on the provided domain. The domain or a parent domain must already be setup as a Route53 Hosted Zone. See https://docs.apppack.io/how-to/bring-your-own-cluster-domain/ for more info.",
-				Question: &survey.Question{
-					Name:     "Domain",
-					Prompt:   &survey.Input{Message: "Cluster Domain", Default: a.Parameters.Domain},
-					Validate: survey.Required,
-				},
-			},
-		}...)
-		if err = ui.AskQuestions(questions, a.Parameters); err != nil {
+		form, domainPtr := ClusterDomainForm(a.Parameters.Domain)
+		if err := form.Run(); err != nil {
 			return err
 		}
+		a.Parameters.Domain = *domainPtr
 	}
 
 	return nil
+}
+
+// ClusterDomainForm builds the interactive form for entering the cluster domain.
+// Returns the form and a pointer to the entered domain value.
+func ClusterDomainForm(defaultDomain string) (*huh.Form, *string) {
+	domain := defaultDomain
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("What domain should be associated with this cluster?").
+				Description("Apps installed to this cluster will automatically get assigned a subdomain on the provided domain.\nThe domain or a parent domain must already be setup as a Route53 Hosted Zone.\nSee https://docs.apppack.io/how-to/bring-your-own-cluster-domain/ for more info."),
+			huh.NewInput().
+				Title("Cluster Domain").
+				Value(&domain).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("domain is required")
+					}
+					return nil
+				}),
+		),
+	)
+
+	return form, &domain
 }
 
 func (*ClusterStack) StackName(name *string) *string {

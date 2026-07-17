@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
@@ -69,18 +68,10 @@ func (a *AccountStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 	return nil
 }
 
-func (a *AccountStack) AskQuestions(_ aws.Config) error {
-	return ui.AskQuestions([]*ui.QuestionExtra{
-		{
-			Verbose:  "Who can administer this account?",
-			HelpText: "A list of email addresses (one per line) who have access to manage this AppPack account. These users will be assigned a permissive IAM policy in your AWS account and should be fully trusted with any resources within ",
-			Question: &survey.Question{
-				Name:     "Administrators",
-				Prompt:   &survey.Multiline{Message: "Administrators"},
-				Validate: survey.Required,
-			},
-		},
-	}, a.Parameters)
+// AskQuestions is a no-op for AccountStack — administrators are managed
+// via the `admins add/remove` commands which take email args directly.
+func (*AccountStack) AskQuestions(_ aws.Config) error {
+	return nil
 }
 
 func (*AccountStack) StackName(_ *string) *string {
