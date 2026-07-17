@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* `version check` command to check if a newer CLI version is available.
+* `version update` command to download and install the latest CLI version from GitHub releases.
+
 ## [4.7.0] - 2026-06-24
 
 ### Added
