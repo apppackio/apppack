@@ -548,6 +548,10 @@ func (a *App) GetServices() ([]string, error) {
 
 	var services []string
 
+	if a.DeployStatus == nil {
+		return services, nil
+	}
+
 	for _, process := range a.DeployStatus.Processes {
 		services = append(services, process.Name)
 	}
@@ -555,7 +559,9 @@ func (a *App) GetServices() ([]string, error) {
 	return services, nil
 }
 
-// LoadDeployStatus will get the app.DeployStatus value from DDB
+// LoadDeployStatus will get the app.DeployStatus value from DDB.
+// If the app has never had a successful release, no DEPLOYSTATUS item
+// exists yet -- this is not an error, so a.DeployStatus is simply left nil.
 func (a *App) LoadDeployStatus() error {
 	if a.DeployStatus != nil {
 		return nil
@@ -563,6 +569,10 @@ func (a *App) LoadDeployStatus() error {
 
 	deployStatus, err := a.GetDeployStatus("")
 	if err != nil {
+		if errors.Is(err, ErrDDBItemNotFound) {
+			return nil
+		}
+
 		return err
 	}
 
