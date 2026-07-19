@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -16,6 +17,10 @@ import (
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/sirupsen/logrus"
 )
+
+// ErrDDBItemNotFound indicates a DynamoDB GetItem call succeeded but found no
+// item for the given key -- as opposed to an AWS/network error.
+var ErrDDBItemNotFound = errors.New("ddb item not found")
 
 func ddbItem(cfg aws.Config, primaryID, secondaryID string) (*map[string]types.AttributeValue, error) {
 	ddbSvc := dynamodb.NewFromConfig(cfg)
@@ -39,7 +44,7 @@ func ddbItem(cfg aws.Config, primaryID, secondaryID string) (*map[string]types.A
 	}
 
 	if result.Item == nil {
-		return nil, fmt.Errorf("could not find DDB item %s %s", primaryID, secondaryID)
+		return nil, fmt.Errorf("could not find DDB item %s %s: %w", primaryID, secondaryID, ErrDDBItemNotFound)
 	}
 
 	return &result.Item, nil
