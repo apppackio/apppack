@@ -22,7 +22,7 @@ import (
 // item for the given key -- as opposed to an AWS/network error.
 var ErrDDBItemNotFound = errors.New("ddb item not found")
 
-func ddbItem(cfg aws.Config, primaryID, secondaryID string) (*map[string]types.AttributeValue, error) {
+func ddbItem(cfg aws.Config, primaryID, secondaryID string) (*map[string]types.AttributeValue, error) { // skipcq: CRT-P0003
 	ddbSvc := dynamodb.NewFromConfig(cfg)
 
 	logrus.WithFields(logrus.Fields{"primaryID": primaryID, "secondaryID": secondaryID}).Debug("DynamoDB GetItem")
@@ -50,7 +50,7 @@ func ddbItem(cfg aws.Config, primaryID, secondaryID string) (*map[string]types.A
 	return &result.Item, nil
 }
 
-func SsmParameters(cfg aws.Config, path string) ([]ssmtypes.Parameter, error) {
+func SsmParameters(cfg aws.Config, path string) ([]ssmtypes.Parameter, error) { // skipcq: CRT-P0003
 	ssmSvc := ssm.NewFromConfig(cfg)
 
 	var parameters []ssmtypes.Parameter
@@ -74,7 +74,7 @@ func SsmParameters(cfg aws.Config, path string) ([]ssmtypes.Parameter, error) {
 	return parameters, nil
 }
 
-func SsmParameter(cfg aws.Config, name string) (*ssmtypes.Parameter, error) {
+func SsmParameter(cfg aws.Config, name string) (*ssmtypes.Parameter, error) { // skipcq: CRT-P0003
 	ssmSvc := ssm.NewFromConfig(cfg)
 	withDecryption := true
 	input := &ssm.GetParameterInput{
@@ -90,7 +90,7 @@ func SsmParameter(cfg aws.Config, name string) (*ssmtypes.Parameter, error) {
 	return result.Parameter, nil
 }
 
-func S3FromURL(cfg aws.Config, logURL string) (*strings.Builder, error) {
+func S3FromURL(cfg aws.Config, logURL string) (*strings.Builder, error) { // skipcq: CRT-P0003
 	s3Svc := s3.NewFromConfig(cfg)
 	parts := strings.Split(strings.TrimPrefix(logURL, "s3://"), "/")
 	bucket := parts[0]
