@@ -25,11 +25,13 @@ import (
 const (
 	repoOwner = "apppackio"
 	repoName  = "apppack"
-
-	// maxBinarySize is the maximum allowed size for the extracted binary (100MB).
-	// This prevents potential DoS via decompression bombs.
-	maxBinarySize = 100 * 1024 * 1024
 )
+
+// maxBinarySize is the maximum allowed size for the extracted binary (100MB).
+// This prevents potential DoS via decompression bombs. It is a var (rather
+// than a const) so tests can lower the cap without materializing a 100MB
+// fixture.
+var maxBinarySize int64 = 100 * 1024 * 1024
 
 // PlatformInfo represents the current platform for download purposes.
 type PlatformInfo struct {
@@ -260,13 +262,18 @@ func extractTarGz(archivePath, destDir string) (string, error) {
 				return "", fmt.Errorf("creating binary file: %w", err)
 			}
 
-			if _, err := io.CopyN(outFile, tr, maxBinarySize); err != nil && !errors.Is(err, io.EOF) {
-				outFile.Close()
+			// Read one byte past the cap so we can detect (rather than
+			// silently truncate) a binary that exceeds maxBinarySize.
+			n, err := io.Copy(outFile, io.LimitReader(tr, maxBinarySize+1))
+			outFile.Close()
 
+			if err != nil {
 				return "", fmt.Errorf("extracting binary: %w", err)
 			}
 
-			outFile.Close()
+			if n > maxBinarySize {
+				return "", fmt.Errorf("binary exceeds maximum allowed size (%d bytes)", maxBinarySize)
+			}
 
 			break
 		}
@@ -305,12 +312,18 @@ func extractZip(archivePath, destDir string) (string, error) {
 				return "", fmt.Errorf("creating binary file: %w", err)
 			}
 
-			_, err = io.CopyN(outFile, rc, maxBinarySize)
+			// Read one byte past the cap so we can detect (rather than
+			// silently truncate) a binary that exceeds maxBinarySize.
+			n, err := io.Copy(outFile, io.LimitReader(rc, maxBinarySize+1))
 			rc.Close()
 			outFile.Close()
 
-			if err != nil && !errors.Is(err, io.EOF) {
+			if err != nil {
 				return "", fmt.Errorf("extracting binary: %w", err)
+			}
+
+			if n > maxBinarySize {
+				return "", fmt.Errorf("binary exceeds maximum allowed size (%d bytes)", maxBinarySize)
 			}
 
 			break

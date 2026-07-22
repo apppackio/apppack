@@ -1,6 +1,10 @@
 package selfupdate
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -178,4 +182,122 @@ func TestVerifyChecksumFileNotFound(t *testing.T) {
 	err := VerifyChecksum("/nonexistent/file.txt", "somehash")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "opening file")
+}
+
+// writeTarGz builds a .tar.gz archive at path containing a single regular
+// file named "apppack" with the given contents.
+func writeTarGz(t *testing.T, path string, contents []byte) {
+	t.Helper()
+
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	defer f.Close()
+
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name:     "apppack",
+		Typeflag: tar.TypeReg,
+		Mode:     0o755,
+		Size:     int64(len(contents)),
+	}))
+	_, err = tw.Write(contents)
+	require.NoError(t, err)
+
+	require.NoError(t, tw.Close())
+	require.NoError(t, gzw.Close())
+}
+
+// writeZip builds a .zip archive at path containing a single file named
+// "apppack.exe" with the given contents.
+func writeZip(t *testing.T, path string, contents []byte) {
+	t.Helper()
+
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	defer f.Close()
+
+	zw := zip.NewWriter(f)
+	w, err := zw.Create("apppack.exe")
+	require.NoError(t, err)
+	_, err = w.Write(contents)
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+}
+
+func TestExtractTarGzSuccess(t *testing.T) {
+	dir := t.TempDir()
+	archivePath := filepath.Join(dir, "apppack.tar.gz")
+	contents := []byte("i am the apppack binary")
+	writeTarGz(t, archivePath, contents)
+
+	binPath, err := extractTarGz(archivePath, dir)
+	require.NoError(t, err)
+
+	got, err := os.ReadFile(binPath)
+	require.NoError(t, err)
+	assert.Equal(t, contents, got)
+}
+
+func TestExtractTarGzExceedsMaxSize(t *testing.T) {
+	// Shrink the cap so we don't need a 100MB fixture.
+	orig := maxBinarySize
+	maxBinarySize = 16
+	defer func() { maxBinarySize = orig }()
+
+	dir := t.TempDir()
+	archivePath := filepath.Join(dir, "apppack.tar.gz")
+	// One byte over the cap must be rejected, not silently truncated.
+	writeTarGz(t, archivePath, bytes.Repeat([]byte("A"), int(maxBinarySize)+1))
+
+	_, err := extractTarGz(archivePath, dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum allowed size")
+}
+
+func TestExtractTarGzAtMaxSize(t *testing.T) {
+	orig := maxBinarySize
+	maxBinarySize = 16
+	defer func() { maxBinarySize = orig }()
+
+	dir := t.TempDir()
+	archivePath := filepath.Join(dir, "apppack.tar.gz")
+	contents := bytes.Repeat([]byte("A"), int(maxBinarySize))
+	writeTarGz(t, archivePath, contents)
+
+	binPath, err := extractTarGz(archivePath, dir)
+	require.NoError(t, err)
+
+	got, err := os.ReadFile(binPath)
+	require.NoError(t, err)
+	assert.Equal(t, contents, got)
+}
+
+func TestExtractZipSuccess(t *testing.T) {
+	dir := t.TempDir()
+	archivePath := filepath.Join(dir, "apppack.zip")
+	contents := []byte("i am the apppack.exe binary")
+	writeZip(t, archivePath, contents)
+
+	binPath, err := extractZip(archivePath, dir)
+	require.NoError(t, err)
+
+	got, err := os.ReadFile(binPath)
+	require.NoError(t, err)
+	assert.Equal(t, contents, got)
+}
+
+func TestExtractZipExceedsMaxSize(t *testing.T) {
+	orig := maxBinarySize
+	maxBinarySize = 16
+	defer func() { maxBinarySize = orig }()
+
+	dir := t.TempDir()
+	archivePath := filepath.Join(dir, "apppack.zip")
+	writeZip(t, archivePath, bytes.Repeat([]byte("A"), int(maxBinarySize)+1))
+
+	_, err := extractZip(archivePath, dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum allowed size")
 }
