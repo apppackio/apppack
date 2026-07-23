@@ -26,6 +26,7 @@ import (
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/aws/smithy-go"
 	"github.com/dustin/go-humanize"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
@@ -330,8 +331,18 @@ apppack -a my-app ps restart web --force  # kill running containers (forced rest
 		if a.Pipeline && !a.IsReviewApp() {
 			checkErr(errors.New("pipelines don't directly run processes"))
 		}
-		checkErr(a.RestartProcess(processType, psRestartForce))
+		err = a.RestartProcess(processType, psRestartForce)
 		ui.Spinner.Stop()
+		if err != nil {
+			// Older app stacks (created before the WebOperatorRole gained
+			// ecs:UpdateService/ecs:StopTask) will get AccessDenied. Point the
+			// user at the upgrade that grants the required permissions.
+			var apiErr smithy.APIError
+			if errors.As(err, &apiErr) && apiErr.ErrorCode() == "AccessDeniedException" {
+				printWarning(fmt.Sprintf("access denied -- the app stack may need to be upgraded: `apppack upgrade app %s`", AppName))
+			}
+			checkErr(err)
+		}
 		if psRestartForce {
 			printSuccess(fmt.Sprintf("forcefully restarted %s (running containers stopped; ECS will relaunch them)", processType))
 		} else {
