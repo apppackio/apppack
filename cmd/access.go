@@ -86,12 +86,13 @@ func adminSession(sessionDuration int) (aws.Config, error) {
 	if UseAWSCredentials {
 		ctx := context.Background()
 		if region != "" {
-			return config.LoadDefaultConfig(ctx, config.WithRegion(region))
+			cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+			return cfg, auth.FriendlyAWSConfigError(err)
 		}
 
 		cfg, err := config.LoadDefaultConfig(ctx)
 		if err != nil {
-			return aws.Config{}, err
+			return aws.Config{}, auth.FriendlyAWSConfigError(err)
 		}
 
 		if cfg.Region == "" {

@@ -1291,7 +1291,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	if awsCredentials {
 		cfg, err := config.LoadDefaultConfig(context.Background())
 		if err != nil {
-			return nil, err
+			return nil, auth.FriendlyAWSConfigError(err)
 		}
 		app.Session = cfg
 		app.AWS = apppackaws.New(cfg)

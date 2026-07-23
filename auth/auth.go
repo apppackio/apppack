@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/apppackio/apppack/state"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -12,6 +13,38 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/sirupsen/logrus"
 )
+
+// ignoreSharedConfigFiles disables loading of the local AWS shared config and
+// credentials files (~/.aws/config, ~/.aws/credentials). AppPack's OAuth flow
+// injects its own credentials, so those files are never needed here. Without
+// this, a partially-configured [default] profile on the user's machine makes
+// every non-`auth` command fail with an opaque SDK error.
+func ignoreSharedConfigFiles() config.LoadOptionsFunc {
+	return func(o *config.LoadOptions) error {
+		o.SharedConfigFiles = []string{}
+		o.SharedCredentialsFiles = []string{}
+		return nil
+	}
+}
+
+// FriendlyAWSConfigError adds a hint to errors returned when loading the local
+// AWS configuration (the `--aws-credentials` flow, which intentionally reads
+// the user's ~/.aws files). The raw SDK "partial credentials" error is opaque;
+// this points the user at the real, machine-local cause.
+func FriendlyAWSConfigError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "partial credentials") {
+		return fmt.Errorf(
+			"%w: your local AWS credentials appear to be incomplete — "+
+				"check for a partial [default] profile in ~/.aws/credentials or ~/.aws/config, "+
+				"or stray AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY environment variables",
+			err,
+		)
+	}
+	return err
+}
 
 const (
 	deviceCodeURL = "https://auth.apppack.io/oauth/device/code"
@@ -53,6 +86,7 @@ func AppAWSSession(appName string, sessionDuration int) (aws.Config, *AppRole, e
 			*creds.SessionToken,
 		)),
 		config.WithRegion(appRole.Region),
+		ignoreSharedConfigFiles(),
 	)
 	if err != nil {
 		return aws.Config{}, nil, err
@@ -90,6 +124,7 @@ func AdminAWSSession(idOrAlias string, sessionDuration int, region string) (aws.
 			*creds.SessionToken,
 		)),
 		config.WithRegion(region),
+		ignoreSharedConfigFiles(),
 	)
 	if err != nil {
 		return aws.Config{}, nil, err
