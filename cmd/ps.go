@@ -309,6 +309,37 @@ apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 pr
 	},
 }
 
+// psRestartCmd represents the restart command
+var psRestartCmd = &cobra.Command{
+	Use:   "restart <process_type>",
+	Short: "restart the process for a given type",
+	Long: `Restart the ECS service for a given process type.
+
+By default, a graceful rolling restart is performed (ForceNewDeployment). Use
+--force to immediately stop all running containers for the process type; ECS
+will relaunch them automatically.`,
+	Example: `apppack -a my-app ps restart web          # graceful rolling restart
+apppack -a my-app ps restart web --force  # kill running containers (forced restart)`,
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run: func(_ *cobra.Command, args []string) {
+		processType := args[0]
+		ui.StartSpinner()
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		checkErr(err)
+		if a.Pipeline && !a.IsReviewApp() {
+			checkErr(errors.New("pipelines don't directly run processes"))
+		}
+		checkErr(a.RestartProcess(processType, psRestartForce))
+		ui.Spinner.Stop()
+		if psRestartForce {
+			printSuccess(fmt.Sprintf("forcefully restarted %s (running containers stopped; ECS will relaunch them)", processType))
+		} else {
+			printSuccess(fmt.Sprintf("triggered rolling restart of %s", processType))
+		}
+	},
+}
+
 // execCmd represents the exec command
 var psExecCmd = &cobra.Command{
 	Use:                   "exec -- <command>",
@@ -325,8 +356,9 @@ var psExecCmd = &cobra.Command{
 }
 
 var (
-	scaleCPU    float64
-	scaleMemory string
+	scaleCPU       float64
+	scaleMemory    string
+	psRestartForce bool
 )
 
 func init() {
@@ -342,6 +374,10 @@ func init() {
 	_ = psResizeCmd.MarkFlagRequired("memory")
 
 	psCmd.AddCommand(psScaleCmd)
+
+	psCmd.AddCommand(psRestartCmd)
+	psRestartCmd.Flags().BoolVar(&psRestartForce, "force", false, "forcefully restart by killing running containers instead of a graceful rolling restart")
+
 	psCmd.AddCommand(psExecCmd)
 	psExecCmd.PersistentFlags().BoolVarP(&shellRoot, "root", "r", false, "open shell as root user")
 	psExecCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
