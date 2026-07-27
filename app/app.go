@@ -1178,6 +1178,83 @@ func (a *App) ResizeProcess(processType string, cpu, memory int) error {
 	return a.SetScaleParameter(processType, nil, nil, &cpu, &memory)
 }
 
+// RestartProcess restarts the ECS service or tasks for the given processType.
+// When force is false, it triggers a graceful rolling restart via UpdateService with
+// ForceNewDeployment. When force is true, it stops all running tasks matching the
+// processType tag, causing ECS to relaunch them.
+func (a *App) RestartProcess(processType string, force bool) error {
+	if err := a.LoadSettings(); err != nil {
+		return fmt.Errorf("loading settings: %w", err)
+	}
+
+	ecsSvc := ecs.NewFromConfig(a.Session)
+
+	if !force {
+		serviceName := a.ServiceName(processType)
+		logrus.WithFields(logrus.Fields{"service": serviceName}).Debug("triggering rolling restart")
+
+		_, err := ecsSvc.UpdateService(context.Background(), &ecs.UpdateServiceInput{
+			Cluster:            &a.Settings.Cluster.ARN,
+			Service:            aws.String(serviceName),
+			ForceNewDeployment: true,
+		})
+		if err != nil {
+			return fmt.Errorf("updating service %s: %w", serviceName, err)
+		}
+
+		return nil
+	}
+
+	// Force restart: stop all matching tasks so ECS relaunches them.
+	tasks, err := a.DescribeTasks()
+	if err != nil {
+		return fmt.Errorf("describing tasks: %w", err)
+	}
+
+	var matchingARNs []string
+	for i := range tasks {
+		tagVal, tagErr := getTagFromTask(&tasks[i], "apppack:processType")
+		if tagErr != nil {
+			continue
+		}
+
+		if tagVal == processType {
+			matchingARNs = append(matchingARNs, *tasks[i].TaskArn)
+		}
+	}
+
+	if len(matchingARNs) == 0 {
+		return fmt.Errorf("no running tasks found for process type %q", processType)
+	}
+
+	for _, taskARN := range matchingARNs {
+		arn := taskARN // capture loop variable
+		logrus.WithFields(logrus.Fields{"task": arn}).Debug("stopping task")
+
+		_, err := ecsSvc.StopTask(context.Background(), &ecs.StopTaskInput{
+			Cluster: &a.Settings.Cluster.ARN,
+			Task:    &arn,
+			Reason:  aws.String("apppack ps restart --force"),
+		})
+		if err != nil {
+			return fmt.Errorf("stopping task %s: %w", arn, err)
+		}
+	}
+
+	return nil
+}
+
+// getTagFromTask returns the value of the named tag on an ECS task.
+func getTagFromTask(task *ecstypes.Task, key string) (string, error) {
+	for _, t := range task.Tags {
+		if t.Key != nil && *t.Key == key && t.Value != nil {
+			return *t.Value, nil
+		}
+	}
+
+	return "", fmt.Errorf("tag %s not found on task", key)
+}
+
 func (a *App) ScaleProcess(processType string, minProcessCount, maxProcessCount int) error {
 	return a.SetScaleParameter(processType, &minProcessCount, &maxProcessCount, nil, nil)
 }
