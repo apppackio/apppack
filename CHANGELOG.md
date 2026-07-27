@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.8.0] - 2026-07-24
+
 ### Added
 
+* `ps restart` command to restart your app's processes. By default it does a graceful, zero-downtime rolling restart (spins up replacement containers before stopping the old ones); add `--force` to immediately stop the running containers and let them relaunch.
 * `version check` command to check if a newer CLI version is available.
 * `version update` command to download and install the latest CLI version from GitHub releases.
 * `shell --live`/`ps exec --live` now show each process's size (CPU/memory) in the selector, and print an advisory naming the process and its size after connecting.
