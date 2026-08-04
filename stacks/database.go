@@ -75,6 +75,21 @@ func standardEngineName(engine *string) (string, error) {
 	return "", errors.New("unrecognized databae engine. valid options are 'mysql' or 'postgres'")
 }
 
+var validDatabaseEngines = []string{"mysql", "postgres", "aurora-mysql", "aurora-postgresql"}
+
+// validateDatabaseEngine ensures an engine value passed via the --engine flag is
+// one AppPack supports. The full engine name (including the aurora- variants) is
+// accepted so that flags fully bypass the interactive engine/aurora prompts.
+func validateDatabaseEngine(engine string) error {
+	for _, e := range validDatabaseEngines {
+		if engine == e {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("invalid engine %q -- must be one of %s", engine, strings.Join(validDatabaseEngines, ", "))
+}
+
 func getLatestRdsVersion(cfg aws.Config, engine *string) (string, error) {
 	rdsSvc := rds.NewFromConfig(cfg)
 
@@ -180,6 +195,14 @@ var DefaultDatabaseStackParameters = DatabaseStackParameters{
 type DatabaseStack struct {
 	Stack      *types.Stack
 	Parameters *DatabaseStackParameters
+	// setFlags records which flags were explicitly provided on the command line
+	// so AskQuestions can skip the corresponding interactive prompt.
+	setFlags map[string]bool
+}
+
+// flagWasSet reports whether the named flag was explicitly provided by the user.
+func (a *DatabaseStack) flagWasSet(name string) bool {
+	return a.setFlags[name]
 }
 
 func (a *DatabaseStack) GetParameters() Parameters {
@@ -271,6 +294,11 @@ func (a *DatabaseStack) ClusterName() string {
 }
 
 func (a *DatabaseStack) UpdateFromFlags(flags *pflag.FlagSet) error {
+	a.setFlags = map[string]bool{}
+	flags.Visit(func(flag *pflag.Flag) {
+		a.setFlags[flag.Name] = true
+	})
+
 	return ui.FlagsToStruct(a.Parameters, flags)
 }
 
@@ -278,41 +306,52 @@ func (a *DatabaseStack) AskQuestions(cfg aws.Config) error {
 	var err error
 
 	if a.Stack == nil {
-		err = AskForCluster(
-			cfg,
-			"Which cluster should this Database be installed in?",
-			"A cluster represents an isolated network and its associated resources (Apps, Database, Redis, etc.).",
-			&a.Parameters.ClusterStackName,
-		)
-		if err != nil {
-			return err
+		if !a.flagWasSet("cluster") {
+			err = AskForCluster(
+				cfg,
+				"Which cluster should this Database be installed in?",
+				"A cluster represents an isolated network and its associated resources (Apps, Database, Redis, etc.).",
+				&a.Parameters.ClusterStackName,
+			)
+			if err != nil {
+				return err
+			}
 		}
 
-		// Engine prompt
-		engineForm, enginePtr := DatabaseEngineForm(a.Parameters.Engine)
-		if err = engineForm.Run(); err != nil {
-			return err
-		}
-		a.Parameters.Engine = *enginePtr
+		// The --engine flag accepts the fully-qualified engine name (including the
+		// aurora- variants), so if it was provided we skip both the engine and
+		// aurora prompts entirely.
+		if a.flagWasSet("engine") {
+			if err = validateDatabaseEngine(a.Parameters.Engine); err != nil {
+				return err
+			}
+		} else {
+			// Engine prompt
+			engineForm, enginePtr := DatabaseEngineForm(a.Parameters.Engine)
+			if err = engineForm.Run(); err != nil {
+				return err
+			}
+			a.Parameters.Engine = *enginePtr
 
-		// Aurora prompt
-		auroraForm, auroraPtr := DatabaseAuroraForm(false)
-		if err = auroraForm.Run(); err != nil {
-			return err
+			// Aurora prompt
+			auroraForm, auroraPtr := DatabaseAuroraForm(false)
+			if err = auroraForm.Run(); err != nil {
+				return err
+			}
+			aurora := ui.YesNoToBool(*auroraPtr)
+
+			if aurora {
+				a.Parameters.Engine, err = auroraEngineName(&a.Parameters.Engine)
+			} else {
+				a.Parameters.Engine, err = standardEngineName(&a.Parameters.Engine)
+			}
+
+			if err != nil {
+				return err
+			}
 		}
-		aurora := ui.YesNoToBool(*auroraPtr)
 
 		ui.StartSpinner()
-
-		if aurora {
-			a.Parameters.Engine, err = auroraEngineName(&a.Parameters.Engine)
-		} else {
-			a.Parameters.Engine, err = standardEngineName(&a.Parameters.Engine)
-		}
-
-		if err != nil {
-			return err
-		}
 
 		a.Parameters.Version, err = getLatestRdsVersion(cfg, &a.Parameters.Engine)
 		if err != nil {
@@ -320,30 +359,34 @@ func (a *DatabaseStack) AskQuestions(cfg aws.Config) error {
 		}
 	}
 
-	ui.StartSpinner()
-	ui.Spinner.Suffix = " retrieving instance classes for " + a.Parameters.Engine
-
-	instanceClasses, err := listRDSInstanceClasses(cfg, &a.Parameters.Engine, &a.Parameters.Version)
-	if err != nil {
-		return err
-	}
-
-	ui.Spinner.Stop()
-	ui.Spinner.Suffix = ""
-
 	// Instance class prompt
-	instanceClassForm, instanceClassPtr := DatabaseInstanceClassForm(instanceClasses, a.Parameters.InstanceClass)
-	if err = instanceClassForm.Run(); err != nil {
-		return err
+	if !a.flagWasSet("instance-class") {
+		ui.StartSpinner()
+		ui.Spinner.Suffix = " retrieving instance classes for " + a.Parameters.Engine
+
+		instanceClasses, err := listRDSInstanceClasses(cfg, &a.Parameters.Engine, &a.Parameters.Version)
+		if err != nil {
+			return err
+		}
+
+		ui.Spinner.Stop()
+		ui.Spinner.Suffix = ""
+
+		instanceClassForm, instanceClassPtr := DatabaseInstanceClassForm(instanceClasses, a.Parameters.InstanceClass)
+		if err = instanceClassForm.Run(); err != nil {
+			return err
+		}
+		a.Parameters.InstanceClass = *instanceClassPtr
 	}
-	a.Parameters.InstanceClass = *instanceClassPtr
 
 	// Multi-AZ prompt
-	multiAZForm, multiAZPtr := DatabaseMultiAZForm(a.Parameters.MultiAZ)
-	if err = multiAZForm.Run(); err != nil {
-		return err
+	if !a.flagWasSet("multi-az") {
+		multiAZForm, multiAZPtr := DatabaseMultiAZForm(a.Parameters.MultiAZ)
+		if err = multiAZForm.Run(); err != nil {
+			return err
+		}
+		a.Parameters.MultiAZ = ui.YesNoToBool(*multiAZPtr)
 	}
-	a.Parameters.MultiAZ = ui.YesNoToBool(*multiAZPtr)
 
 	return nil
 }
