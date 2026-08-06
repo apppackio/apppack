@@ -116,6 +116,11 @@ func StructToCloudformationParameters(s Parameters) ([]types.Parameter, error) {
 	for i, field := range fields {
 		f := structValue.Field(i)
 
+		// skip fields marked as non-CloudFormation (CLI-only flags)
+		if field.Tag.Get("cfnignore") != "" {
+			continue
+		}
+
 		// Get the CloudFormation parameter name - use cfnparam tag if present, otherwise use field name
 		paramName := field.Name
 		if cfnParamName, ok := field.Tag.Lookup("cfnparam"); ok && cfnParamName != "" {

@@ -42,8 +42,13 @@ type AppStackParameters struct {
 	PrivateS3BucketEnabled             bool   `flag:"addon-private-s3"`
 	PublicS3BucketEnabled              bool   `flag:"addon-public-s3"`
 	SESDomain                          string `flag:"addon-ses-domain" cfnparam:"SesDomain"`
-	DatabaseStackName                  string `flag:"addon-database-name;fmtString:apppack-database-%s"`
-	RedisStackName                     string `flag:"addon-redis-name;fmtString:apppack-redis-%s"`
+	// DatabaseAddonEnabled and RedisAddonEnabled are CLI-only fields: they are never sent to
+	// CloudFormation (cfnignore:"-"). They capture the bare --addon-database / --addon-redis
+	// boolean flags and drive interactive defaults and non-interactive auto-resolution.
+	DatabaseAddonEnabled bool   `flag:"addon-database" cfnignore:"-"`
+	DatabaseStackName    string `flag:"addon-database-name;fmtString:apppack-database-%s"`
+	RedisAddonEnabled    bool   `flag:"addon-redis" cfnignore:"-"`
+	RedisStackName       string `flag:"addon-redis-name;fmtString:apppack-redis-%s"`
 	SQSQueueEnabled                    bool   `flag:"addon-sqs"`
 	RepositoryType                     string
 	Fargate                            bool     `flag:"ec2;negate"`
@@ -83,7 +88,7 @@ func (p *AppStackParameters) ToCloudFormationParameters() ([]types.Parameter, er
 }
 
 // SetInternalFields updates fields that aren't exposed to the user
-func (p *AppStackParameters) SetInternalFields(_ aws.Config, name *string) error {
+func (p *AppStackParameters) SetInternalFields(cfg aws.Config, name *string) error {
 	// update values from flags if they are set
 	if p.LoadBalancerRulePriority == 0 {
 		p.LoadBalancerRulePriority = rand.Intn(50000-200) + 200 // #nosec G404 -- Non-crypto random for LB priority assignment
@@ -102,7 +107,112 @@ func (p *AppStackParameters) SetInternalFields(_ aws.Config, name *string) error
 		p.Name = *name
 	}
 
+	// Resolve addon stacks when the boolean flags are set without an explicit name.
+	// This makes --addon-database / --addon-redis meaningful in --non-interactive mode.
+	if err := p.resolveAddonStacks(cfg); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// resolveAddonStacks auto-selects database/redis stack names when the boolean
+// --addon-database / --addon-redis flags are set but no explicit instance name
+// was provided via --addon-database-name / --addon-redis-name. This makes the
+// boolean flags meaningful in --non-interactive mode.
+//
+// If the user ran interactively and said "no" to a database/redis addon,
+// AskForDatabase / AskForRedis will have cleared DatabaseAddonEnabled /
+// RedisAddonEnabled, so this function becomes a no-op for those addons.
+func (p *AppStackParameters) resolveAddonStacks(cfg aws.Config) error {
+	clusterName := strings.TrimPrefix(p.ClusterStackName, fmt.Sprintf(clusterStackNameTmpl, ""))
+
+	if p.DatabaseAddonEnabled && p.DatabaseStackName == "" {
+		databases, err := ddb.ListStacks(cfg, &clusterName, "DATABASE")
+		if err != nil {
+			return fmt.Errorf("looking up database instances on cluster %s: %w", clusterName, err)
+		}
+
+		stackName, err := selectDatabaseStack(clusterName, databases)
+		if err != nil {
+			return err
+		}
+
+		p.DatabaseStackName = stackName
+	}
+
+	if p.RedisAddonEnabled && p.RedisStackName == "" {
+		redises, err := ddb.ListStacks(cfg, &clusterName, "REDIS")
+		if err != nil {
+			return fmt.Errorf("looking up Redis instances on cluster %s: %w", clusterName, err)
+		}
+
+		stackName, err := selectRedisStack(clusterName, redises)
+		if err != nil {
+			return err
+		}
+
+		p.RedisStackName = stackName
+	}
+
+	return nil
+}
+
+// selectDatabaseStack returns the database stack name to use given the list of
+// available database instances on the cluster. It is extracted as a pure helper
+// to facilitate unit testing without real AWS calls.
+//
+// databases is the slice returned by ddb.ListStacks(..., "DATABASE"), where each
+// entry is "{name} ({engine})" or just "{name}".
+func selectDatabaseStack(clusterName string, databases []string) (string, error) {
+	switch len(databases) {
+	case 0:
+		return "", fmt.Errorf(
+			"no AppPack databases are setup on %s cluster"+
+				" -- create one first with `apppack create database`",
+			clusterName,
+		)
+	case 1:
+		// Strip the optional " ({engine})" suffix to get just the name.
+		parts := strings.SplitN(databases[0], " ", 2)
+		return fmt.Sprintf(databaseStackNameTmpl, parts[0]), nil
+	default:
+		names := make([]string, len(databases))
+		for i, db := range databases {
+			parts := strings.SplitN(db, " ", 2)
+			names[i] = parts[0]
+		}
+
+		return "", fmt.Errorf(
+			"multiple database instances found on %s cluster (%s)"+
+				" -- use --addon-database-name to select one",
+			clusterName, strings.Join(names, ", "),
+		)
+	}
+}
+
+// selectRedisStack returns the Redis stack name to use given the list of
+// available Redis instances on the cluster. See selectDatabaseStack for rationale.
+//
+// redises is the slice returned by ddb.ListStacks(..., "REDIS"), where each
+// entry is just the instance name (no engine suffix).
+func selectRedisStack(clusterName string, redises []string) (string, error) {
+	switch len(redises) {
+	case 0:
+		return "", fmt.Errorf(
+			"no AppPack Redis instances are setup on %s cluster"+
+				" -- create one first with `apppack create redis`",
+			clusterName,
+		)
+	case 1:
+		return fmt.Sprintf(redisStackNameTmpl, redises[0]), nil
+	default:
+		return "", fmt.Errorf(
+			"multiple Redis instances found on %s cluster (%s)"+
+				" -- use --addon-redis-name to select one",
+			clusterName, strings.Join(redises, ", "),
+		)
+	}
 }
 
 func (p *AppStackParameters) SetRepositoryType() error {
@@ -175,7 +285,8 @@ func (a *AppStack) UpdateFromFlags(flags *pflag.FlagSet) error {
 }
 
 func (a *AppStack) AskForDatabase(cfg aws.Config) error {
-	enable := a.Parameters.DatabaseStackName != ""
+	// Default to enabled when either the bool flag is set OR a stack name is already configured.
+	enable := a.Parameters.DatabaseAddonEnabled || a.Parameters.DatabaseStackName != ""
 
 	var verbose string
 	var helpText string
@@ -210,7 +321,10 @@ func (a *AppStack) AskForDatabase(cfg aws.Config) error {
 		return nil
 	}
 
+	// User chose "no": clear both the stack name and the bool flag so that
+	// resolveAddonStacks (called from SetInternalFields) does not re-enable it.
 	a.Parameters.DatabaseStackName = ""
+	a.Parameters.DatabaseAddonEnabled = false
 
 	return nil
 }
@@ -258,7 +372,8 @@ func (a *AppStack) AskForDatabaseStack(cfg aws.Config) error {
 }
 
 func (a *AppStack) AskForRedis(cfg aws.Config) error {
-	enable := a.Parameters.RedisStackName != ""
+	// Default to enabled when either the bool flag is set OR a stack name is already configured.
+	enable := a.Parameters.RedisAddonEnabled || a.Parameters.RedisStackName != ""
 
 	var verbose string
 	var helpText string
@@ -294,7 +409,10 @@ func (a *AppStack) AskForRedis(cfg aws.Config) error {
 		return nil
 	}
 
+	// User chose "no": clear both the stack name and the bool flag so that
+	// resolveAddonStacks (called from SetInternalFields) does not re-enable it.
 	a.Parameters.RedisStackName = ""
+	a.Parameters.RedisAddonEnabled = false
 
 	return nil
 }

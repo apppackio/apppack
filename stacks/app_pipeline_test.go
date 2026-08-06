@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/apppackio/apppack/ui/uitest"
@@ -464,5 +465,212 @@ func TestAppDataLossConfirmForm_Reject(t *testing.T) {
 
 	if *confirmedPtr {
 		t.Error("expected confirmed=false when user accepts default (No), got true")
+	}
+}
+
+// --- Addon enable-default logic ---
+
+// TestDatabaseAddonEnabledDefault verifies that the interactive default for the
+// database addon is true whenever either DatabaseAddonEnabled (the bool flag) or
+// DatabaseStackName (an explicit instance name) is set.
+func TestDatabaseAddonEnabledDefault(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name        string
+		params      AppStackParameters
+		wantEnabled bool
+	}{
+		{
+			name:        "bool flag only",
+			params:      AppStackParameters{DatabaseAddonEnabled: true},
+			wantEnabled: true,
+		},
+		{
+			name:        "stack name only",
+			params:      AppStackParameters{DatabaseStackName: "apppack-database-mydb"},
+			wantEnabled: true,
+		},
+		{
+			name:        "both set",
+			params:      AppStackParameters{DatabaseAddonEnabled: true, DatabaseStackName: "apppack-database-mydb"},
+			wantEnabled: true,
+		},
+		{
+			name:        "neither set",
+			params:      AppStackParameters{},
+			wantEnabled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.params.DatabaseAddonEnabled || tt.params.DatabaseStackName != ""
+			if got != tt.wantEnabled {
+				t.Errorf("enable = %v, want %v", got, tt.wantEnabled)
+			}
+		})
+	}
+}
+
+// TestRedisAddonEnabledDefault mirrors TestDatabaseAddonEnabledDefault for Redis.
+func TestRedisAddonEnabledDefault(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name        string
+		params      AppStackParameters
+		wantEnabled bool
+	}{
+		{
+			name:        "bool flag only",
+			params:      AppStackParameters{RedisAddonEnabled: true},
+			wantEnabled: true,
+		},
+		{
+			name:        "stack name only",
+			params:      AppStackParameters{RedisStackName: "apppack-redis-myredis"},
+			wantEnabled: true,
+		},
+		{
+			name:        "both set",
+			params:      AppStackParameters{RedisAddonEnabled: true, RedisStackName: "apppack-redis-myredis"},
+			wantEnabled: true,
+		},
+		{
+			name:        "neither set",
+			params:      AppStackParameters{},
+			wantEnabled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.params.RedisAddonEnabled || tt.params.RedisStackName != ""
+			if got != tt.wantEnabled {
+				t.Errorf("enable = %v, want %v", got, tt.wantEnabled)
+			}
+		})
+	}
+}
+
+// --- selectDatabaseStack ---
+
+func TestSelectDatabaseStack(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name        string
+		databases   []string
+		wantStack   string
+		wantErrSub  string // non-empty: error must contain this substring
+	}{
+		{
+			name:       "zero databases → error with create instruction",
+			databases:  []string{},
+			wantErrSub: "apppack create database",
+		},
+		{
+			name:       "single database without engine",
+			databases:  []string{"mydb"},
+			wantStack:  "apppack-database-mydb",
+		},
+		{
+			name:       "single database with engine suffix",
+			databases:  []string{"mydb (postgres)"},
+			wantStack:  "apppack-database-mydb",
+		},
+		{
+			name:       "multiple databases → error listing names and flag hint",
+			databases:  []string{"mydb (postgres)", "otherdb (mysql)"},
+			wantErrSub: "--addon-database-name",
+		},
+		{
+			name:       "multiple databases error contains instance names",
+			databases:  []string{"mydb (postgres)", "otherdb (mysql)"},
+			wantErrSub: "mydb",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := selectDatabaseStack("mycluster", tt.databases)
+
+			if tt.wantErrSub != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErrSub)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.wantErrSub)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if got != tt.wantStack {
+				t.Errorf("got %q, want %q", got, tt.wantStack)
+			}
+		})
+	}
+}
+
+// --- selectRedisStack ---
+
+func TestSelectRedisStack(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name       string
+		redises    []string
+		wantStack  string
+		wantErrSub string
+	}{
+		{
+			name:       "zero instances → error with create instruction",
+			redises:    []string{},
+			wantErrSub: "apppack create redis",
+		},
+		{
+			name:      "single instance",
+			redises:   []string{"myredis"},
+			wantStack: "apppack-redis-myredis",
+		},
+		{
+			name:       "multiple instances → error with flag hint",
+			redises:    []string{"myredis", "otherredis"},
+			wantErrSub: "--addon-redis-name",
+		},
+		{
+			name:       "multiple instances error contains instance names",
+			redises:    []string{"myredis", "otherredis"},
+			wantErrSub: "myredis",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := selectRedisStack("mycluster", tt.redises)
+
+			if tt.wantErrSub != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErrSub)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.wantErrSub)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if got != tt.wantStack {
+				t.Errorf("got %q, want %q", got, tt.wantStack)
+			}
+		})
 	}
 }
