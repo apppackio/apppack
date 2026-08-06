@@ -4,7 +4,90 @@ import (
 	"testing"
 
 	"github.com/apppackio/apppack/ui/uitest"
+	"github.com/spf13/pflag"
 )
+
+func TestValidateDatabaseEngine(t *testing.T) {
+	valid := []string{"mysql", "postgres", "aurora-mysql", "aurora-postgresql"}
+	for _, e := range valid {
+		if err := validateDatabaseEngine(e); err != nil {
+			t.Errorf("expected %q to be valid, got error: %v", e, err)
+		}
+	}
+
+	invalid := []string{"", "sqlite", "aurora", "Postgres", "mariadb"}
+	for _, e := range invalid {
+		if err := validateDatabaseEngine(e); err == nil {
+			t.Errorf("expected %q to be invalid, got no error", e)
+		}
+	}
+}
+
+// newDatabaseFlagSet mirrors the flags registered on createDatabaseCmd so we can
+// exercise UpdateFromFlags without pulling in the cmd package.
+func newDatabaseFlagSet() *pflag.FlagSet {
+	flags := pflag.NewFlagSet("database", pflag.ContinueOnError)
+	flags.String("cluster", "apppack", "cluster name")
+	flags.StringP("instance-class", "i", DefaultDatabaseStackParameters.InstanceClass, "instance class")
+	flags.StringP("engine", "e", DefaultDatabaseStackParameters.Engine, "engine")
+	flags.Bool("multi-az", DefaultDatabaseStackParameters.MultiAZ, "enable multi-AZ")
+	flags.Int("allocated-storage", DefaultDatabaseStackParameters.AllocatedStorage, "allocated storage")
+	flags.Int("max-allocated-storage", DefaultDatabaseStackParameters.MaxAllocatedStorage, "max allocated storage")
+
+	return flags
+}
+
+func TestUpdateFromFlagsRecordsSetFlags(t *testing.T) {
+	flags := newDatabaseFlagSet()
+	if err := flags.Parse([]string{"--engine", "aurora-postgresql", "--multi-az"}); err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+
+	params := DefaultDatabaseStackParameters
+	stack := DatabaseStack{Parameters: &params}
+	if err := stack.UpdateFromFlags(flags); err != nil {
+		t.Fatalf("UpdateFromFlags returned error: %v", err)
+	}
+
+	if !stack.flagWasSet("engine") {
+		t.Error("expected engine flag to be recorded as set")
+	}
+	if !stack.flagWasSet("multi-az") {
+		t.Error("expected multi-az flag to be recorded as set")
+	}
+	if stack.flagWasSet("cluster") {
+		t.Error("expected cluster flag to be recorded as not set")
+	}
+	if stack.flagWasSet("instance-class") {
+		t.Error("expected instance-class flag to be recorded as not set")
+	}
+
+	if params.Engine != "aurora-postgresql" {
+		t.Errorf("expected engine 'aurora-postgresql', got %q", params.Engine)
+	}
+	if !params.MultiAZ {
+		t.Error("expected multi-az to be true")
+	}
+}
+
+func TestUpdateFromFlagsNoFlagsSet(t *testing.T) {
+	flags := newDatabaseFlagSet()
+	if err := flags.Parse([]string{}); err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+
+	params := DefaultDatabaseStackParameters
+	stack := DatabaseStack{Parameters: &params}
+	if err := stack.UpdateFromFlags(flags); err != nil {
+		t.Fatalf("UpdateFromFlags returned error: %v", err)
+	}
+
+	for _, name := range []string{"cluster", "engine", "instance-class", "multi-az"} {
+		if stack.flagWasSet(name) {
+			t.Errorf("expected %q to be recorded as not set", name)
+		}
+	}
+}
 
 func TestDatabaseEngineForm_DefaultPostgres(t *testing.T) {
 	form, selectedPtr := DatabaseEngineForm("postgres")
