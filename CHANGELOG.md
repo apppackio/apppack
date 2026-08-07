@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.8.1] - 2026-08-07
+
 ### Fixed
 
 * `create database` now honors flags like `--engine` instead of re-prompting for them. Any flag you set explicitly (`--engine`, `--instance-class`, `--multi-az`, etc.) is used directly and its interactive prompt is skipped. `--engine` accepts the fully-qualified engine name (`mysql`, `postgres`, `aurora-mysql`, `aurora-postgresql`) and is validated so a typo fails fast.
