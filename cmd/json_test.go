@@ -257,8 +257,9 @@ func TestRootJSONPersistentFlag(t *testing.T) {
 		return
 	}
 
-	if flag.Shorthand != "j" {
-		t.Errorf("expected shorthand -j, got %q", flag.Shorthand)
+	// -j is reserved for `db load`'s --jobs flag, which predates --json.
+	if flag.Shorthand != "" {
+		t.Errorf("expected no shorthand, got %q", flag.Shorthand)
 	}
 }
 
