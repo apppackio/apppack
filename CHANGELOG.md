@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.8.2] - 2026-08-10
+
+### Fixed
+
+* `db load` no longer fails with a shorthand collision error. Its `--jobs`/`-j` flag was clashing with the global `--json`/`-j` flag added in 4.7.0, breaking every `db load` invocation. `--json` no longer has a shorthand; `db load -j <n>` is unchanged.
+
 ## [4.8.1] - 2026-08-07
 
 ### Fixed
