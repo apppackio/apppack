@@ -49,12 +49,12 @@ type AppStackParameters struct {
 	DatabaseStackName    string `flag:"addon-database-name;fmtString:apppack-database-%s"`
 	RedisAddonEnabled    bool   `flag:"addon-redis" cfnignore:"-"`
 	RedisStackName       string `flag:"addon-redis-name;fmtString:apppack-redis-%s"`
-	SQSQueueEnabled                    bool   `flag:"addon-sqs"`
-	RepositoryType                     string
-	Fargate                            bool     `flag:"ec2;negate"`
-	AllowedUsers                       []string `flag:"users"`
-	BuildWebhook                       bool     `flag:"disable-build-webhook;negate"`
-	CustomTaskPolicyARN                string   `cfnparam:"CustomTaskPolicyArn"`
+	SQSQueueEnabled      bool   `flag:"addon-sqs"`
+	RepositoryType       string
+	Fargate              bool     `flag:"ec2;negate"`
+	AllowedUsers         []string `flag:"users"`
+	BuildWebhook         bool     `flag:"disable-build-webhook;negate"`
+	CustomTaskPolicyARN  string   `cfnparam:"CustomTaskPolicyArn"`
 }
 
 var DefaultAppStackParameters = AppStackParameters{

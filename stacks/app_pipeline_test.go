@@ -560,10 +560,10 @@ func TestSelectDatabaseStack(t *testing.T) {
 	t.Helper()
 
 	tests := []struct {
-		name        string
-		databases   []string
-		wantStack   string
-		wantErrSub  string // non-empty: error must contain this substring
+		name       string
+		databases  []string
+		wantStack  string
+		wantErrSub string // non-empty: error must contain this substring
 	}{
 		{
 			name:       "zero databases → error with create instruction",
@@ -571,14 +571,14 @@ func TestSelectDatabaseStack(t *testing.T) {
 			wantErrSub: "apppack create database",
 		},
 		{
-			name:       "single database without engine",
-			databases:  []string{"mydb"},
-			wantStack:  "apppack-database-mydb",
+			name:      "single database without engine",
+			databases: []string{"mydb"},
+			wantStack: "apppack-database-mydb",
 		},
 		{
-			name:       "single database with engine suffix",
-			databases:  []string{"mydb (postgres)"},
-			wantStack:  "apppack-database-mydb",
+			name:      "single database with engine suffix",
+			databases: []string{"mydb (postgres)"},
+			wantStack: "apppack-database-mydb",
 		},
 		{
 			name:       "multiple databases → error listing names and flag hint",
