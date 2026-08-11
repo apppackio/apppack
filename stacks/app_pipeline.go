@@ -49,12 +49,17 @@ type AppStackParameters struct {
 	DatabaseStackName    string `flag:"addon-database-name;fmtString:apppack-database-%s"`
 	RedisAddonEnabled    bool   `flag:"addon-redis" cfnignore:"-"`
 	RedisStackName       string `flag:"addon-redis-name;fmtString:apppack-redis-%s"`
-	SQSQueueEnabled      bool   `flag:"addon-sqs"`
-	RepositoryType       string
-	Fargate              bool     `flag:"ec2;negate"`
-	AllowedUsers         []string `flag:"users"`
-	BuildWebhook         bool     `flag:"disable-build-webhook;negate"`
-	CustomTaskPolicyARN  string   `cfnparam:"CustomTaskPolicyArn"`
+	// ExternalDatabaseEngine IS a real CloudFormation parameter (unlike DatabaseAddonEnabled /
+	// RedisAddonEnabled above): it drives the db-utils container image tag at template render
+	// time for apps using an externally-managed database (Neon, Crunchy, etc.) reachable via
+	// the DATABASE_URL config variable. Valid values: "", "postgres", "mysql".
+	ExternalDatabaseEngine string `flag:"external-database"`
+	SQSQueueEnabled        bool   `flag:"addon-sqs"`
+	RepositoryType         string
+	Fargate                bool     `flag:"ec2;negate"`
+	AllowedUsers           []string `flag:"users"`
+	BuildWebhook           bool     `flag:"disable-build-webhook;negate"`
+	CustomTaskPolicyARN    string   `cfnparam:"CustomTaskPolicyArn"`
 }
 
 var DefaultAppStackParameters = AppStackParameters{
@@ -107,6 +112,10 @@ func (p *AppStackParameters) SetInternalFields(cfg aws.Config, name *string) err
 		p.Name = *name
 	}
 
+	if err := p.validateExternalDatabase(); err != nil {
+		return err
+	}
+
 	// Resolve addon stacks when the boolean flags are set without an explicit name.
 	// This makes --addon-database / --addon-redis meaningful in --non-interactive mode.
 	if err := p.resolveAddonStacks(cfg); err != nil {
@@ -114,6 +123,43 @@ func (p *AppStackParameters) SetInternalFields(cfg aws.Config, name *string) err
 	}
 
 	return nil
+}
+
+const (
+	externalDatabaseEnginePostgres = "postgres"
+	externalDatabaseEngineMySQL    = "mysql"
+)
+
+// validExternalDatabaseEngines lists the values CloudFormation's ExternalDatabaseEngine
+// parameter accepts (besides the empty string, which means "no external database").
+var validExternalDatabaseEngines = []string{externalDatabaseEnginePostgres, externalDatabaseEngineMySQL}
+
+// validateExternalDatabase enforces that --external-database is mutually exclusive
+// with the managed database addon (--addon-database / --addon-database-name), and
+// that the engine value, when set, is one CloudFormation will actually accept.
+// CloudFormation also enforces this via AllowedValues, but failing fast client-side
+// is a far better UX than waiting for a stack rollback.
+func (p *AppStackParameters) validateExternalDatabase() error {
+	if p.ExternalDatabaseEngine == "" {
+		return nil
+	}
+
+	if p.DatabaseAddonEnabled || p.DatabaseStackName != "" {
+		return errors.New(
+			"--external-database cannot be combined with --addon-database/--addon-database-name",
+		)
+	}
+
+	for _, valid := range validExternalDatabaseEngines {
+		if p.ExternalDatabaseEngine == valid {
+			return nil
+		}
+	}
+
+	return fmt.Errorf(
+		"invalid --external-database engine %q -- must be one of: %s",
+		p.ExternalDatabaseEngine, strings.Join(validExternalDatabaseEngines, ", "),
+	)
 }
 
 // resolveAddonStacks auto-selects database/redis stack names when the boolean
@@ -325,6 +371,66 @@ func (a *AppStack) AskForDatabase(cfg aws.Config) error {
 	// resolveAddonStacks (called from SetInternalFields) does not re-enable it.
 	a.Parameters.DatabaseStackName = ""
 	a.Parameters.DatabaseAddonEnabled = false
+
+	// Review apps/pipelines can't use an external database -- the CloudFormation
+	// condition requires IsApp, and the flag itself is only registered on `create app`.
+	if a.Pipeline {
+		return nil
+	}
+
+	return a.AskForExternalDatabase()
+}
+
+// AskForExternalDatabase offers an externally-managed database (Neon, Crunchy, etc.)
+// as a follow-up when the user declines an AppPack-managed database. Only relevant
+// to apps -- see AskForDatabase.
+func (a *AppStack) AskForExternalDatabase() error {
+	enable := a.Parameters.ExternalDatabaseEngine != ""
+
+	verbose := "Do you have an externally-managed database (e.g. Neon, Crunchy) for this app?"
+	helpText := "If this app's DATABASE_URL config variable already points at a database you manage " +
+		"outside of AppPack, select its engine so that `apppack db shell`/`db dump` work against it."
+
+	form, selectedPtr := AppExternalDatabaseForm(verbose, helpText, enable)
+	if err := form.Run(); err != nil {
+		return err
+	}
+
+	if !ui.YesNoToBool(*selectedPtr) {
+		// User chose "no": clear the engine so `apppack modify app` can turn the
+		// feature back off.
+		a.Parameters.ExternalDatabaseEngine = ""
+
+		return nil
+	}
+
+	return a.AskForExternalDatabaseEngine()
+}
+
+// AskForExternalDatabaseEngine prompts for the engine of an externally-managed database.
+func (a *AppStack) AskForExternalDatabaseEngine() error {
+	current := a.Parameters.ExternalDatabaseEngine
+	if current == "" {
+		current = externalDatabaseEnginePostgres
+	}
+
+	options := []huh.Option[string]{
+		huh.NewOption("PostgreSQL", externalDatabaseEnginePostgres),
+		huh.NewOption("MySQL", externalDatabaseEngineMySQL),
+	}
+
+	for i, opt := range options {
+		if opt.Value == current {
+			options[i] = opt.Selected(true)
+		}
+	}
+
+	form, selectedPtr := AppExternalDatabaseEngineForm(options)
+	if err := form.Run(); err != nil {
+		return err
+	}
+
+	a.Parameters.ExternalDatabaseEngine = *selectedPtr
 
 	return nil
 }
@@ -725,6 +831,50 @@ func AppDatabaseStackForm(options []huh.Option[string], verbose string) (*huh.Fo
 				Title(verbose),
 			huh.NewSelect[string]().
 				Title("Database Cluster").
+				Options(options...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppExternalDatabaseForm builds the interactive yes/no form for enabling/disabling
+// an externally-managed database (Neon, Crunchy, etc.).
+// Returns the form and a pointer to the selected "yes"/"no" value.
+func AppExternalDatabaseForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *string) {
+	selected := ui.BooleanAsYesNo(defaultEnabled)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(verbose).
+				Description(helpText),
+			huh.NewSelect[string]().
+				Title("External Database").
+				Options(ui.YesNoOptions(defaultEnabled)...).
+				Value(&selected),
+		),
+	)
+
+	return form, &selected
+}
+
+// AppExternalDatabaseEngineForm builds the interactive form for selecting the engine
+// of an externally-managed database. Returns the form and a pointer to the selected
+// engine value.
+//
+// Same rationale as AppDatabaseStackForm: do NOT pre-seed `selected` -- rely on
+// `.Selected(true)` on the matching option instead.
+func AppExternalDatabaseEngineForm(options []huh.Option[string]) (*huh.Form, *string) {
+	var selected string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Which engine is the external database?"),
+			huh.NewSelect[string]().
+				Title("Engine").
 				Options(options...).
 				Value(&selected),
 		),

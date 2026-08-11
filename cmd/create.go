@@ -342,6 +342,7 @@ func init() {
 	appCmd.Flags().String("addon-database-name", "", "database instance name to install add-on (implies --addon-database)")
 	appCmd.Flags().Bool("addon-redis", false, "setup Redis add-on (Redis instance must already exist -- run `apppack create redis` first; use --addon-redis-name to select a specific instance when multiple exist)")
 	appCmd.Flags().String("addon-redis-name", "", "Redis instance name to install add-on (implies --addon-redis)")
+	appCmd.Flags().String("external-database", "", "use an externally-managed database (Neon, Crunchy, etc.) reachable via the DATABASE_URL config variable -- value is the engine: postgres or mysql")
 	appCmd.Flags().Bool("addon-sqs", false, "setup SQS Queue add-on")
 	appCmd.Flags().Bool("addon-ses", false, "setup SES (Email) add-on (requires manual approval of domain at SES)")
 	appCmd.Flags().String("addon-ses-domain", "*", "domain approved for sending via SES add-on. Use '*' for all domains.")

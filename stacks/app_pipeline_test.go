@@ -674,3 +674,107 @@ func TestSelectRedisStack(t *testing.T) {
 		})
 	}
 }
+
+// --- validateExternalDatabase ---
+
+func TestValidateExternalDatabase(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name       string
+		params     AppStackParameters
+		wantErrSub string // non-empty: error must contain this substring
+	}{
+		{
+			name:   "not set is fine",
+			params: AppStackParameters{},
+		},
+		{
+			name:   "postgres alone is accepted",
+			params: AppStackParameters{ExternalDatabaseEngine: "postgres"},
+		},
+		{
+			name:   "mysql alone is accepted",
+			params: AppStackParameters{ExternalDatabaseEngine: "mysql"},
+		},
+		{
+			name: "combined with --addon-database errors",
+			params: AppStackParameters{
+				ExternalDatabaseEngine: "postgres",
+				DatabaseAddonEnabled:   true,
+			},
+			wantErrSub: "--external-database cannot be combined with --addon-database",
+		},
+		{
+			name: "combined with --addon-database-name errors",
+			params: AppStackParameters{
+				ExternalDatabaseEngine: "postgres",
+				DatabaseStackName:      "apppack-database-mydb",
+			},
+			wantErrSub: "--external-database cannot be combined with --addon-database",
+		},
+		{
+			name: "invalid engine errors",
+			params: AppStackParameters{
+				ExternalDatabaseEngine: "mongodb",
+			},
+			wantErrSub: "invalid --external-database engine",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.params.validateExternalDatabase()
+
+			if tt.wantErrSub != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErrSub)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.wantErrSub)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestExternalDatabaseEngineRoundTrip verifies ExternalDatabaseEngine is a real
+// CloudFormation parameter (no cfnignore) and round-trips through
+// ToCloudFormationParameters / Import.
+func TestExternalDatabaseEngineRoundTrip(t *testing.T) {
+	t.Helper()
+
+	params := AppStackParameters{ExternalDatabaseEngine: "postgres"}
+
+	cfnParams, err := params.ToCloudFormationParameters()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var found bool
+	for _, p := range cfnParams {
+		if *p.ParameterKey == "ExternalDatabaseEngine" {
+			found = true
+			if *p.ParameterValue != "postgres" {
+				t.Errorf("ParameterValue = %q, want %q", *p.ParameterValue, "postgres")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("ExternalDatabaseEngine parameter not found in CloudFormation parameters")
+	}
+
+	var imported AppStackParameters
+	if err := imported.Import(cfnParams); err != nil {
+		t.Fatalf("unexpected error importing: %v", err)
+	}
+
+	if imported.ExternalDatabaseEngine != "postgres" {
+		t.Errorf("imported ExternalDatabaseEngine = %q, want %q", imported.ExternalDatabaseEngine, "postgres")
+	}
+}

@@ -1067,6 +1067,47 @@ func (a *App) GetECSEvents(service string) ([]ecstypes.ServiceEvent, error) {
 	return events, nil
 }
 
+// noDatabaseConfiguredError returns a targeted, actionable error for the case where
+// a DB command is run against an app that has no db utils engine configured
+// (Settings.DBUtils.Engine == ""). This replaces the unhelpful
+// "unknown database engine " message (empty engine) that used to surface here.
+//
+// It distinguishes two cases by checking for a DATABASE_URL config variable:
+//   - present: the app has an externally-managed database wired up via config,
+//     but db utils haven't been enabled for it -- point the user at
+//     `apppack modify app` / `--external-database`.
+//   - absent: no database has been set up for the app at all -- point the user
+//     at `apppack create database`.
+func (a *App) noDatabaseConfiguredError() error {
+	// If we can't load config for whatever reason, fall back to the "no database
+	// configured" message -- it's the more common case and still actionable.
+	configVars, _ := a.GetConfig()
+
+	return noDatabaseConfiguredErrorFromConfig(a.Name, configVars)
+}
+
+// noDatabaseConfiguredErrorFromConfig is the pure, testable core of
+// noDatabaseConfiguredError: given the app's config variables, it returns the
+// targeted error message depending on whether DATABASE_URL is set.
+func noDatabaseConfiguredErrorFromConfig(appName string, configVars ConfigVariables) error {
+	for _, v := range configVars {
+		if v.Name == "DATABASE_URL" {
+			return fmt.Errorf(
+				"%s has a DATABASE_URL config variable set, but db utils are not enabled for it -- "+
+					"run `apppack modify app %s` (or recreate the app with `--external-database postgres|mysql`) "+
+					"to enable database commands",
+				appName, appName,
+			)
+		}
+	}
+
+	return fmt.Errorf(
+		"no database is configured for %s -- run `apppack create database` to create one, "+
+			"then attach it with `--addon-database`",
+		appName,
+	)
+}
+
 func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 	currentTime := time.Now()
 
@@ -1088,6 +1129,8 @@ func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 		extension = "sql.gz"
 	} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
 		extension = "dump"
+	} else if a.Settings.DBUtils.Engine == "" {
+		return nil, a.noDatabaseConfiguredError()
 	} else {
 		return nil, fmt.Errorf("unknown database engine %s", a.Settings.DBUtils.Engine)
 	}
@@ -1101,6 +1144,14 @@ func (a *App) DBDumpLocation(prefix string) (*s3.GetObjectInput, error) {
 }
 
 func (a *App) DBDumpLoadFamily() (*string, error) {
+	if err := a.LoadSettings(); err != nil {
+		return nil, err
+	}
+
+	if a.Settings.DBUtils.Engine == "" {
+		return nil, a.noDatabaseConfiguredError()
+	}
+
 	taskDefn, _, err := a.TaskDefinition("dbutils")
 	if err != nil {
 		return nil, err
@@ -1151,6 +1202,8 @@ func (a *App) DBShellTaskInfo() (*string, *string, error) {
 		exec = "mysql --database=" + database
 	} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
 		exec = "psql"
+	} else if a.Settings.DBUtils.Engine == "" {
+		return nil, nil, a.noDatabaseConfiguredError()
 	} else {
 		return nil, nil, fmt.Errorf("unknown database engine %s", a.Settings.DBUtils.Engine)
 	}
