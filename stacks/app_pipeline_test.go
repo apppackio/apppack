@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/apppackio/apppack/ui/uitest"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 )
@@ -675,71 +676,188 @@ func TestSelectRedisStack(t *testing.T) {
 	}
 }
 
-// --- validateExternalDatabase ---
+// --- engineFromDatabaseURL ---
 
-func TestValidateExternalDatabase(t *testing.T) {
+func TestEngineFromDatabaseURL(t *testing.T) {
 	t.Helper()
 
 	tests := []struct {
-		name       string
-		params     AppStackParameters
-		wantErrSub string // non-empty: error must contain this substring
+		name                   string
+		rawURL                 string
+		wantEngine             string
+		wantUnrecognizedScheme string
 	}{
+		{name: "empty string", rawURL: ""},
+		{name: "postgres", rawURL: "postgres://user:pass@host:5432/db", wantEngine: "postgres"},
+		{name: "postgresql", rawURL: "postgresql://user:pass@host:5432/db", wantEngine: "postgres"},
+		{name: "pgsql", rawURL: "pgsql://user:pass@host:5432/db", wantEngine: "postgres"},
+		{name: "psql", rawURL: "psql://user:pass@host:5432/db", wantEngine: "postgres"},
+		{name: "mysql", rawURL: "mysql://user:pass@host:3306/db", wantEngine: "mysql"},
+		{name: "mysql2", rawURL: "mysql2://user:pass@host:3306/db", wantEngine: "mysql"},
+		{name: "mariadb", rawURL: "mariadb://user:pass@host:3306/db", wantEngine: "mysql"},
+		{name: "scheme comparison is case-insensitive", rawURL: "POSTGRES://user:pass@host/db", wantEngine: "postgres"},
 		{
-			name:   "not set is fine",
-			params: AppStackParameters{},
+			name:                   "unknown scheme",
+			rawURL:                 "mongodb://user:pass@host:27017/db",
+			wantUnrecognizedScheme: "mongodb",
 		},
+		{name: "malformed URL (parse error)", rawURL: "://not-a-url"},
+		{name: "malformed URL (no scheme)", rawURL: "not a url at all"},
 		{
-			name:   "postgres alone is accepted",
-			params: AppStackParameters{ExternalDatabaseEngine: "postgres"},
-		},
-		{
-			name:   "mysql alone is accepted",
-			params: AppStackParameters{ExternalDatabaseEngine: "mysql"},
-		},
-		{
-			name: "combined with --addon-database errors",
-			params: AppStackParameters{
-				ExternalDatabaseEngine: "postgres",
-				DatabaseAddonEnabled:   true,
-			},
-			wantErrSub: "--external-database cannot be combined with --addon-database",
-		},
-		{
-			name: "combined with --addon-database-name errors",
-			params: AppStackParameters{
-				ExternalDatabaseEngine: "postgres",
-				DatabaseStackName:      "apppack-database-mydb",
-			},
-			wantErrSub: "--external-database cannot be combined with --addon-database",
-		},
-		{
-			name: "invalid engine errors",
-			params: AppStackParameters{
-				ExternalDatabaseEngine: "mongodb",
-			},
-			wantErrSub: "invalid --external-database engine",
+			// Guards against substring matching: the whole URL contains "mysql" (in
+			// the password) but the scheme is postgres, so the result must be postgres.
+			name:       "password contains mysql but scheme is postgres",
+			rawURL:     "postgres://user:mysqlpassword123@host:5432/db",
+			wantEngine: "postgres",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.params.validateExternalDatabase()
+			engine, unrecognizedScheme := engineFromDatabaseURL(tt.rawURL)
 
-			if tt.wantErrSub != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErrSub)
-				}
-				if !strings.Contains(err.Error(), tt.wantErrSub) {
-					t.Errorf("error %q does not contain %q", err.Error(), tt.wantErrSub)
-				}
-				return
+			if engine != tt.wantEngine {
+				t.Errorf("engine = %q, want %q", engine, tt.wantEngine)
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			if unrecognizedScheme != tt.wantUnrecognizedScheme {
+				t.Errorf("unrecognizedScheme = %q, want %q", unrecognizedScheme, tt.wantUnrecognizedScheme)
 			}
 		})
+	}
+}
+
+// --- detectExternalDatabaseEngine ---
+
+// TestDetectExternalDatabaseEngine covers the auto-detection algorithm in
+// SetInternalFields. The SSM read is stubbed via the fetchDatabaseURL function
+// variable so these run with no AWS calls.
+func TestDetectExternalDatabaseEngine(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name        string
+		params      AppStackParameters
+		databaseURL string
+		fetchOK     bool
+		wantEngine  string
+	}{
+		{
+			name:        "managed database via DatabaseStackName forces empty even with a postgres DATABASE_URL",
+			params:      AppStackParameters{Type: "app", DatabaseStackName: "apppack-database-mydb"},
+			databaseURL: "postgres://user:pass@host/db",
+			fetchOK:     true,
+			wantEngine:  "",
+		},
+		{
+			name:        "managed database via DatabaseAddonEnabled forces empty even with a postgres DATABASE_URL",
+			params:      AppStackParameters{Type: "app", DatabaseAddonEnabled: true},
+			databaseURL: "postgres://user:pass@host/db",
+			fetchOK:     true,
+			wantEngine:  "",
+		},
+		{
+			name:        "pipeline forces empty even with a postgres DATABASE_URL",
+			params:      AppStackParameters{Type: "pipeline"},
+			databaseURL: "postgres://user:pass@host/db",
+			fetchOK:     true,
+			wantEngine:  "",
+		},
+		{
+			name:       "SSM lookup failure yields empty",
+			params:     AppStackParameters{Type: "app"},
+			fetchOK:    false,
+			wantEngine: "",
+		},
+		{
+			name:        "postgres DATABASE_URL is detected for a plain app",
+			params:      AppStackParameters{Type: "app"},
+			databaseURL: "postgres://user:pass@host/db",
+			fetchOK:     true,
+			wantEngine:  "postgres",
+		},
+		{
+			name:        "mysql DATABASE_URL is detected for a plain app",
+			params:      AppStackParameters{Type: "app"},
+			databaseURL: "mysql://user:pass@host/db",
+			fetchOK:     true,
+			wantEngine:  "mysql",
+		},
+		{
+			name:        "unrecognized scheme yields empty (warning is side effect, not asserted here)",
+			params:      AppStackParameters{Type: "app"},
+			databaseURL: "mongodb://user:pass@host/db",
+			fetchOK:     true,
+			wantEngine:  "",
+		},
+		{
+			name:       "no DATABASE_URL set (app not yet created) yields empty, matching an unset app",
+			params:     AppStackParameters{Type: "app"},
+			fetchOK:    true,
+			wantEngine: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalFetch := fetchDatabaseURL
+			defer func() { fetchDatabaseURL = originalFetch }()
+
+			databaseURL := tt.databaseURL
+			fetchOK := tt.fetchOK
+			fetchDatabaseURL = func(_ aws.Config, _ string) (string, bool) {
+				return databaseURL, fetchOK
+			}
+
+			p := tt.params
+			p.detectExternalDatabaseEngine(aws.Config{})
+
+			if p.ExternalDatabaseEngine != tt.wantEngine {
+				t.Errorf("ExternalDatabaseEngine = %q, want %q", p.ExternalDatabaseEngine, tt.wantEngine)
+			}
+		})
+	}
+}
+
+// TestDetectExternalDatabaseEngineIdempotent verifies that repeatedly running detection
+// (as `apppack modify app` would on every invocation) converges rather than flip-flopping:
+// a managed database stays "" forever, and an app whose DATABASE_URL is later unset goes
+// back to "".
+func TestDetectExternalDatabaseEngineIdempotent(t *testing.T) {
+	t.Helper()
+
+	originalFetch := fetchDatabaseURL
+	defer func() { fetchDatabaseURL = originalFetch }()
+
+	p := AppStackParameters{Type: "app"}
+
+	// DATABASE_URL set to postgres -- engine detected.
+	fetchDatabaseURL = func(_ aws.Config, _ string) (string, bool) {
+		return "postgres://user:pass@host/db", true
+	}
+
+	p.detectExternalDatabaseEngine(aws.Config{})
+
+	if p.ExternalDatabaseEngine != "postgres" {
+		t.Fatalf("ExternalDatabaseEngine = %q, want %q after first detection", p.ExternalDatabaseEngine, "postgres")
+	}
+
+	// Running again with the same DATABASE_URL converges to the same value.
+	p.detectExternalDatabaseEngine(aws.Config{})
+
+	if p.ExternalDatabaseEngine != "postgres" {
+		t.Fatalf("ExternalDatabaseEngine = %q, want %q to stay stable on repeat", p.ExternalDatabaseEngine, "postgres")
+	}
+
+	// DATABASE_URL is later unset -- detection must go back to "".
+	fetchDatabaseURL = func(_ aws.Config, _ string) (string, bool) {
+		return "", false
+	}
+
+	p.detectExternalDatabaseEngine(aws.Config{})
+
+	if p.ExternalDatabaseEngine != "" {
+		t.Errorf("ExternalDatabaseEngine = %q, want empty after DATABASE_URL is unset", p.ExternalDatabaseEngine)
 	}
 }
 
