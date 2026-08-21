@@ -119,3 +119,21 @@ func (a *ConfigVariables) ToConsole(w *ansiterm.TabWriter) {
 		printRow(w, configVar.Name, configVar.Value)
 	}
 }
+
+// ToConsoleMasked prints the config vars to the console via the TabWriter,
+// obscuring values that look like secrets (see MaskConfigValue). It returns
+// the number of values that were masked.
+func (a *ConfigVariables) ToConsoleMasked(w *ansiterm.TabWriter) int {
+	masked := 0
+
+	for _, configVar := range *a {
+		value, wasMasked := MaskConfigValue(configVar.Name, configVar.Value)
+		if wasMasked {
+			masked++
+		}
+
+		printRow(w, configVar.Name, value)
+	}
+
+	return masked
+}

@@ -42,6 +42,8 @@ var configCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 }
 
+var revealGet bool
+
 // getCmd represents the get command
 var getCmd = &cobra.Command{
 	Use:                   "get <variable>",
@@ -59,7 +61,19 @@ var getCmd = &cobra.Command{
 		})
 		ui.Spinner.Stop()
 		checkErr(err)
-		fmt.Println(*resp.Parameter.Value)
+
+		value := *resp.Parameter.Value
+
+		if !revealGet && isatty.IsTerminal(os.Stdout.Fd()) {
+			if masked, ok := app.MaskConfigValue(args[0], value); ok {
+				fmt.Println(masked)
+				fmt.Fprintln(os.Stderr, "value masked — use --reveal to show")
+
+				return
+			}
+		}
+
+		fmt.Println(value)
 	},
 }
 
@@ -108,6 +122,8 @@ var unsetCmd = &cobra.Command{
 	},
 }
 
+var revealList bool
+
 // configListCmd represents the list command
 var configListCmd = &cobra.Command{
 	Use:                   "list",
@@ -133,12 +149,22 @@ var configListCmd = &cobra.Command{
 		// minwidth, tabwidth, padding, padchar, flags
 		w := ansiterm.NewTabWriter(os.Stdout, 8, 8, 0, '\t', 0)
 
-		if isatty.IsTerminal(os.Stdout.Fd()) {
+		isTerminal := isatty.IsTerminal(os.Stdout.Fd())
+		mask := isTerminal && !revealList
+
+		if isTerminal {
 			w.SetColorCapable(true)
 		}
 
 		ui.PrintHeaderln(AppName + " Config Vars")
-		configVars.ToConsole(w)
+
+		maskedCount := 0
+		if mask {
+			maskedCount = configVars.ToConsoleMasked(w)
+		} else {
+			configVars.ToConsole(w)
+		}
+
 		checkErr(w.Flush())
 
 		if a.IsReviewApp() {
@@ -148,9 +174,19 @@ var configListCmd = &cobra.Command{
 			parameters, err := a.GetConfig()
 			checkErr(err)
 			ui.Spinner.Stop()
-			parameters.ToConsole(w)
+
+			if mask {
+				maskedCount += parameters.ToConsoleMasked(w)
+			} else {
+				parameters.ToConsole(w)
+			}
+
 			ui.PrintHeaderln(a.Name + " Config Vars (inherited)")
 			checkErr(w.Flush())
+		}
+
+		if maskedCount > 0 {
+			fmt.Fprintf(os.Stderr, "%d value(s) masked — use --reveal to show\n", maskedCount)
 		}
 	},
 }
@@ -239,9 +275,11 @@ func init() {
 	)
 
 	configCmd.AddCommand(getCmd)
+	getCmd.Flags().BoolVar(&revealGet, "reveal", false, "show secret-looking values in plaintext instead of masking them")
 	configCmd.AddCommand(setCmd)
 	configCmd.AddCommand(unsetCmd)
 	configCmd.AddCommand(configListCmd)
+	configListCmd.Flags().BoolVar(&revealList, "reveal", false, "show secret-looking values in plaintext instead of masking them")
 	configCmd.AddCommand(configExportCmd)
 	configExportCmd.Flags().BoolVar(&includeManagedVars,
 		"all",
