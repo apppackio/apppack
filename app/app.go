@@ -1075,7 +1075,7 @@ func (a *App) GetECSEvents(service string) ([]ecstypes.ServiceEvent, error) {
 // It distinguishes two cases by checking for a DATABASE_URL config variable:
 //   - present: the app has an externally-managed database wired up via config,
 //     but db utils haven't been enabled for it -- point the user at
-//     `apppack modify app` / `--external-database`.
+//     `apppack modify app`, which infers the engine from DATABASE_URL.
 //   - absent: no database has been set up for the app at all -- point the user
 //     at `apppack create database`.
 func (a *App) noDatabaseConfiguredError() error {
@@ -1094,8 +1094,7 @@ func noDatabaseConfiguredErrorFromConfig(appName string, configVars ConfigVariab
 		if v.Name == "DATABASE_URL" {
 			return fmt.Errorf(
 				"%s has a DATABASE_URL config variable set, but db utils are not enabled for it -- "+
-					"run `apppack modify app %s` (or recreate the app with `--external-database postgres|mysql`) "+
-					"to enable database commands",
+					"run `apppack modify app %s` to enable database commands",
 				appName, appName,
 			)
 		}

@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-* `config list -j` works again. `-j` was a shorthand for `--json` on `config list` before 4.7.0 promoted `--json` to a global flag, and removing the global shorthand in 4.8.2 took `config list -j` with it. The shorthand is registered on `config list` again; `--json` continues to work everywhere.
-
 ## [4.8.2] - 2026-08-10
 
 ### Fixed

@@ -12,19 +12,24 @@ func TestNoDatabaseConfiguredErrorFromConfig(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		configVars ConfigVariables
-		wantErrSub string
+		name          string
+		configVars    ConfigVariables
+		wantErrSub    string
+		notWantErrSub string
 	}{
 		{
-			name:       "DATABASE_URL present -- points at modify app / --external-database",
+			name:       "DATABASE_URL present -- points at modify app",
 			configVars: ConfigVariables{{Name: "DATABASE_URL", Value: "postgres://example"}},
 			wantErrSub: "apppack modify app myapp",
 		},
 		{
-			name:       "DATABASE_URL present -- mentions --external-database",
-			configVars: ConfigVariables{{Name: "DATABASE_URL", Value: "postgres://example"}},
-			wantErrSub: "--external-database",
+			// The engine is inferred from DATABASE_URL, so there is no
+			// --external-database flag to advertise. Guard against a stale
+			// reference creeping back into user-facing text.
+			name:          "DATABASE_URL present -- does not advertise a removed flag",
+			configVars:    ConfigVariables{{Name: "DATABASE_URL", Value: "postgres://example"}},
+			wantErrSub:    "db utils are not enabled",
+			notWantErrSub: "--external-database",
 		},
 		{
 			name:       "DATABASE_URL absent -- points at create database",
@@ -49,6 +54,10 @@ func TestNoDatabaseConfiguredErrorFromConfig(t *testing.T) {
 
 			if !strings.Contains(err.Error(), tt.wantErrSub) {
 				t.Errorf("error %q does not contain %q", err.Error(), tt.wantErrSub)
+			}
+
+			if tt.notWantErrSub != "" && strings.Contains(err.Error(), tt.notWantErrSub) {
+				t.Errorf("error %q should not contain %q", err.Error(), tt.notWantErrSub)
 			}
 		})
 	}

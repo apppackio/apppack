@@ -242,12 +242,6 @@ func init() {
 	configCmd.AddCommand(setCmd)
 	configCmd.AddCommand(unsetCmd)
 	configCmd.AddCommand(configListCmd)
-	// `config list` carried its own --json/-j long before --json was promoted to a
-	// root persistent flag, so re-register it locally to keep `-j` working here.
-	// The shorthand can't live on the root flag: `db load` already owns -j for
-	// --jobs, and the two collide the moment cobra merges the flag sets.
-	// Same variable as the root flag, so `--json` behaves identically either way.
-	configListCmd.Flags().BoolVarP(&AsJSON, "json", "j", false, "output as JSON")
 	configCmd.AddCommand(configExportCmd)
 	configExportCmd.Flags().BoolVar(&includeManagedVars,
 		"all",

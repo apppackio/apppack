@@ -263,23 +263,6 @@ func TestRootJSONPersistentFlag(t *testing.T) {
 	}
 }
 
-// TestConfigListJSONShorthand verifies `config list -j` still works. The
-// shorthand lived on this command before --json was promoted to a root
-// persistent flag, so it has to stay registered locally -- it can't move to
-// the root flag, which would collide with `db load --jobs`.
-func TestConfigListJSONShorthand(t *testing.T) {
-	t.Parallel()
-
-	flag := configListCmd.Flags().Lookup("json")
-	if flag == nil {
-		t.Fatal("expected --json flag on configListCmd, not found")
-	}
-
-	if flag.Shorthand != "j" {
-		t.Errorf("expected -j shorthand on `config list --json`, got %q", flag.Shorthand)
-	}
-}
-
 // captureStdout redirects os.Stdout to a pipe, runs fn, then restores stdout
 // and returns what was written.
 func captureStdout(t *testing.T, fn func()) string {
