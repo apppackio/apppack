@@ -16,49 +16,49 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
 	"os"
-	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// crashAndRecover mirrors what main() wires up: handlePanic deferred as the
-// outermost recover around some code that panics.
-func crashAndRecover() {
-	defer handlePanic()
-	panic("boom: something exploded")
+// TestRun is a regression test for #177: a panic anywhere in the CLI used
+// to be recovered and reported, but the process still exited 0, hiding the
+// failure from CI. run() is what main() passes to os.Exit, so asserting on
+// its return value pins down the real exit code the process will produce.
+func TestRun(t *testing.T) {
+	t.Run("panic exits non-zero", func(t *testing.T) {
+		exitCode := run(func() { panic("boom: something exploded") })
+		assert.Equal(t, 1, exitCode)
+	})
+
+	t.Run("no panic exits zero", func(t *testing.T) {
+		exitCode := run(func() {})
+		assert.Equal(t, 0, exitCode)
+	})
 }
 
-// TestHandlePanicSubprocess is a regression test for #177: the CLI used to
-// recover from panics and still exit 0, hiding failures from CI. It
-// re-execs this same test binary in a subprocess (BE_CRASHER=1) so it can
-// observe the real process exit code produced by os.Exit, which can't be
-// captured within the test process itself.
-func TestHandlePanicSubprocess(t *testing.T) {
-	if os.Getenv("BE_CRASHER") == "1" {
-		crashAndRecover()
-		return
+// TestReportPanic verifies the panic message is written to stderr (not
+// stdout, which was the previous behaviour) so it doesn't get mixed into a
+// command's normal output.
+func TestReportPanic(t *testing.T) {
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
 	}
+	os.Stderr = w
+	defer func() { os.Stderr = origStderr }()
 
-	// #nosec G204 -- os.Args[0] is this test binary, not user input.
-	cmd := exec.Command(os.Args[0], "-test.run=TestHandlePanicSubprocess")
-	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	reportPanic("boom: something exploded")
 
-	err := cmd.Run()
+	_ = w.Close()
+	os.Stderr = origStderr
 
-	var exitErr *exec.ExitError
-	require.ErrorAs(t, err, &exitErr, "expected process to exit with an error, got: %v", err)
-	assert.Equal(t, 1, exitErr.ExitCode(), "a panic must exit non-zero so CI can detect it")
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	output := string(buf[:n])
 
-	// showCursor() writes a terminal escape sequence to stdout (matching the
-	// SIGTERM path), but the panic message itself must go to stderr.
-	assert.False(t, strings.Contains(stdout.String(), "Something went wrong"), "panic message should not be written to stdout, got: %q", stdout.String())
-	assert.True(t, strings.Contains(stderr.String(), "Something went wrong"), "expected panic message on stderr, got: %q", stderr.String())
+	assert.Contains(t, output, "Something went wrong")
+	assert.Contains(t, output, "boom: something exploded")
 }

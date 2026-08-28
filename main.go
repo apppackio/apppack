@@ -57,24 +57,32 @@ func main() {
 		}
 	}
 
-	// Registered unconditionally so behaviour is identical whether or not
-	// SentryDSN was set at build time -- a panic must always exit non-zero.
-	defer handlePanic()
-
-	cmd.Execute()
+	// os.Exit is called exactly once, directly from main -- never from a
+	// deferred function -- so behaviour is identical whether or not
+	// SentryDSN was set at build time, and a panic always exits non-zero.
+	os.Exit(run(cmd.Execute))
 }
 
-// handlePanic recovers from a panic anywhere in the CLI, reports it to
-// Sentry (if configured), prints a message to stderr, and exits with a
-// non-zero status so callers (CI, shell scripts, etc.) can detect the
-// failure. If this is not deferred as the outermost recover, the panic
-// resumes and the process crashes normally.
-func handlePanic() {
-	err := recover()
-	if err == nil {
-		return
-	}
+// run executes fn and converts a panic into a non-zero exit code instead of
+// letting it silently exit 0. It reports the panic to Sentry (if
+// sentry.Init was called), prints a message to stderr, and restores the
+// terminal cursor before returning.
+func run(fn func()) (exitCode int) {
+	defer func() {
+		if err := recover(); err != nil {
+			reportPanic(err)
+			exitCode = 1
+		}
+	}()
 
+	fn()
+
+	return 0
+}
+
+// reportPanic prints a user-facing message for a recovered panic to stderr
+// and reports it to Sentry.
+func reportPanic(err any) {
 	fmt.Fprintln(os.Stderr, aurora.Faint(fmt.Sprintf("%v", err)))
 	fmt.Fprintln(os.Stderr, aurora.Red("✖"), "Something went wrong. Please retry.")
 	fmt.Fprintln(os.Stderr, "  Contact support if the issue persists.")
@@ -85,7 +93,6 @@ func handlePanic() {
 	sentry.Flush(time.Second * 3)
 
 	showCursor()
-	os.Exit(1)
 }
 
 // showCursor sends the terminal a command to show the cursor on
