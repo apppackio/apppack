@@ -55,19 +55,37 @@ func main() {
 		if err != nil {
 			log.Fatalf("sentry.Init: %s", err)
 		}
-
-		defer func() {
-			if err := recover(); err != nil {
-				fmt.Println(aurora.Faint(fmt.Sprintf("%v", err)))
-				fmt.Println(aurora.Red("✖"), "Something went wrong. Please retry.")
-				fmt.Println("  Contact support if the issue persists.")
-				sentry.CurrentHub().Recover(err)
-				sentry.Flush(time.Second * 3)
-			}
-		}()
 	}
 
+	// Registered unconditionally so behaviour is identical whether or not
+	// SentryDSN was set at build time -- a panic must always exit non-zero.
+	defer handlePanic()
+
 	cmd.Execute()
+}
+
+// handlePanic recovers from a panic anywhere in the CLI, reports it to
+// Sentry (if configured), prints a message to stderr, and exits with a
+// non-zero status so callers (CI, shell scripts, etc.) can detect the
+// failure. If this is not deferred as the outermost recover, the panic
+// resumes and the process crashes normally.
+func handlePanic() {
+	err := recover()
+	if err == nil {
+		return
+	}
+
+	fmt.Fprintln(os.Stderr, aurora.Faint(fmt.Sprintf("%v", err)))
+	fmt.Fprintln(os.Stderr, aurora.Red("✖"), "Something went wrong. Please retry.")
+	fmt.Fprintln(os.Stderr, "  Contact support if the issue persists.")
+
+	// Safe even when sentry.Init was never called: CurrentHub() returns a
+	// hub with a no-op client in that case.
+	sentry.CurrentHub().Recover(err)
+	sentry.Flush(time.Second * 3)
+
+	showCursor()
+	os.Exit(1)
 }
 
 // showCursor sends the terminal a command to show the cursor on
