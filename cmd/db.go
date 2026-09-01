@@ -251,11 +251,11 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			taskOverride,
 			true,
 		)
+		checkErr(err)
 		ui.Spinner.Stop()
 		fmt.Println(aurora.Faint("starting task " + *task.TaskArn))
 		ui.StartSpinner()
 		ui.Spinner.Suffix = " loading database"
-		checkErr(err)
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
 		ui.Spinner.Stop()
