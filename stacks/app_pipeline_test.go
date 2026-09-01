@@ -679,7 +679,7 @@ func TestSelectRedisStack(t *testing.T) {
 // --- engineFromDatabaseURL ---
 
 func TestEngineFromDatabaseURL(t *testing.T) {
-	t.Helper()
+	t.Parallel()
 
 	tests := []struct {
 		name                   string
@@ -733,8 +733,6 @@ func TestEngineFromDatabaseURL(t *testing.T) {
 // SetInternalFields. The SSM read is stubbed via the fetchDatabaseURL function
 // variable so these run with no AWS calls.
 func TestDetectExternalDatabaseEngine(t *testing.T) {
-	t.Helper()
-
 	tests := []struct {
 		name        string
 		params      AppStackParameters
@@ -824,8 +822,6 @@ func TestDetectExternalDatabaseEngine(t *testing.T) {
 // a managed database stays "" forever, and an app whose DATABASE_URL is later unset goes
 // back to "".
 func TestDetectExternalDatabaseEngineIdempotent(t *testing.T) {
-	t.Helper()
-
 	originalFetch := fetchDatabaseURL
 	defer func() { fetchDatabaseURL = originalFetch }()
 

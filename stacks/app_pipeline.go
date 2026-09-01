@@ -147,7 +147,7 @@ func externalDatabaseConfigPath(appName string) string {
 // package-level function variable so tests can simulate SSM success/failure
 // without making real AWS calls -- the same seam style used elsewhere in this
 // package for injecting testable behavior around AWS-backed lookups.
-var fetchDatabaseURL = func(cfg aws.Config, appName string) (string, bool) {
+var fetchDatabaseURL = func(cfg aws.Config, appName string) (string, bool) { // skipcq: CRT-P0003
 	param, err := app.SsmParameter(cfg, externalDatabaseConfigPath(appName))
 	if err != nil || param == nil || param.Value == nil {
 		return "", false
@@ -199,7 +199,7 @@ func engineFromDatabaseURL(rawURL string) (engine, unrecognizedScheme string) {
 // (and its DATABASE_URL parameter) exists, so a lookup miss is the expected, common case
 // -- never fatal, never noisy. The one exception is a recognized-but-unmappable scheme,
 // where staying silent would be exactly the unhelpful-error problem #146 is about.
-func (p *AppStackParameters) detectExternalDatabaseEngine(cfg aws.Config) {
+func (p *AppStackParameters) detectExternalDatabaseEngine(cfg aws.Config) { // skipcq: CRT-P0003
 	// A managed AppPack database always wins -- the two are mutually exclusive, and
 	// there is no longer a user input to reject, so we just force the field off.
 	if p.DatabaseAddonEnabled || p.DatabaseStackName != "" {
