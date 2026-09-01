@@ -713,7 +713,10 @@ func TestEngineFromDatabaseURL(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			engine, unrecognizedScheme := engineFromDatabaseURL(tt.rawURL)
 
 			if engine != tt.wantEngine {
