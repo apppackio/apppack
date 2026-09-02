@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
 
+	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/auth"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ddb"
@@ -49,12 +51,20 @@ type AppStackParameters struct {
 	DatabaseStackName    string `flag:"addon-database-name;fmtString:apppack-database-%s"`
 	RedisAddonEnabled    bool   `flag:"addon-redis" cfnignore:"-"`
 	RedisStackName       string `flag:"addon-redis-name;fmtString:apppack-redis-%s"`
-	SQSQueueEnabled      bool   `flag:"addon-sqs"`
-	RepositoryType       string
-	Fargate              bool     `flag:"ec2;negate"`
-	AllowedUsers         []string `flag:"users"`
-	BuildWebhook         bool     `flag:"disable-build-webhook;negate"`
-	CustomTaskPolicyARN  string   `cfnparam:"CustomTaskPolicyArn"`
+	// ExternalDatabaseEngine IS a real CloudFormation parameter (unlike DatabaseAddonEnabled /
+	// RedisAddonEnabled above): it drives the db-utils container image tag at template render
+	// time for apps using an externally-managed database (Neon, Crunchy, etc.) reachable via
+	// the DATABASE_URL config variable. Valid values: "", "postgres", "mysql".
+	//
+	// There is no user-facing flag for this -- it is not settable directly. It is inferred
+	// in SetInternalFields from the app's DATABASE_URL scheme; see detectExternalDatabaseEngine.
+	ExternalDatabaseEngine string
+	SQSQueueEnabled        bool `flag:"addon-sqs"`
+	RepositoryType         string
+	Fargate                bool     `flag:"ec2;negate"`
+	AllowedUsers           []string `flag:"users"`
+	BuildWebhook           bool     `flag:"disable-build-webhook;negate"`
+	CustomTaskPolicyARN    string   `cfnparam:"CustomTaskPolicyArn"`
 }
 
 var DefaultAppStackParameters = AppStackParameters{
@@ -113,7 +123,116 @@ func (p *AppStackParameters) SetInternalFields(cfg aws.Config, name *string) err
 		return err
 	}
 
+	// Infer ExternalDatabaseEngine from DATABASE_URL now that DatabaseStackName is
+	// fully resolved. This must run after resolveAddonStacks so a bare --addon-database
+	// (resolved to a stack name above) correctly wins over any external DATABASE_URL.
+	p.detectExternalDatabaseEngine(cfg)
+
 	return nil
+}
+
+const (
+	externalDatabaseEnginePostgres = "postgres"
+	externalDatabaseEngineMySQL    = "mysql"
+)
+
+// externalDatabaseConfigPath returns the SSM path for the app's DATABASE_URL config
+// variable. Review apps are out of scope for external databases (see
+// detectExternalDatabaseEngine), so this always uses the plain app config path.
+func externalDatabaseConfigPath(appName string) string {
+	return fmt.Sprintf("/apppack/apps/%s/config/DATABASE_URL", appName)
+}
+
+// fetchDatabaseURL fetches the app's DATABASE_URL config variable. It is a
+// package-level function variable so tests can simulate SSM success/failure
+// without making real AWS calls -- the same seam style used elsewhere in this
+// package for injecting testable behavior around AWS-backed lookups.
+var fetchDatabaseURL = func(cfg aws.Config, appName string) (string, bool) { // skipcq: CRT-P0003
+	param, err := app.SsmParameter(cfg, externalDatabaseConfigPath(appName))
+	if err != nil || param == nil || param.Value == nil {
+		return "", false
+	}
+
+	return *param.Value, true
+}
+
+// engineFromDatabaseURL infers a CloudFormation-accepted ExternalDatabaseEngine value
+// from a DATABASE_URL's scheme, compared case-insensitively and only against the
+// scheme -- never by substring-matching the whole URL, since a password could
+// legitimately contain a string like "mysql".
+//
+// Returns ("", "") for an empty or unparseable URL (nothing to report -- this is the
+// expected case before an app has a DATABASE_URL at all). Returns ("", scheme) when the
+// URL parses but the scheme is not one we recognize, so the caller can warn the user by
+// name rather than silently doing nothing.
+func engineFromDatabaseURL(rawURL string) (engine, unrecognizedScheme string) {
+	if rawURL == "" {
+		return "", ""
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" {
+		return "", ""
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+
+	switch scheme {
+	case "postgres", "postgresql", "pgsql", "psql":
+		return externalDatabaseEnginePostgres, ""
+	case "mysql", "mysql2", "mariadb":
+		return externalDatabaseEngineMySQL, ""
+	default:
+		return "", scheme
+	}
+}
+
+// detectExternalDatabaseEngine populates ExternalDatabaseEngine by inspecting the app's
+// DATABASE_URL, so the user never has to name the engine themselves. It runs for both
+// `create app` and `modify app` (via SetInternalFields), which makes `modify app` the
+// natural way to turn external db-utils support on after the app's DATABASE_URL is set.
+//
+// Idempotency: running this repeatedly must converge. An app with a managed database
+// stays "" forever; an app whose DATABASE_URL is later unset goes back to "".
+//
+// Every failure mode here is silent-and-safe: a `create app` run happens before the app
+// (and its DATABASE_URL parameter) exists, so a lookup miss is the expected, common case
+// -- never fatal, never noisy. The one exception is a recognized-but-unmappable scheme,
+// where staying silent would be exactly the unhelpful-error problem #146 is about.
+func (p *AppStackParameters) detectExternalDatabaseEngine(cfg aws.Config) { // skipcq: CRT-P0003
+	// A managed AppPack database always wins -- the two are mutually exclusive, and
+	// there is no longer a user input to reject, so we just force the field off.
+	if p.DatabaseAddonEnabled || p.DatabaseStackName != "" {
+		p.ExternalDatabaseEngine = ""
+
+		return
+	}
+
+	// The CloudFormation condition is And(ExternalDatabaseEngine != "", IsApp), so this
+	// can never take effect for pipelines or review apps.
+	if p.Type != DefaultAppStackParameters.Type {
+		p.ExternalDatabaseEngine = ""
+
+		return
+	}
+
+	databaseURL, ok := fetchDatabaseURL(cfg, p.Name)
+	if !ok {
+		p.ExternalDatabaseEngine = ""
+
+		return
+	}
+
+	engine, unrecognizedScheme := engineFromDatabaseURL(databaseURL)
+	if engine == "" && unrecognizedScheme != "" {
+		ui.PrintWarning(fmt.Sprintf(
+			"could not determine a database engine from %s's DATABASE_URL scheme %q -- "+
+				"db commands (`apppack db shell`/`apppack db dump`) will not be enabled for it",
+			p.Name, unrecognizedScheme,
+		))
+	}
+
+	p.ExternalDatabaseEngine = engine
 }
 
 // resolveAddonStacks auto-selects database/redis stack names when the boolean

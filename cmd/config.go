@@ -34,6 +34,57 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// databaseURLConfigVar is the config variable an externally-managed database is
+// reached through. Setting it is necessary but not sufficient: db utils also have
+// to be enabled on the app's stack before `apppack db ...` works.
+const databaseURLConfigVar = "DATABASE_URL"
+
+// hintEnableDBUtils prints a follow-up instruction after DATABASE_URL is stored on
+// an app whose db utils aren't enabled yet.
+//
+// Setting DATABASE_URL is the natural thing a user does when pointing an app at an
+// externally-managed database (Neon, Crunchy, etc.), but on its own it does nothing
+// for `apppack db shell`/`db dump`/`db load` -- those need the db-utils resources,
+// which only get created when the app's stack is updated. `apppack modify app` infers
+// the engine from this variable, so it's the whole of the remaining work; without a
+// nudge here there is nothing to tell the user that second step exists.
+//
+// This is advisory only. The config variable has already been stored successfully by
+// the time we're called, so every failure path is silent -- a hint is never worth
+// turning a succeeded command into a failed one.
+func hintEnableDBUtils(a *app.App) {
+	if !shouldHintEnableDBUtils(a) {
+		return
+	}
+
+	printWarning(fmt.Sprintf(
+		"db commands are not enabled for %s yet -- run `apppack modify app %s` to enable "+
+			"`apppack db shell`/`db dump`/`db load` against this database",
+		a.Name, a.Name,
+	))
+}
+
+// shouldHintEnableDBUtils is the decision half of hintEnableDBUtils, split out so the
+// branches are testable without stdout capture. A settings-load failure returns false:
+// we can't tell whether db utils are enabled, and guessing wrong means either nagging
+// a correctly-configured app or staying quiet on a misconfigured one -- silence is the
+// safer error for a purely advisory message.
+func shouldHintEnableDBUtils(a *app.App) bool {
+	// Review apps and pipelines can't use an external database (the CloudFormation
+	// condition requires IsApp), so the hint would be dead advice.
+	if a.IsReviewApp() || a.Pipeline {
+		return false
+	}
+
+	if err := a.LoadSettings(); err != nil {
+		return false
+	}
+
+	// A non-empty engine means db utils are already wired up, either by a managed
+	// AppPack database or by a previous `modify app` for this external one.
+	return a.Settings.DBUtils.Engine == ""
+}
+
 // configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:                   "config",
@@ -84,6 +135,10 @@ var setCmd = &cobra.Command{
 		checkErr(err)
 		ui.Spinner.Stop()
 		printSuccess("stored config variable " + name)
+
+		if name == databaseURLConfigVar {
+			hintEnableDBUtils(a)
+		}
 	},
 }
 
@@ -202,6 +257,8 @@ var configImportCmd = &cobra.Command{
 		checkErr(err)
 		imported := 0
 		skipped := 0
+		databaseURLImported := false
+
 		for key, val := range config {
 			err = a.SetConfig(key, val, importConfigOverride)
 			if err != nil {
@@ -216,6 +273,10 @@ var configImportCmd = &cobra.Command{
 				checkErr(err)
 			} else {
 				imported++
+
+				if key == databaseURLConfigVar {
+					databaseURLImported = true
+				}
 			}
 		}
 		msg := fmt.Sprintf("imported %d variables", imported)
@@ -224,6 +285,10 @@ var configImportCmd = &cobra.Command{
 		}
 		ui.Spinner.Stop()
 		printSuccess(msg)
+
+		if databaseURLImported {
+			hintEnableDBUtils(a)
+		}
 	},
 }
 
