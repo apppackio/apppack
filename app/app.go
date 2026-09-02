@@ -1193,12 +1193,15 @@ func (a *App) DBShellTaskInfo() (*string, *string, error) {
 	var exec string
 
 	if strings.Contains(a.Settings.DBUtils.Engine, "mysql") {
-		database := a.Name
 		if a.IsReviewApp() {
-			database = fmt.Sprintf("%s-pr%s", database, *a.ReviewApp)
+			exec = "mysql --database=" + fmt.Sprintf("%s-pr%s", a.Name, *a.ReviewApp)
+		} else {
+			// No --database here: the db-utils image writes the database name
+			// parsed from DATABASE_URL into ~/.my.cnf, so a bare `mysql` resolves
+			// the right database whether it's a managed AppPack database or an
+			// externally-managed one (mirrors psql/~/.pg_service.conf below).
+			exec = "mysql"
 		}
-
-		exec = "mysql --database=" + database
 	} else if strings.Contains(a.Settings.DBUtils.Engine, "postgres") {
 		exec = "psql"
 	} else if a.Settings.DBUtils.Engine == "" {
