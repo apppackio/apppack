@@ -24,12 +24,7 @@ func TestBooleanAsYesNo(t *testing.T) {
 func TestYesNoOptions(t *testing.T) {
 	t.Parallel()
 
-	opts := YesNoOptions(true)
-	if len(opts) != 2 {
-		t.Fatalf("expected 2 options, got %d", len(opts))
-	}
-
-	opts = YesNoOptions(false)
+	opts := YesNoOptions()
 	if len(opts) != 2 {
 		t.Fatalf("expected 2 options, got %d", len(opts))
 	}
@@ -68,7 +63,7 @@ func TestYesNoOptions_RendersAllOptionsWhenDefaultIsNo(t *testing.T) {
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Enabled").
-				Options(YesNoOptions(false)...).
+				Options(YesNoOptions()...).
 				Value(&selected),
 		),
 	)

@@ -633,7 +633,7 @@ func AppPrivateS3Form(verbose, helpText string, defaultEnabled bool) (*huh.Form,
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("Private S3 Bucket").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -653,7 +653,7 @@ func AppPublicS3Form(verbose, helpText string, defaultEnabled bool) (*huh.Form, 
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("Public S3 Bucket").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -673,7 +673,7 @@ func AppSQSForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *stri
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("SQS Queue").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -693,7 +693,7 @@ func AppDatabaseForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, 
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("Database").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -749,7 +749,7 @@ func AppRedisForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *st
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("Redis").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -794,7 +794,7 @@ func AppSESForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *stri
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("SES (email)").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)

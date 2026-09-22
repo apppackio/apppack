@@ -223,7 +223,7 @@ func RedisMultiAZForm(defaultMultiAZ bool) (*huh.Form, *string) {
 				Description("Multiple availability zones (AZs) provide more resilience in the case of an AZ outage,\nbut double the cost at AWS. For more info see\nhttps://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html."),
 			huh.NewSelect[string]().
 				Title("Multi AZ").
-				Options(ui.YesNoOptions(defaultMultiAZ)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)

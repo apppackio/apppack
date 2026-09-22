@@ -33,7 +33,7 @@ func PauseUntilEnter(msg string) {
 // that match came from Value or Selected, and it isn't clamped, so a match
 // at a non-zero index scrolls earlier options off the top of the list on
 // first render. Seeding the bound value alone avoids that code path.
-func YesNoOptions(defaultValue bool) []huh.Option[string] {
+func YesNoOptions() []huh.Option[string] {
 	return []huh.Option[string]{
 		huh.NewOption("yes", "yes"),
 		huh.NewOption("no", "no"),

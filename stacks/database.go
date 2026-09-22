@@ -430,7 +430,7 @@ func DatabaseAuroraForm(defaultAurora bool) (*huh.Form, *string) {
 				Description("Aurora provides many benefits over the standard engines, but is not available on very small\ninstance sizes. For more info see https://aws.amazon.com/rds/aurora/."),
 			huh.NewSelect[string]().
 				Title("Aurora").
-				Options(ui.YesNoOptions(defaultAurora)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -475,7 +475,7 @@ func DatabaseMultiAZForm(defaultMultiAZ bool) (*huh.Form, *string) {
 				Description("Multiple availability zones (AZs) provide more resilience in the case of an AZ outage,\nbut double the cost at AWS. In the case of Aurora databases, enabling multiple availability\nzones will give you access to a read-replica. For more info see\nhttps://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html."),
 			huh.NewSelect[string]().
 				Title("Multi AZ").
-				Options(ui.YesNoOptions(defaultMultiAZ)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
