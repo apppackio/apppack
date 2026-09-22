@@ -347,11 +347,7 @@ func (a *AppStack) AskForDatabaseStack(cfg aws.Config) error {
 	for i, db := range databases {
 		parts := strings.Split(db, " ")
 		stackName := fmt.Sprintf(databaseStackNameTmpl, parts[0])
-		opt := huh.NewOption(db, stackName)
-		if stackName == a.Parameters.DatabaseStackName {
-			opt = opt.Selected(true)
-		}
-		options[i] = opt
+		options[i] = huh.NewOption(db, stackName)
 	}
 
 	var verbose string
@@ -361,7 +357,7 @@ func (a *AppStack) AskForDatabaseStack(cfg aws.Config) error {
 		verbose = "Which database cluster should this app's database be setup on?"
 	}
 
-	form, selectedPtr := AppDatabaseStackForm(options, verbose)
+	form, selectedPtr := AppDatabaseStackForm(options, verbose, a.Parameters.DatabaseStackName)
 	if err := form.Run(); err != nil {
 		return err
 	}
@@ -434,11 +430,7 @@ func (a *AppStack) AskForRedisStack(cfg aws.Config) error {
 	options := make([]huh.Option[string], len(redises))
 	for i, r := range redises {
 		stackName := fmt.Sprintf(redisStackNameTmpl, r)
-		opt := huh.NewOption(r, stackName)
-		if stackName == a.Parameters.RedisStackName {
-			opt = opt.Selected(true)
-		}
-		options[i] = opt
+		options[i] = huh.NewOption(r, stackName)
 	}
 
 	var verbose string
@@ -448,7 +440,7 @@ func (a *AppStack) AskForRedisStack(cfg aws.Config) error {
 		verbose = "Which Redis instance should this app's user be setup on?"
 	}
 
-	form, selectedPtr := AppRedisStackForm(options, verbose)
+	form, selectedPtr := AppRedisStackForm(options, verbose, a.Parameters.RedisStackName)
 	if err := form.Run(); err != nil {
 		return err
 	}
@@ -641,7 +633,7 @@ func AppPrivateS3Form(verbose, helpText string, defaultEnabled bool) (*huh.Form,
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("Private S3 Bucket").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -661,7 +653,7 @@ func AppPublicS3Form(verbose, helpText string, defaultEnabled bool) (*huh.Form, 
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("Public S3 Bucket").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -681,7 +673,7 @@ func AppSQSForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *stri
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("SQS Queue").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -701,7 +693,7 @@ func AppDatabaseForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, 
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("Database").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -710,14 +702,26 @@ func AppDatabaseForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, 
 }
 
 // AppDatabaseStackForm builds the interactive form for selecting a database stack.
-// Returns the form and a pointer to the selected stack name value.
+// Returns the form and a pointer to the selected stack name value. defaultValue
+// is the stack name to pre-select (e.g. the app's current DatabaseStackName);
+// pass "" to leave the cursor on the first option.
 //
-// Do NOT pre-seed `selected` with options[0].Value — huh's Select widget
-// positions the cursor on the first option whose Value matches `*value`, and
-// only falls back to the option with `.Selected(true)` if no match is found.
-// Pre-seeding would silently override the caller's pre-selection.
-func AppDatabaseStackForm(options []huh.Option[string], verbose string) (*huh.Form, *string) {
-	var selected string
+// The cursor position must be driven by seeding `selected` with defaultValue
+// before the field is built, via `.Value(&selected)` below. Do NOT mark any
+// option `.Selected(true)` instead (or in addition): huh.Select's Options()
+// path (field_select.go's selectOption, unchanged as of huh v1.0.0) sets
+// `viewport.YOffset = s.selected` unconditionally, with no clamping, for
+// whichever option matched first — whether the match came from the bound
+// Value or from an explicit `.Selected(true)`. When no explicit height is
+// set the viewport height equals the option count, so a match at index N
+// scrolls the first N options off the top and they never render on first
+// paint (only a subsequent arrow keypress repairs it, via the clamped
+// SetYOffset on that path). Seeding the bound value instead avoids this:
+// `.Value()` routes through `Accessor()`/`selectValue()`, which sets
+// `s.selected` without touching `YOffset`. See
+// https://github.com/apppackio/apppack/issues/181.
+func AppDatabaseStackForm(options []huh.Option[string], verbose, defaultValue string) (*huh.Form, *string) {
+	selected := defaultValue
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -745,7 +749,7 @@ func AppRedisForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *st
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("Redis").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)
@@ -755,10 +759,14 @@ func AppRedisForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *st
 
 // AppRedisStackForm builds the interactive form for selecting a Redis stack.
 // Returns the form and a pointer to the selected stack name value.
+// defaultValue is the stack name to pre-select (e.g. the app's current
+// RedisStackName); pass "" to leave the cursor on the first option.
 //
-// Same rationale as AppDatabaseStackForm: do NOT pre-seed selected.
-func AppRedisStackForm(options []huh.Option[string], verbose string) (*huh.Form, *string) {
-	var selected string
+// Same rationale as AppDatabaseStackForm — see its doc comment: the cursor
+// position must come from seeding `selected` with defaultValue via
+// `.Value(&selected)`, never from `.Selected(true)` on an option.
+func AppRedisStackForm(options []huh.Option[string], verbose, defaultValue string) (*huh.Form, *string) {
+	selected := defaultValue
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -786,7 +794,7 @@ func AppSESForm(verbose, helpText string, defaultEnabled bool) (*huh.Form, *stri
 				Description(helpText),
 			huh.NewSelect[string]().
 				Title("SES (email)").
-				Options(ui.YesNoOptions(defaultEnabled)...).
+				Options(ui.YesNoOptions()...).
 				Value(&selected),
 		),
 	)

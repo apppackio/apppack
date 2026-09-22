@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/apppackio/apppack/ui/uitest"
@@ -60,5 +61,34 @@ func TestRedisInstanceClassForm_SelectSecond(t *testing.T) {
 
 	if *selectedPtr != "cache.t4g.small" {
 		t.Errorf("expected 'cache.t4g.small', got %q", *selectedPtr)
+	}
+}
+
+// TestRedisInstanceClassForm_RendersAllClassesWhenDefaultIsNotFirst is a
+// regression test for https://github.com/apppackio/apppack/issues/181: when
+// the default instance class isn't the first option, every class must still
+// render on initial paint, not just the ones at/after the selected index.
+func TestRedisInstanceClassForm_RendersAllClassesWhenDefaultIsNotFirst(t *testing.T) {
+	classes := []string{
+		"cache.t4g.micro",
+		"cache.t4g.small",
+		"cache.t4g.medium",
+		"cache.t4g.large",
+		"cache.r6g.large",
+	}
+
+	form, _ := RedisInstanceClassForm(classes, "cache.t4g.large")
+	view := uitest.RenderView(form, 100, 40)
+
+	idx := strings.Index(view, "Instance Class")
+	if idx == -1 {
+		t.Fatalf("expected view to contain the select title, got:\n%s", view)
+	}
+	optionRows := view[idx:]
+
+	for _, c := range classes {
+		if !strings.Contains(optionRows, c) {
+			t.Errorf("expected %q to be rendered, got:\n%s", c, optionRows)
+		}
 	}
 }

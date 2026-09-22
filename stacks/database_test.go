@@ -1,6 +1,7 @@
 package stacks
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/apppackio/apppack/ui/uitest"
@@ -162,6 +163,35 @@ func TestDatabaseInstanceClassForm_SelectSecond(t *testing.T) {
 
 	if *selectedPtr != "db.t4g.large" {
 		t.Errorf("expected 'db.t4g.large', got %q", *selectedPtr)
+	}
+}
+
+// TestDatabaseInstanceClassForm_RendersAllClassesWhenDefaultIsNotFirst is a
+// regression test for https://github.com/apppackio/apppack/issues/181: when
+// the default instance class isn't the first option, every class must still
+// render on initial paint, not just the ones at/after the selected index.
+func TestDatabaseInstanceClassForm_RendersAllClassesWhenDefaultIsNotFirst(t *testing.T) {
+	classes := []string{
+		"db.t4g.micro",
+		"db.t4g.small",
+		"db.t4g.medium",
+		"db.t4g.large",
+		"db.r6g.large",
+	}
+
+	form, _ := DatabaseInstanceClassForm(classes, "db.t4g.large")
+	view := uitest.RenderView(form, 100, 40)
+
+	idx := strings.Index(view, "Instance Class")
+	if idx == -1 {
+		t.Fatalf("expected view to contain the select title, got:\n%s", view)
+	}
+	optionRows := view[idx:]
+
+	for _, c := range classes {
+		if !strings.Contains(optionRows, c) {
+			t.Errorf("expected %q to be rendered, got:\n%s", c, optionRows)
+		}
 	}
 }
 
