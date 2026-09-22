@@ -403,11 +403,6 @@ func DatabaseEngineForm(defaultEngine string) (*huh.Form, *string) {
 		huh.NewOption("postgres", "postgres"),
 		huh.NewOption("mysql", "mysql"),
 	}
-	if defaultEngine == "mysql" {
-		options[1] = options[1].Selected(true)
-	} else {
-		options[0] = options[0].Selected(true)
-	}
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -450,11 +445,7 @@ func DatabaseInstanceClassForm(instanceClasses []string, defaultClass string) (*
 
 	options := make([]huh.Option[string], len(instanceClasses))
 	for i, c := range instanceClasses {
-		opt := huh.NewOption(c, c)
-		if c == defaultClass {
-			opt = opt.Selected(true)
-		}
-		options[i] = opt
+		options[i] = huh.NewOption(c, c)
 	}
 
 	form := huh.NewForm(

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/apppackio/apppack/ui/uitest"
 	"github.com/charmbracelet/huh"
 )
 
@@ -47,6 +48,44 @@ func TestYesNoToBool(t *testing.T) {
 
 	if YesNoToBool("anything") {
 		t.Error("expected false for non-yes value")
+	}
+}
+
+// TestYesNoOptions_RendersAllOptionsWhenDefaultIsNo is a regression test for
+// https://github.com/apppackio/apppack/issues/181: when the default is "no"
+// (the second option), huh's Select field must still render "yes" on
+// initial paint. It previously scrolled "yes" off the top of the viewport
+// because huh's `selectOption` sets `viewport.YOffset` to the selected
+// index without clamping, and an option marked `.Selected(true)` at a
+// non-zero index triggers that path. Asserting only the bound value here
+// would pass against the bug (the value was always correct) — the
+// regression is specifically about what's rendered, so we inspect the view.
+func TestYesNoOptions_RendersAllOptionsWhenDefaultIsNo(t *testing.T) {
+	t.Parallel()
+
+	selected := BooleanAsYesNo(false)
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Enabled").
+				Options(YesNoOptions(false)...).
+				Value(&selected),
+		),
+	)
+
+	view := uitest.RenderView(form, 80, 24)
+
+	idx := strings.Index(view, "Enabled")
+	if idx == -1 {
+		t.Fatalf("expected view to contain the select title, got:\n%s", view)
+	}
+	optionRows := view[idx:]
+
+	if !strings.Contains(optionRows, "yes") {
+		t.Errorf("expected 'yes' option to be rendered, got:\n%s", optionRows)
+	}
+	if !strings.Contains(optionRows, "no") {
+		t.Errorf("expected 'no' option to be rendered, got:\n%s", optionRows)
 	}
 }
 

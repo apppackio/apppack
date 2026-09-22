@@ -242,7 +242,7 @@ func TestAppDatabaseStackForm_SelectFirst(t *testing.T) {
 		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb"),
 	}
 
-	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?")
+	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?", "")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
 	uitest.SelectFirst(tm) // accept first option
@@ -259,7 +259,7 @@ func TestAppDatabaseStackForm_SelectSecond(t *testing.T) {
 		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb"),
 	}
 
-	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?")
+	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?", "")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm)  // pass Note
 	uitest.SelectNth(tm, 1) // select second option
@@ -271,16 +271,16 @@ func TestAppDatabaseStackForm_SelectSecond(t *testing.T) {
 }
 
 // TestAppDatabaseStackForm_PreservesSelection verifies that when the caller
-// marks a non-first option as pre-selected (via .Selected(true)), the form
-// starts with that option focused. This matches the real-world `modify app`
-// workflow where the existing database is re-presented to the user.
+// passes the existing stack name as defaultValue, the form starts with that
+// option focused. This matches the real-world `modify app` workflow where
+// the existing database is re-presented to the user.
 func TestAppDatabaseStackForm_PreservesSelection(t *testing.T) {
 	options := []huh.Option[string]{
 		huh.NewOption("mydb (postgres)", "apppack-database-mydb"),
-		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb").Selected(true),
+		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb"),
 	}
 
-	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?")
+	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?", "apppack-database-otherdb")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
 	uitest.SelectFirst(tm) // accept currently-focused option (should be the pre-selected second one)
@@ -288,6 +288,33 @@ func TestAppDatabaseStackForm_PreservesSelection(t *testing.T) {
 
 	if *selectedPtr != "apppack-database-otherdb" {
 		t.Errorf("expected pre-selected 'apppack-database-otherdb' to be preserved, got %q", *selectedPtr)
+	}
+}
+
+// TestAppDatabaseStackForm_RendersAllOptionsWhenDefaultIsNotFirst is a
+// regression test for https://github.com/apppackio/apppack/issues/181: when
+// defaultValue matches a non-first option, every option must still render
+// on initial paint.
+func TestAppDatabaseStackForm_RendersAllOptionsWhenDefaultIsNotFirst(t *testing.T) {
+	options := []huh.Option[string]{
+		huh.NewOption("mydb (postgres)", "apppack-database-mydb"),
+		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb"),
+		huh.NewOption("thirddb (postgres)", "apppack-database-thirddb"),
+	}
+
+	form, _ := AppDatabaseStackForm(options, "Which database cluster?", "apppack-database-thirddb")
+	view := uitest.RenderView(form, 100, 40)
+
+	idx := strings.Index(view, "Database Cluster")
+	if idx == -1 {
+		t.Fatalf("expected view to contain the select title, got:\n%s", view)
+	}
+	optionRows := view[idx:]
+
+	for _, label := range []string{"mydb (postgres)", "otherdb (mysql)", "thirddb (postgres)"} {
+		if !strings.Contains(optionRows, label) {
+			t.Errorf("expected %q to be rendered, got:\n%s", label, optionRows)
+		}
 	}
 }
 
@@ -325,7 +352,7 @@ func TestAppRedisStackForm_SelectFirst(t *testing.T) {
 		huh.NewOption("otherredis", "apppack-redis-otherredis"),
 	}
 
-	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?")
+	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?", "")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
 	uitest.SelectFirst(tm) // accept first option
@@ -342,7 +369,7 @@ func TestAppRedisStackForm_SelectSecond(t *testing.T) {
 		huh.NewOption("otherredis", "apppack-redis-otherredis"),
 	}
 
-	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?")
+	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?", "")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm)  // pass Note
 	uitest.SelectNth(tm, 1) // select second option
@@ -353,15 +380,16 @@ func TestAppRedisStackForm_SelectSecond(t *testing.T) {
 	}
 }
 
-// TestAppRedisStackForm_PreservesSelection verifies the pre-existing selection
-// (via .Selected(true)) is honored, matching the `modify app` flow.
+// TestAppRedisStackForm_PreservesSelection verifies that when the caller
+// passes the existing stack name as defaultValue, the form starts with that
+// option focused, matching the `modify app` flow.
 func TestAppRedisStackForm_PreservesSelection(t *testing.T) {
 	options := []huh.Option[string]{
 		huh.NewOption("myredis", "apppack-redis-myredis"),
-		huh.NewOption("otherredis", "apppack-redis-otherredis").Selected(true),
+		huh.NewOption("otherredis", "apppack-redis-otherredis"),
 	}
 
-	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?")
+	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?", "apppack-redis-otherredis")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
 	uitest.SelectFirst(tm) // accept currently-focused option (should be pre-selected second)
@@ -369,6 +397,33 @@ func TestAppRedisStackForm_PreservesSelection(t *testing.T) {
 
 	if *selectedPtr != "apppack-redis-otherredis" {
 		t.Errorf("expected pre-selected 'apppack-redis-otherredis' to be preserved, got %q", *selectedPtr)
+	}
+}
+
+// TestAppRedisStackForm_RendersAllOptionsWhenDefaultIsNotFirst is a
+// regression test for https://github.com/apppackio/apppack/issues/181: when
+// defaultValue matches a non-first option, every option must still render
+// on initial paint.
+func TestAppRedisStackForm_RendersAllOptionsWhenDefaultIsNotFirst(t *testing.T) {
+	options := []huh.Option[string]{
+		huh.NewOption("myredis", "apppack-redis-myredis"),
+		huh.NewOption("otherredis", "apppack-redis-otherredis"),
+		huh.NewOption("thirdredis", "apppack-redis-thirdredis"),
+	}
+
+	form, _ := AppRedisStackForm(options, "Which Redis instance?", "apppack-redis-thirdredis")
+	view := uitest.RenderView(form, 100, 40)
+
+	idx := strings.Index(view, "Redis Cluster")
+	if idx == -1 {
+		t.Fatalf("expected view to contain the select title, got:\n%s", view)
+	}
+	optionRows := view[idx:]
+
+	for _, label := range []string{"myredis", "otherredis", "thirdredis"} {
+		if !strings.Contains(optionRows, label) {
+			t.Errorf("expected %q to be rendered, got:\n%s", label, optionRows)
+		}
 	}
 }
 

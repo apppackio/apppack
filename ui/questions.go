@@ -21,20 +21,23 @@ func PauseUntilEnter(msg string) {
 	_, _ = fmt.Scanln()
 }
 
-// YesNoOptions returns huh options for a boolean yes/no select, with the
-// given default pre-selected.
+// YesNoOptions returns huh options for a boolean yes/no select.
+//
+// It deliberately does not mark either option `.Selected(true)`: every
+// caller binds the field's value to a string pre-seeded via
+// BooleanAsYesNo(defaultValue), and huh.Select positions its cursor on the
+// option whose Value matches the bound value. Marking an option
+// `.Selected(true)` as well is redundant, and it also triggers a huh bug
+// (see https://github.com/apppackio/apppack/issues/181): huh's initial
+// viewport offset is derived from whichever option matched first, whether
+// that match came from Value or Selected, and it isn't clamped, so a match
+// at a non-zero index scrolls earlier options off the top of the list on
+// first render. Seeding the bound value alone avoids that code path.
 func YesNoOptions(defaultValue bool) []huh.Option[string] {
-	opts := []huh.Option[string]{
+	return []huh.Option[string]{
 		huh.NewOption("yes", "yes"),
 		huh.NewOption("no", "no"),
 	}
-	if defaultValue {
-		opts[0] = opts[0].Selected(true)
-	} else {
-		opts[1] = opts[1].Selected(true)
-	}
-
-	return opts
 }
 
 // YesNoToBool converts a "yes"/"no" string to a boolean.

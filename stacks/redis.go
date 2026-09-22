@@ -238,11 +238,7 @@ func RedisInstanceClassForm(instanceClasses []string, defaultClass string) (*huh
 
 	options := make([]huh.Option[string], len(instanceClasses))
 	for i, c := range instanceClasses {
-		opt := huh.NewOption(c, c)
-		if c == defaultClass {
-			opt = opt.Selected(true)
-		}
-		options[i] = opt
+		options[i] = huh.NewOption(c, c)
 	}
 
 	form := huh.NewForm(
