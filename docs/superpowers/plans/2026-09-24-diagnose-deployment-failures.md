@@ -210,10 +210,14 @@ Why it was cut, so it does not get reintroduced:
 The remaining control is the system prompt's no-credential-echo rule
 (Task 8). It is a soft control and the docs must say so.
 
-Note this does **not** affect `redactTaskDefinition` in Task 8, which strips
-environment variable *values* from a task definition before the model sees
-it. That serves the separate, still-binding constraint that the model never
-receives secret values.
+Separately, an earlier draft also stripped environment variable *values* out
+of ECS task definitions. That was cut too: AppPack never writes secrets into
+task definitions (config is delivered through SSM, which this package reads
+names-only), so the values are not sensitive and a wrong one is a common
+cause of the failures this tool diagnoses.
+
+What remains binding is that **SSM config values are never read** — see
+Task 3's `GetConfigKeys`, which sets `WithDecryption: false`.
 
 ---
 
@@ -396,7 +400,7 @@ git commit -m "feat: read config variable names without decrypting values"
 - Consumes: `app.App.GetConfigKeys()` (Task 3)
 - Produces:
   - `type PhaseState struct { Name, State string }`
-  - `type TaskDefSummary struct { Service, Image string; Command []string; CPU, Memory string; EnvNames []string; HealthCheck string }`
+  - `type TaskDefSummary struct { Service, Image string; Command []string; CPU, Memory string; Env []string; HealthCheck string }`
   - `type Context struct { AppName, Region string; Pipeline bool; BuildNumber *int; Phases []PhaseState; Services, ConfigKeys []string; TaskDefs []TaskDefSummary }`
   - `func PhaseStates(b *app.BuildStatus) []PhaseState`
   - `func PhaseLogURL(b *app.BuildStatus, phase string) (string, error)`
@@ -533,7 +537,7 @@ type TaskDefSummary struct {
 	Command     []string
 	CPU         string
 	Memory      string
-	EnvNames    []string
+	Env         []string
 	HealthCheck string
 }
 
@@ -668,7 +672,7 @@ func (c *Context) Render() string {
 			fmt.Fprintf(&b, "- command: %s\n", strings.Join(td.Command, " "))
 			fmt.Fprintf(&b, "- cpu/memory: %s/%s\n", td.CPU, td.Memory)
 			fmt.Fprintf(&b, "- health check: %s\n", td.HealthCheck)
-			fmt.Fprintf(&b, "- env var names: %s\n", strings.Join(td.EnvNames, ", "))
+			fmt.Fprintf(&b, "- env: %s\n", strings.Join(td.Env, ", "))
 		}
 	}
 
@@ -1104,7 +1108,7 @@ func BuildTools(d ToolDeps) []Tool {
 		},
 		{
 			Name:        "get_task_definition",
-			Description: "Read the full ECS task definition for one service: image, command, resource limits, health check, and environment variable names.",
+			Description: "Read the full ECS task definition for one service: image, command, resource limits, health check, and environment variables.",
 			Schema: objectSchema(map[string]any{
 				"service": stringSchema("Which service's task definition to read.", d.Services),
 			}, []string{"service"}),
@@ -2134,7 +2138,7 @@ func taskDefinition(a *app.App, service string) (string, error) {
 		return "", err
 	}
 
-	out, err := json.MarshalIndent(redactTaskDefinition(td), "", "  ")
+	out, err := json.MarshalIndent(summarizeTaskDefinition(td), "", "  ")
 	if err != nil {
 		return "", err
 	}
@@ -2142,36 +2146,43 @@ func taskDefinition(a *app.App, service string) (string, error) {
 	return string(out), nil
 }
 
-// redactTaskDefinition strips environment variable VALUES from a task
-// definition, keeping names. Task definitions can carry plaintext env vars.
-func redactTaskDefinition(td *ecstypes.TaskDefinition) map[string]any {
+// summarizeTaskDefinition reduces a task definition to the fields that help
+// diagnose a failure, dropping ARNs, network config, and other noise.
+//
+// Environment variable values are included. AppPack never writes secrets into
+// task definitions -- config is delivered through SSM, which this package
+// reads names-only (see App.GetConfigKeys) -- so these values are not
+// sensitive, and a wrong one (a bad PORT, a stale hostname) is a common cause
+// of the failures this tool exists to diagnose. `secrets` entries carry an
+// SSM/Secrets Manager reference rather than a value, so they are safe too.
+func summarizeTaskDefinition(td *ecstypes.TaskDefinition) map[string]any {
 	containers := make([]map[string]any, 0, len(td.ContainerDefinitions))
 
 	for i := range td.ContainerDefinitions {
 		c := td.ContainerDefinitions[i]
 
-		envNames := make([]string, 0, len(c.Environment))
+		env := make(map[string]string, len(c.Environment))
 		for _, e := range c.Environment {
-			envNames = append(envNames, aws.ToString(e.Name))
+			env[aws.ToString(e.Name)] = aws.ToString(e.Value)
 		}
 
-		secretNames := make([]string, 0, len(c.Secrets))
+		secretRefs := make(map[string]string, len(c.Secrets))
 		for _, s := range c.Secrets {
-			secretNames = append(secretNames, aws.ToString(s.Name))
+			secretRefs[aws.ToString(s.Name)] = aws.ToString(s.ValueFrom)
 		}
 
 		containers = append(containers, map[string]any{
-			"name":                  aws.ToString(c.Name),
-			"image":                 aws.ToString(c.Image),
-			"command":               c.Command,
-			"entry_point":           c.EntryPoint,
-			"cpu":                   c.Cpu,
-			"memory":                c.Memory,
-			"memory_reservation":    c.MemoryReservation,
-			"port_mappings":         c.PortMappings,
-			"health_check":          c.HealthCheck,
-			"environment_var_names": envNames,
-			"secret_names":          secretNames,
+			"name":               aws.ToString(c.Name),
+			"image":              aws.ToString(c.Image),
+			"command":            c.Command,
+			"entry_point":        c.EntryPoint,
+			"cpu":                c.Cpu,
+			"memory":             c.Memory,
+			"memory_reservation": c.MemoryReservation,
+			"port_mappings":      c.PortMappings,
+			"health_check":       c.HealthCheck,
+			"environment":        env,
+			"secret_references":  secretRefs,
 		})
 	}
 
@@ -2196,9 +2207,11 @@ func taskDefSummaries(a *app.App, services []string) []TaskDefSummary {
 
 		c := td.ContainerDefinitions[0]
 
-		envNames := make([]string, 0, len(c.Environment))
+		// Values included: AppPack never writes secrets into task
+		// definitions, and a wrong value here is a common failure cause.
+		env := make([]string, 0, len(c.Environment))
 		for _, e := range c.Environment {
-			envNames = append(envNames, aws.ToString(e.Name))
+			env = append(env, fmt.Sprintf("%s=%s", aws.ToString(e.Name), aws.ToString(e.Value)))
 		}
 
 		health := "none"
@@ -2212,7 +2225,7 @@ func taskDefSummaries(a *app.App, services []string) []TaskDefSummary {
 			Command:     c.Command,
 			CPU:         aws.ToString(td.Cpu),
 			Memory:      aws.ToString(td.Memory),
-			EnvNames:    envNames,
+			Env:         env,
 			HealthCheck: health,
 		})
 	}

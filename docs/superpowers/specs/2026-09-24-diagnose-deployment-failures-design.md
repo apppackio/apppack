@@ -201,7 +201,7 @@ Sent in the first message, because it is small, structured, and always relevant:
 - Service list from `GetServices()`
 - Config variable **names** only
 - Per-service task definition summary: image, command, CPU/memory, health check
-  configuration, and environment variable **names**
+  configuration, and environment variables (values included -- AppPack never writes secrets into task definitions)
 
 ### Tools
 
