@@ -10,6 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/juju/ansiterm"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var errMock = errors.New("mock error")
@@ -161,4 +163,71 @@ func TestConfigVariableLoadManaged(t *testing.T) {
 	if !errors.Is(err, errMock) {
 		t.Errorf("expected %s, got %s", errMock, err)
 	}
+}
+
+// Review Focus: the diagnose feature must never receive plaintext secrets.
+// This test is the enforcement point for spec invariant 2.
+func TestConfigKeysNeverRequestsDecryption(t *testing.T) {
+	t.Parallel()
+
+	var gotInputs []*ssm.GetParametersByPathInput
+
+	get := func(in *ssm.GetParametersByPathInput) (*ssm.GetParametersByPathOutput, error) {
+		gotInputs = append(gotInputs, in)
+
+		return &ssm.GetParametersByPathOutput{
+			Parameters: []ssmtypes.Parameter{
+				{Name: aws.String("/apppack/apps/myapp/config/DATABASE_URL"), Value: aws.String("ciphertext")},
+				{Name: aws.String("/apppack/apps/myapp/config/SECRET_KEY"), Value: aws.String("ciphertext")},
+			},
+		}, nil
+	}
+
+	keys, err := app.ConfigKeys(get, "/apppack/apps/myapp/config/")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"DATABASE_URL", "SECRET_KEY"}, keys)
+
+	require.Len(t, gotInputs, 1)
+	require.NotNil(t, gotInputs[0].WithDecryption)
+	assert.False(t, *gotInputs[0].WithDecryption, "diagnose must never request decrypted SSM values")
+}
+
+func TestConfigKeysPaginates(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+
+	get := func(in *ssm.GetParametersByPathInput) (*ssm.GetParametersByPathOutput, error) {
+		calls++
+		if calls == 1 {
+			return &ssm.GetParametersByPathOutput{
+				Parameters: []ssmtypes.Parameter{
+					{Name: aws.String("/apppack/apps/myapp/config/A"), Value: aws.String("x")},
+				},
+				NextToken: aws.String("more"),
+			}, nil
+		}
+
+		return &ssm.GetParametersByPathOutput{
+			Parameters: []ssmtypes.Parameter{
+				{Name: aws.String("/apppack/apps/myapp/config/B"), Value: aws.String("x")},
+			},
+		}, nil
+	}
+
+	keys, err := app.ConfigKeys(get, "/apppack/apps/myapp/config/")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"A", "B"}, keys)
+	assert.Equal(t, 2, calls)
+}
+
+func TestConfigKeysPropagatesError(t *testing.T) {
+	t.Parallel()
+
+	get := func(*ssm.GetParametersByPathInput) (*ssm.GetParametersByPathOutput, error) {
+		return nil, errMock
+	}
+
+	_, err := app.ConfigKeys(get, "/apppack/apps/myapp/config/")
+	require.ErrorIs(t, err, errMock)
 }
