@@ -22,9 +22,17 @@
 - `make lint` does NOT pass at baseline — the repo has 57 pre-existing
   `golangci-lint` issues (cmd/ 26, selfupdate/ 24, app/ 3, state/ 2,
   version/ 1, stacks/ 1). Do not try to fix them; they are out of scope.
-  The requirement is to introduce **no new** issues in the files you touch:
-  `make lint 2>&1 | grep "^diagnose/"` must be empty, and the counts for
-  `app/` and `cmd/` must not rise above 4 and 26.
+  The requirement is to introduce **no new** issues in the files you touch.
+  Verify this **by filename, never by count**: every file you create or
+  modify must be absent from `make lint` output, e.g.
+  `make lint 2>&1 | grep "^diagnose/"` is empty and
+  `make lint 2>&1 | grep "cmd/diagnose.go"` is empty.
+
+  Do not use per-prefix counts as a gate. golangci-lint applies a default
+  per-linter issue cap, and the repo has more than 50 `errcheck` findings, so
+  *which* files get reported varies between runs on identical code — measured
+  24 and 29 for `cmd/` on consecutive runs. A count gate there tests nothing
+  but luck.
 - Commit messages follow the repo's `type: subject` convention (`feat:`, `fix:`, `docs:`, `test:`).
 
 ## Review Focus
