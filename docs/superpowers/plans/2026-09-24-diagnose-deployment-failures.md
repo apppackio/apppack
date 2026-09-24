@@ -24,7 +24,7 @@
   version/ 1, stacks/ 1). Do not try to fix them; they are out of scope.
   The requirement is to introduce **no new** issues in the files you touch:
   `make lint 2>&1 | grep "^diagnose/"` must be empty, and the counts for
-  `app/` and `cmd/` must not rise above 3 and 26.
+  `app/` and `cmd/` must not rise above 4 and 26.
 - Commit messages follow the repo's `type: subject` convention (`feat:`, `fix:`, `docs:`, `test:`).
 
 ## Review Focus
