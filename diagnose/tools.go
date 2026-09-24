@@ -3,6 +3,7 @@ package diagnose
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -70,7 +71,10 @@ func (r *Registry) Call(name string, args map[string]any) (string, error) {
 
 	out, err := t.Invoke(args)
 	if err != nil {
-		return "", err
+		// Cap error text too: MaxToolResultBytes exists to bound the cost of a
+		// single tool call, and an AWS error can carry an arbitrarily large
+		// request/response body.
+		return "", errors.New(Truncate(err.Error(), MaxToolResultBytes))
 	}
 
 	return Truncate(out, MaxToolResultBytes), nil
@@ -163,7 +167,11 @@ type ToolDeps struct {
 func stringSchema(desc string, enum []string) map[string]any {
 	p := map[string]any{"type": "string", "description": desc}
 	if enum != nil {
-		p["enum"] = enum
+		// Clone: this map is handed to callers outside the package via
+		// Registry.Tools(), and enum aliases the live validation allowlist
+		// (phaseNames or ToolDeps.Services). Mutating the schema in place
+		// must never mutate the allowlist the validator checks against.
+		p["enum"] = slices.Clone(enum)
 	}
 
 	return p
