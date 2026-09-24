@@ -18,7 +18,13 @@
 - **Only flag is `--model`.** No `--region`, no streaming.
 - Go module path is `github.com/apppackio/apppack`.
 - Tests use `testify` (`require`/`assert`) and `t.Parallel()`, co-located as `*_test.go`.
-- Run `make fmt` before every commit; `make lint` and `make test` must pass.
+- Run `make fmt` before every commit; `go test ./...` must pass.
+- `make lint` does NOT pass at baseline — the repo has 57 pre-existing
+  `golangci-lint` issues (cmd/ 26, selfupdate/ 24, app/ 3, state/ 2,
+  version/ 1, stacks/ 1). Do not try to fix them; they are out of scope.
+  The requirement is to introduce **no new** issues in the files you touch:
+  `make lint 2>&1 | grep "^diagnose/"` must be empty, and the counts for
+  `app/` and `cmd/` must not rise above 3 and 26.
 - Commit messages follow the repo's `type: subject` convention (`feat:`, `fix:`, `docs:`, `test:`).
 
 ## Review Focus
