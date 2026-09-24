@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	brtypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/aws/smithy-go"
 )
 
@@ -16,13 +15,33 @@ import (
 // the permission error IS this feature's front door. It leads with the stack
 // upgrade because that is the expected cause during rollout; the two
 // AccessDenied causes cannot be distinguished from the error alone.
+//
+// Matching is done on smithy.APIError's ErrorCode() rather than on the
+// concrete exception types. Bedrock has two SDK packages with distinct Go
+// types for the same error names: the control-plane package
+// ("github.com/aws/aws-sdk-go-v2/service/bedrock", used by SelectProfile's
+// ListInferenceProfiles call) and the data-plane package
+// ("github.com/aws/aws-sdk-go-v2/service/bedrockruntime", used by Converse).
+// A *bedrock/types.AccessDeniedException and a
+// *bedrockruntime/types.AccessDeniedException do not unify via errors.As
+// against a single concrete type, so a type-assertion-based version of this
+// function would only translate errors from whichever package it happened to
+// import -- and ListInferenceProfiles is the very first Bedrock call this
+// command makes, so a customer without Bedrock IAM access would hit that gap
+// on every default invocation. Matching on the shared smithy.APIError
+// interface handles both packages (and any future one) uniformly.
 func TranslateError(err error, appName string, pipeline bool, region string) error {
 	if err == nil {
 		return nil
 	}
 
-	var accessDenied *brtypes.AccessDeniedException
-	if errors.As(err, &accessDenied) {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+
+	switch apiErr.ErrorCode() {
+	case "AccessDeniedException":
 		return fmt.Errorf(`not authorized to invoke Amazon Bedrock in %s
 
 This usually means one of two things:
@@ -35,15 +54,11 @@ This usually means one of two things:
      console in %s, go to "Model access", and enable the model
 
 Original error: %w`, region, upgradeCommand(appName, pipeline), region, err)
-	}
 
-	var throttling *brtypes.ThrottlingException
-	if errors.As(err, &throttling) {
+	case "ThrottlingException":
 		return fmt.Errorf("request throttled by Amazon Bedrock; wait a moment and try again: %w", err)
-	}
 
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ValidationException" {
+	case "ValidationException":
 		if strings.Contains(strings.ToLower(apiErr.ErrorMessage()), "tool") {
 			return fmt.Errorf(`the selected model does not support tool use, which `+"`apppack diagnose`"+` requires
 

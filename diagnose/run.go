@@ -43,7 +43,7 @@ func Diagnose(ctx context.Context, a *app.App, buildNumber *int, modelID string)
 			ctx, bedrock.NewFromConfig(a.Session), geo, DefaultModelID,
 		)
 		if err != nil {
-			return "", err
+			return "", TranslateError(err, a.Name, a.Pipeline, region)
 		}
 	} else {
 		resolvedModel = ModelIDForGeography(geo, resolvedModel)

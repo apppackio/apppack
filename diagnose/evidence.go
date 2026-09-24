@@ -13,8 +13,14 @@ type PhaseState struct {
 	State string
 }
 
-// TaskDefSummary describes a service's task definition. Environment variable
-// NAMES are included; values never are.
+// TaskDefSummary describes a service's task definition. Env holds
+// "name=value" entries, values included: AppPack never writes secrets into
+// task definitions (config is delivered through SSM, read names-only via
+// App.GetConfigKeys), so a task definition's environment values are not
+// sensitive, and a wrong one (a bad PORT, a stale hostname) is a common cause
+// of the failures this command diagnoses. Unlike the get_task_definition
+// tool, this is preloaded into the model's first message on every run, not
+// fetched on demand.
 type TaskDefSummary struct {
 	Service     string
 	Image       string
