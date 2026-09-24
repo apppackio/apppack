@@ -2190,14 +2190,18 @@ func describeTasks(a *app.App, service string) (string, error) {
 
 	var summaries []taskSummary
 
+	// ECS sets a service task's Group to "service:<ecs-service-name>", where
+	// the ECS service name is the qualified form from a.ServiceName.
+	wantGroup := "service:" + a.ServiceName(service)
+
 	for i := range tasks {
 		t := tasks[i]
-		if !taskBelongsToService(t, service) {
+		if aws.ToString(t.Group) != wantGroup {
 			continue
 		}
 
 		s := taskSummary{
-			TaskARN:       aws.ToString(t.TaskArn),
+			TaskARN:       aws.ToString(t.TaskArn)
 			LastStatus:    aws.ToString(t.LastStatus),
 			DesiredStatus: aws.ToString(t.DesiredStatus),
 			HealthStatus:  string(t.HealthStatus),
@@ -2228,15 +2232,13 @@ func describeTasks(a *app.App, service string) (string, error) {
 	return string(out), nil
 }
 
-// taskBelongsToService matches a task to a service by its group, which ECS
-// sets to "service:<service-name>".
-func taskBelongsToService(t ecstypes.Task, service string) bool {
-	return strings.HasSuffix(aws.ToString(t.Group), ":"+service) ||
-		strings.Contains(aws.ToString(t.Group), service)
-}
-
+// taskDefinition reads a service's task definition.
+//
+// Pass the BARE process name ("web"), not a.ServiceName(service):
+// App.TaskDefinition applies ServiceName internally (app/app.go:340), so
+// qualifying it here would produce "myapp-myapp-web" and fail to resolve.
 func taskDefinition(a *app.App, service string) (string, error) {
-	td, _, err := a.TaskDefinition(a.ServiceName(service))
+	td, _, err := a.TaskDefinition(service)
 	if err != nil {
 		return "", err
 	}
@@ -2295,7 +2297,8 @@ func taskDefSummaries(a *app.App, services []string) []TaskDefSummary {
 	var out []TaskDefSummary
 
 	for _, s := range services {
-		td, _, err := a.TaskDefinition(a.ServiceName(s))
+		// Bare process name — TaskDefinition qualifies it internally.
+		td, _, err := a.TaskDefinition(s)
 		if err != nil || len(td.ContainerDefinitions) == 0 {
 			continue
 		}
