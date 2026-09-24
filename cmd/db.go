@@ -40,7 +40,7 @@ import (
 
 var dbOutputFile string
 
-func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string) error {
+func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string) error { // skipcq: CRT-P0003
 	ui.Spinner.Suffix = " downloading " + outputFile
 	downloader := manager.NewDownloader(s3.NewFromConfig(cfg))
 
@@ -57,7 +57,7 @@ func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string
 	return nil
 }
 
-func uploadFile(cfg aws.Config, uploadInput *s3.PutObjectInput) error {
+func uploadFile(cfg aws.Config, uploadInput *s3.PutObjectInput) error { // skipcq: CRT-P0003
 	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 
 	_, err := uploader.Upload(context.Background(), uploadInput)
@@ -137,7 +137,7 @@ var dbDumpCmd = &cobra.Command{
 	},
 }
 
-func taskLogs(cfg aws.Config, task *ecstypes.Task) error {
+func taskLogs(cfg aws.Config, task *ecstypes.Task) error { // skipcq: CRT-P0003
 	ecsSvc := ecs.NewFromConfig(cfg)
 
 	taskDefn, err := ecsSvc.DescribeTaskDefinition(context.Background(), &ecs.DescribeTaskDefinitionInput{
