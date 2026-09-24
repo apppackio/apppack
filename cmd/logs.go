@@ -16,24 +16,16 @@ limitations under the License.
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/url"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 
-	"github.com/TylerBrock/saw/blade"
-	sawconfig "github.com/TylerBrock/saw/config"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsv1 "github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
+	"github.com/apppackio/saw/blade"
+	sawconfig "github.com/apppackio/saw/config"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 )
@@ -44,39 +36,6 @@ var (
 	logsStart       string
 	logsEnd         string
 )
-
-// newBlade is a hack to get a Blade instance with our AWS session
-func newBlade(cfg aws.Config) *blade.Blade {
-	// Convert v2 credentials to v1 session for saw library
-	creds, err := cfg.Credentials.Retrieve(context.Background())
-	if err != nil {
-		panic(err)
-	}
-
-	// Create v1 session with credentials from v2 config
-	sess, err := session.NewSession(&awsv1.Config{
-		Region: awsv1.String(cfg.Region),
-		Credentials: credentials.NewStaticCredentials(
-			creds.AccessKeyID,
-			creds.SecretAccessKey,
-			creds.SessionToken,
-		),
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	b := blade.Blade{}
-	setField := func(name string, value interface{}) {
-		field := reflect.ValueOf(&b).Elem().FieldByName(name)
-		reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(value))
-	}
-	setField("cwl", cloudwatchlogs.New(sess))
-	setField("config", &sawConfig)
-	setField("output", &sawOutputConfig)
-
-	return &b
-}
 
 // TimeValForSaw converts/validates an AppPack time flag to what Saw expects
 func TimeValForSaw(val string) (string, error) {
@@ -143,7 +102,7 @@ var logsCmd = &cobra.Command{
 		checkErr(err)
 		sawConfig.End, err = TimeValForSaw(logsEnd)
 		checkErr(err)
-		b := newBlade(a.Session)
+		b := blade.NewBladeWithConfig(a.Session, &sawConfig, &sawOutputConfig)
 		if a.IsReviewApp() {
 			sawConfig.Prefix = fmt.Sprintf("pr%s-%s", *a.ReviewApp, sawConfig.Prefix)
 		}

@@ -27,6 +27,7 @@ import (
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/saw/blade"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
@@ -39,7 +40,7 @@ import (
 
 var dbOutputFile string
 
-func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string) error {
+func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string) error { // skipcq: CRT-P0003
 	ui.Spinner.Suffix = " downloading " + outputFile
 	downloader := manager.NewDownloader(s3.NewFromConfig(cfg))
 
@@ -56,7 +57,7 @@ func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string
 	return nil
 }
 
-func uploadFile(cfg aws.Config, uploadInput *s3.PutObjectInput) error {
+func uploadFile(cfg aws.Config, uploadInput *s3.PutObjectInput) error { // skipcq: CRT-P0003
 	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 
 	_, err := uploader.Upload(context.Background(), uploadInput)
@@ -136,7 +137,7 @@ var dbDumpCmd = &cobra.Command{
 	},
 }
 
-func taskLogs(cfg aws.Config, task *ecstypes.Task) error {
+func taskLogs(cfg aws.Config, task *ecstypes.Task) error { // skipcq: CRT-P0003
 	ecsSvc := ecs.NewFromConfig(cfg)
 
 	taskDefn, err := ecsSvc.DescribeTaskDefinition(context.Background(), &ecs.DescribeTaskDefinitionInput{
@@ -162,14 +163,14 @@ func taskLogs(cfg aws.Config, task *ecstypes.Task) error {
 	taskID := taskArnParts[len(taskArnParts)-1]
 	sawConfig.Group = logConfig.Options["awslogs-group"]
 	sawConfig.Start = task.StartedAt.Format(time.RFC3339)
-	// Use prefix-based filtering instead of directly setting streams
-	// since saw library uses v1 SDK types for Streams
+	// Filter by stream prefix rather than naming the stream outright. The
+	// prefix identifies exactly one stream here, so the two are equivalent.
 	sawConfig.Prefix = fmt.Sprintf("%s/%s/%s",
 		logConfig.Options["awslogs-stream-prefix"],
 		*containerDefn.Name,
 		taskID)
 
-	newBlade(cfg).GetEvents()
+	blade.NewBladeWithConfig(cfg, &sawConfig, &sawOutputConfig).GetEvents()
 
 	return nil
 }
