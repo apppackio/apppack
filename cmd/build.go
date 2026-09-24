@@ -165,6 +165,16 @@ func pollBuildStatus(a *app.App, buildNumber, retries int) (*app.BuildStatus, er
 	return buildStatus, nil
 }
 
+// printDiagnoseHint suggests the `apppack diagnose` command after a build
+// phase has failed. It is a suggestion only -- diagnosis is never triggered
+// automatically, since it spends the customer's money on Bedrock tokens.
+func printDiagnoseHint(a *app.App) {
+	fmt.Println()
+	fmt.Println(aurora.Faint(fmt.Sprintf(
+		"To investigate, run: apppack -a %s diagnose", a.Name,
+	)))
+}
+
 func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 	var lastPhase *app.BuildPhase
 
@@ -193,6 +203,8 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 		} else {
 			failedPhase = buildStatus.FirstFailedPhase()
 			if failedPhase != nil {
+				printDiagnoseHint(a)
+
 				return fmt.Errorf("%s failed at %s", failedPhase.Name, failedPhase.Phase.EndTime().Local().Format(timeFmt))
 			}
 
@@ -212,6 +224,8 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 			}
 
 			if finalPhase.Phase.State == "failed" {
+				printDiagnoseHint(a)
+
 				return fmt.Errorf("%s failed at %s", finalPhase.Name, finalPhase.Phase.EndTime().Local().Format(timeFmt))
 			}
 
