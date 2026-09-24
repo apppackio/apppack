@@ -19,12 +19,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/apppackio/apppack/app"
+	"github.com/apppackio/apppack/auth"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
@@ -165,6 +167,17 @@ func pollBuildStatus(a *app.App, buildNumber, retries int) (*app.BuildStatus, er
 	return buildStatus, nil
 }
 
+// buildPhaseFailedError reports that a build phase failed, as opposed to an
+// AWS or CLI error. Only this class of failure warrants a diagnosis hint.
+type buildPhaseFailedError struct {
+	phase string
+	at    string
+}
+
+func (e *buildPhaseFailedError) Error() string {
+	return fmt.Sprintf("%s failed at %s", e.phase, e.at)
+}
+
 // printDiagnoseHint suggests the `apppack diagnose` command after a build
 // phase has failed. It is a suggestion only -- diagnosis is never triggered
 // automatically, since it spends the customer's money on Bedrock tokens.
@@ -173,6 +186,47 @@ func printDiagnoseHint(a *app.App) {
 	fmt.Println(aurora.Faint(fmt.Sprintf(
 		"To investigate, run: apppack -a %s diagnose", a.Name,
 	)))
+}
+
+// reportWatchBuildErr prints a watchBuild failure the same way checkErr
+// would (including the token-refresh special case), plus a suggestion to run
+// `apppack diagnose` when the failure was a build phase failure rather than
+// an AWS or CLI error. Split out from watchBuildOrExit so the print order
+// can be exercised in tests without triggering os.Exit.
+func reportWatchBuildErr(a *app.App, err error) {
+	ui.Spinner.Stop()
+
+	if strings.HasPrefix(err.Error(), auth.TokenRefreshErr) {
+		fmt.Println(
+			aurora.Yellow("⚠  "+auth.TokenRefreshErr),
+			aurora.Faint(strings.TrimPrefix(err.Error(), auth.TokenRefreshErr+": ")),
+		)
+		fmt.Printf("%s Reauthenticate this device by running: %s\n", aurora.Blue("ℹ"), aurora.White("apppack auth login"))
+
+		return
+	}
+
+	printError(err.Error())
+
+	var phaseErr *buildPhaseFailedError
+	if errors.As(err, &phaseErr) {
+		printDiagnoseHint(a)
+	}
+}
+
+// watchBuildOrExit runs watchBuild and, on failure, reports the error and
+// exits.
+//
+// This exists instead of checkErr because checkErr exits immediately, which
+// would print the diagnose hint before the failure it responds to.
+func watchBuildOrExit(a *app.App, buildStatus *app.BuildStatus) {
+	err := watchBuild(a, buildStatus)
+	if err == nil {
+		return
+	}
+
+	reportWatchBuildErr(a, err)
+	os.Exit(1)
 }
 
 func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
@@ -203,9 +257,10 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 		} else {
 			failedPhase = buildStatus.FirstFailedPhase()
 			if failedPhase != nil {
-				printDiagnoseHint(a)
-
-				return fmt.Errorf("%s failed at %s", failedPhase.Name, failedPhase.Phase.EndTime().Local().Format(timeFmt))
+				return &buildPhaseFailedError{
+					phase: failedPhase.Name,
+					at:    failedPhase.Phase.EndTime().Local().Format(timeFmt),
+				}
 			}
 
 			currentPhase = buildStatus.NextActivePhase(lastPhase)
@@ -224,9 +279,10 @@ func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
 			}
 
 			if finalPhase.Phase.State == "failed" {
-				printDiagnoseHint(a)
-
-				return fmt.Errorf("%s failed at %s", finalPhase.Name, finalPhase.Phase.EndTime().Local().Format(timeFmt))
+				return &buildPhaseFailedError{
+					phase: finalPhase.Name,
+					at:    finalPhase.Phase.EndTime().Local().Format(timeFmt),
+				}
 			}
 
 			if finalPhase.Name == "Deploy" {
@@ -832,7 +888,7 @@ var buildStartCmd = &cobra.Command{
 		ui.Spinner.Stop()
 		printBuild(buildStatus)
 		if watchBuildFlag {
-			checkErr(watchBuild(a, buildStatus))
+			watchBuildOrExit(a, buildStatus)
 		}
 	},
 }
@@ -870,7 +926,7 @@ var buildWatchCmd = &cobra.Command{
 		ui.Spinner.Stop()
 		printBuild(build)
 		printCommitLog(a.Session, build)
-		checkErr(watchBuild(a, build))
+		watchBuildOrExit(a, build)
 	},
 }
 
