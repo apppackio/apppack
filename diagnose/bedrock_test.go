@@ -166,9 +166,21 @@ func TestModelIDForGeography(t *testing.T) {
 
 	assert.Equal(t, "us.anthropic.foo", diagnose.ModelIDForGeography(diagnose.GeographyUS, "anthropic.foo"))
 	assert.Equal(t, "eu.anthropic.foo", diagnose.ModelIDForGeography(diagnose.GeographyEU, "anthropic.foo"))
+	// A bare ID still gets its geography prefix even in a geography (APAC)
+	// whose GeographyPrefixes list has more than one entry.
 	assert.Equal(t, "apac.anthropic.foo", diagnose.ModelIDForGeography(diagnose.GeographyAPAC, "anthropic.foo"))
 
-	// An ID that already carries a geography prefix is passed through, so a
-	// user can name an exact inference profile with --model.
+	// An ID that already carries a known prefix is passed through unchanged,
+	// so a user can name an exact inference profile with --model. This must
+	// hold for every prefix GeographyPrefixes recognises for any geography
+	// (au. and jp. serve APAC on some models even though apac. does not
+	// exist for Claude Sonnet 5), not just the geography being passed in.
 	assert.Equal(t, "us.anthropic.foo", diagnose.ModelIDForGeography(diagnose.GeographyEU, "us.anthropic.foo"))
+	assert.Equal(t, "au.anthropic.foo", diagnose.ModelIDForGeography(diagnose.GeographyAPAC, "au.anthropic.foo"))
+	assert.Equal(t, "jp.anthropic.foo", diagnose.ModelIDForGeography(diagnose.GeographyAPAC, "jp.anthropic.foo"))
+
+	// "global." is a valid, explicit --model opt-in even though
+	// GeographyPrefixes never selects it automatically: it must pass through
+	// unchanged rather than getting a second prefix prepended.
+	assert.Equal(t, "global.anthropic.foo", diagnose.ModelIDForGeography(diagnose.GeographyUS, "global.anthropic.foo"))
 }

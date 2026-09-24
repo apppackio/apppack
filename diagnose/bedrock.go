@@ -43,11 +43,32 @@ type Converser interface {
 	) (*bedrockruntime.ConverseOutput, error)
 }
 
+// knownProfilePrefixes returns every inference profile prefix this package
+// recognises as already-prefixed, including "global.".
+//
+// Derived from GeographyPrefixes so it cannot drift out of sync: a prefix
+// added there for geography selection is automatically recognised here too.
+//
+// "global." is included even though GeographyPrefixes deliberately never
+// returns it for automatic selection. Those are different questions:
+// GeographyPrefixes answers "what may SelectProfile choose on its own"
+// (never global., since it has no residency guarantee), while this answers
+// "what does an already-prefixed --model value look like" (global. is a
+// valid, explicit profile a user may opt into by name).
+func knownProfilePrefixes() []string {
+	prefixes := []string{"global."}
+	for _, g := range []Geography{GeographyUS, GeographyEU, GeographyAPAC} {
+		prefixes = append(prefixes, GeographyPrefixes(g)...)
+	}
+
+	return prefixes
+}
+
 // ModelIDForGeography prefixes a model ID with its cross-region inference
 // profile geography. An ID that already carries a known prefix is returned
 // unchanged so --model can name an exact profile.
 func ModelIDForGeography(g Geography, modelID string) string {
-	for _, p := range []string{"us.", "eu.", "apac."} {
+	for _, p := range knownProfilePrefixes() {
 		if strings.HasPrefix(modelID, p) {
 			return modelID
 		}
