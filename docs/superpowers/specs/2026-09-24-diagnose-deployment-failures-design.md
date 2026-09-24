@@ -138,6 +138,41 @@ the Converse API's own validation error, **not** by maintaining a hardcoded list
 compatible models -- such a list would go stale every time AWS adds a model, and would
 wrongly reject models that gained tool support after the CLI was released.
 
+### The model is pinned; its inference profile is discovered at runtime
+
+The model is pinned to a specific version, `anthropic.claude-sonnet-5`. A
+pinned model means a predictable response shape, a predictable cost profile,
+and a diagnosis quality that only changes when someone deliberately changes
+it. Picking a model dynamically would make all three move under the CLI's
+feet.
+
+The *inference profile* for that model is a different matter, and is
+discovered at runtime.
+
+An earlier draft hardcoded a geography-to-prefix map: `us-*` → `us.`,
+`eu-*` → `eu.`, `ap-*` → `apac.`. That was wrong in a way only running it
+would reveal. Claude Sonnet 5's published profiles are `us.`, `eu.`, `au.`
+and `global.` — there is no `apac.` profile at all, and no `jp.` one either.
+The hardcoded prefix would have produced an invalid model ID and broken the
+command for every Asia-Pacific app.
+
+The prefix set is per-model and AWS revises it, so the CLI does not guess a
+second time. It calls `bedrock:ListInferenceProfiles` in the app's region and
+finds the active, system-defined profile for the pinned model whose prefix
+keeps inference inside the app's geography.
+
+Profiles with the `global.` prefix are deliberately **not** accepted. Global
+cross-Region inference routes to all commercial regions with no residency
+constraint, which is exactly the property geography matching exists to
+prevent. If no in-geography profile exists for the app's region, the command
+fails with that explanation rather than silently widening the blast radius.
+
+This costs one control-plane call per run and one extra IAM action, marginal
+given the role already needs a CloudFormation update to reach Bedrock at all.
+
+`--model` bypasses discovery entirely, so a customer who has vetted one
+specific model or profile gets exactly that.
+
 ### Region is derived from the app's region, and is not configurable
 
 Current Claude models are invoked through cross-region inference profiles, which route
@@ -293,8 +328,15 @@ network access.
 
 ## Rollout
 
-The AppPack-managed IAM role needs `bedrock:InvokeModel` on both the inference profile
-ARN and the underlying foundation model ARNs in every region the profile can route to.
+The AppPack-managed IAM role needs two things:
+
+- `bedrock:InvokeModel` on both the inference profile ARN and the underlying
+  foundation model ARNs in every region the profile can route to.
+- `bedrock:ListInferenceProfiles` in the app's region, for the profile discovery
+  described above. This is a control-plane action, listing only profile metadata.
+
+Note the two use different endpoints: discovery goes to the Bedrock control plane
+(`bedrock`), invocation to the data plane (`bedrock-runtime`).
 
 Those CloudFormation templates live in the `apppack-cloudformations` repository, not
 here (`stacks/constants.go` resolves them from

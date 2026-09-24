@@ -1151,7 +1151,7 @@ git commit -m "feat: add validated read-only tool registry for diagnosis"
 - Consumes: `Registry`, `ErrUnknownTool` (Task 5), `Geography` (Task 1)
 - Produces:
   - `type Converser interface { Converse(context.Context, *bedrockruntime.ConverseInput, ...func(*bedrockruntime.Options)) (*bedrockruntime.ConverseOutput, error) }`
-  - `const MaxRounds = 12`, `const MaxTotalTokens = 400000`, `const DefaultModelID = "anthropic.claude-sonnet-4-5-20250929-v1:0"`
+  - `const MaxRounds = 12`, `const MaxTotalTokens = 400000`, `const DefaultModelID = "anthropic.claude-sonnet-5"` (set in Task 11; see note below)
   - `func ModelIDForGeography(g Geography, modelID string) string`
   - `func Run(ctx context.Context, c Converser, modelID, system, userMessage string, r *Registry) (string, error)`
 
@@ -1161,7 +1161,7 @@ git commit -m "feat: add validated read-only tool registry for diagnosis"
 go get github.com/aws/aws-sdk-go-v2/service/bedrockruntime
 ```
 
-Then confirm the default model ID is still current. `DefaultModelID` below was correct as of the spec date but AWS revises these. Check the Bedrock user guide's supported-models list, or run `aws bedrock list-inference-profiles --region us-east-1` if you have credentials. If it has changed, update the constant in Step 4 and nothing else — the geography prefix is applied separately.
+The `DefaultModelID` value written in Step 4 is superseded by Task 11, which pins it to `anthropic.claude-sonnet-5` and adds runtime inference-profile discovery. Write whatever Step 4 says; Task 11 corrects it. Do not spend time verifying model IDs in this task.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1926,8 +1926,25 @@ func Diagnose(ctx context.Context, a *app.App, buildNumber *int, modelID string)
 		return "", err
 	}
 
-	if modelID == "" {
-		modelID = DefaultModelID
+	// Resolve the model ID to invoke.
+	//
+	// With no --model, discover the inference profile for the pinned model
+	// that keeps inference inside the app's geography (Task 11). The prefix
+	// is per-model and AWS revises it -- Claude Sonnet 5 has us./eu./au./
+	// global. and no apac. at all -- so it must not be hardcoded.
+	//
+	// With --model, the user's value is used as given (prefixed if bare),
+	// bypassing discovery entirely.
+	resolvedModel := modelID
+	if resolvedModel == "" {
+		resolvedModel, err = SelectProfile(
+			ctx, bedrock.NewFromConfig(a.Session), geo, DefaultModelID,
+		)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		resolvedModel = ModelIDForGeography(geo, resolvedModel)
 	}
 
 	buildStatus := loadBuildStatus(a, buildNumber)
@@ -1968,7 +1985,7 @@ func Diagnose(ctx context.Context, a *app.App, buildNumber *int, modelID string)
 
 	client := bedrockruntime.NewFromConfig(a.Session)
 
-	answer, err := Run(ctx, client, ModelIDForGeography(geo, modelID), SystemPrompt(), dctx.Render(), registry)
+	answer, err := Run(ctx, client, resolvedModel, SystemPrompt(), dctx.Render(), registry)
 	if err != nil {
 		return "", TranslateError(err, a.Name, a.Pipeline, region)
 	}
@@ -2391,3 +2408,340 @@ Add a section near the top of `troubleshoot-deployment-failures.md` pointing at 
 git add src/how-to/apps/diagnose-deployment-failures.md src/how-to/apps/troubleshoot-deployment-failures.md
 git commit -m "docs: document apppack diagnose"
 ```
+
+---
+
+### Task 11: Pin the model and discover its inference profile
+
+**Files:**
+- Create: `diagnose/profile.go`
+- Test: `diagnose/profile_test.go`
+- Modify: `diagnose/bedrock.go` (the `DefaultModelID` constant only)
+- Modify: `go.mod`, `go.sum`
+
+**Interfaces:**
+- Consumes: `Geography`, `GeographyUS`, `GeographyEU`, `GeographyAPAC` (Task 1)
+- Produces: `ProfileLister`, `GeographyPrefixes(Geography) []string`,
+  `SelectProfile(ctx, ProfileLister, Geography, string) (string, error)`,
+  and the corrected `DefaultModelID`
+
+**Why this task exists:** the plan originally hardcoded `us-*` to `us.`,
+`eu-*` to `eu.`, `ap-*` to `apac.`. That is wrong. Claude Sonnet 5's published
+inference profiles are `us.`, `eu.`, `au.` and `global.` — there is no
+`apac.` profile and no `jp.` one. A hardcoded prefix would produce an invalid
+model ID and break the command for every Asia-Pacific app. The prefix set is
+per-model and AWS revises it, so it is discovered rather than guessed.
+
+- [ ] **Step 1: Add the Bedrock control-plane dependency**
+
+Run: `go get github.com/aws/aws-sdk-go-v2/service/bedrock`
+
+This is the **control plane** (`bedrock`), distinct from the data plane
+(`bedrock-runtime`) already used by `bedrock.go`. Both are needed.
+
+- [ ] **Step 2: Write the failing test**
+
+```go
+package diagnose_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/apppackio/apppack/diagnose"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/bedrock"
+	bedrocktypes "github.com/aws/aws-sdk-go-v2/service/bedrock/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+type fakeLister struct {
+	pages []*bedrock.ListInferenceProfilesOutput
+	calls int
+	err   error
+}
+
+func (f *fakeLister) ListInferenceProfiles(
+	_ context.Context, _ *bedrock.ListInferenceProfilesInput, _ ...func(*bedrock.Options),
+) (*bedrock.ListInferenceProfilesOutput, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	out := f.pages[f.calls]
+	f.calls++
+
+	return out, nil
+}
+
+func profile(id string, status bedrocktypes.InferenceProfileStatus) bedrocktypes.InferenceProfileSummary {
+	return bedrocktypes.InferenceProfileSummary{
+		InferenceProfileId: aws.String(id),
+		Status:             status,
+	}
+}
+
+func page(next *string, ids ...bedrocktypes.InferenceProfileSummary) *bedrock.ListInferenceProfilesOutput {
+	return &bedrock.ListInferenceProfilesOutput{
+		InferenceProfileSummaries: ids,
+		NextToken:                 next,
+	}
+}
+
+func TestGeographyPrefixes(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, []string{"us."}, diagnose.GeographyPrefixes(diagnose.GeographyUS))
+	assert.Equal(t, []string{"eu."}, diagnose.GeographyPrefixes(diagnose.GeographyEU))
+
+	// Asia-Pacific has been served by different prefixes on different models,
+	// so all of them are acceptable.
+	assert.Equal(t, []string{"apac.", "au.", "jp."}, diagnose.GeographyPrefixes(diagnose.GeographyAPAC))
+}
+
+// "global." routes to all commercial regions with no residency constraint,
+// which is exactly what geography matching exists to prevent.
+func TestGeographyPrefixesNeverIncludesGlobal(t *testing.T) {
+	t.Parallel()
+
+	for _, g := range []diagnose.Geography{diagnose.GeographyUS, diagnose.GeographyEU, diagnose.GeographyAPAC} {
+		assert.NotContains(t, diagnose.GeographyPrefixes(g), "global.")
+	}
+}
+
+func TestSelectProfile(t *testing.T) {
+	t.Parallel()
+
+	l := &fakeLister{pages: []*bedrock.ListInferenceProfilesOutput{
+		page(nil,
+			profile("eu.anthropic.claude-sonnet-5", bedrocktypes.InferenceProfileStatusActive),
+			profile("us.anthropic.claude-sonnet-5", bedrocktypes.InferenceProfileStatusActive),
+			profile("global.anthropic.claude-sonnet-5", bedrocktypes.InferenceProfileStatusActive),
+		),
+	}}
+
+	got, err := diagnose.SelectProfile(context.Background(), l, diagnose.GeographyUS, "anthropic.claude-sonnet-5")
+	require.NoError(t, err)
+	assert.Equal(t, "us.anthropic.claude-sonnet-5", got)
+}
+
+// The APAC case the hardcoded map got wrong: no apac. profile exists, but au.
+// does, and it keeps inference inside the geography.
+func TestSelectProfileFallsToAnyInGeographyPrefix(t *testing.T) {
+	t.Parallel()
+
+	l := &fakeLister{pages: []*bedrock.ListInferenceProfilesOutput{
+		page(nil,
+			profile("us.anthropic.claude-sonnet-5", bedrocktypes.InferenceProfileStatusActive),
+			profile("au.anthropic.claude-sonnet-5", bedrocktypes.InferenceProfileStatusActive),
+		),
+	}}
+
+	got, err := diagnose.SelectProfile(context.Background(), l, diagnose.GeographyAPAC, "anthropic.claude-sonnet-5")
+	require.NoError(t, err)
+	assert.Equal(t, "au.anthropic.claude-sonnet-5", got)
+}
+
+// A global profile must never be selected, even when it is the only one for
+// the model.
+func TestSelectProfileRejectsGlobal(t *testing.T) {
+	t.Parallel()
+
+	l := &fakeLister{pages: []*bedrock.ListInferenceProfilesOutput{
+		page(nil, profile("global.anthropic.claude-sonnet-5", bedrocktypes.InferenceProfileStatusActive)),
+	}}
+
+	_, err := diagnose.SelectProfile(context.Background(), l, diagnose.GeographyAPAC, "anthropic.claude-sonnet-5")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--model")
+}
+
+func TestSelectProfileIgnoresInactiveAndOtherModels(t *testing.T) {
+	t.Parallel()
+
+	l := &fakeLister{pages: []*bedrock.ListInferenceProfilesOutput{
+		page(nil,
+			profile("us.anthropic.claude-sonnet-5", bedrocktypes.InferenceProfileStatusInactive),
+			profile("us.anthropic.claude-haiku-4-5", bedrocktypes.InferenceProfileStatusActive),
+		),
+	}}
+
+	_, err := diagnose.SelectProfile(context.Background(), l, diagnose.GeographyUS, "anthropic.claude-sonnet-5")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "anthropic.claude-sonnet-5")
+}
+
+func TestSelectProfilePaginates(t *testing.T) {
+	t.Parallel()
+
+	l := &fakeLister{pages: []*bedrock.ListInferenceProfilesOutput{
+		page(aws.String("more"), profile("us.anthropic.claude-haiku-4-5", bedrocktypes.InferenceProfileStatusActive)),
+		page(nil, profile("us.anthropic.claude-sonnet-5", bedrocktypes.InferenceProfileStatusActive)),
+	}}
+
+	got, err := diagnose.SelectProfile(context.Background(), l, diagnose.GeographyUS, "anthropic.claude-sonnet-5")
+	require.NoError(t, err)
+	assert.Equal(t, "us.anthropic.claude-sonnet-5", got)
+	assert.Equal(t, 2, l.calls)
+}
+
+// An exact-match requirement: a different model whose ID merely ends with the
+// pinned one's text must not be accepted.
+func TestSelectProfileDoesNotMatchLongerModelID(t *testing.T) {
+	t.Parallel()
+
+	l := &fakeLister{pages: []*bedrock.ListInferenceProfilesOutput{
+		page(nil, profile("us.anthropic.claude-sonnet-5-preview", bedrocktypes.InferenceProfileStatusActive)),
+	}}
+
+	_, err := diagnose.SelectProfile(context.Background(), l, diagnose.GeographyUS, "anthropic.claude-sonnet-5")
+	require.Error(t, err)
+}
+```
+
+- [ ] **Step 3: Run test to verify it fails**
+
+Run: `go test ./diagnose -run 'TestGeography|TestSelectProfile' -v`
+Expected: FAIL — `undefined: diagnose.GeographyPrefixes`
+
+- [ ] **Step 4: Write the implementation**
+
+```go
+package diagnose
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/bedrock"
+	bedrocktypes "github.com/aws/aws-sdk-go-v2/service/bedrock/types"
+	"github.com/sirupsen/logrus"
+)
+
+// ProfileLister is the Bedrock control-plane call used to discover inference
+// profiles, extracted so selection is testable without AWS.
+type ProfileLister interface {
+	ListInferenceProfiles(
+		ctx context.Context,
+		params *bedrock.ListInferenceProfilesInput,
+		optFns ...func(*bedrock.Options),
+	) (*bedrock.ListInferenceProfilesOutput, error)
+}
+
+// GeographyPrefixes returns the inference profile ID prefixes that keep
+// inference inside a geography, in preference order.
+//
+// These are plural because AWS assigns prefixes per model, not per geography:
+// Asia-Pacific has been served by "apac." on some models and "au." or "jp." on
+// others, and Claude Sonnet 5 has no "apac." profile at all.
+//
+// "global." is deliberately absent. Global cross-Region inference routes to
+// all commercial regions with no residency constraint, which is the exact
+// property geography matching exists to prevent.
+func GeographyPrefixes(g Geography) []string {
+	switch g {
+	case GeographyUS:
+		return []string{"us."}
+	case GeographyEU:
+		return []string{"eu."}
+	case GeographyAPAC:
+		return []string{"apac.", "au.", "jp."}
+	default:
+		return nil
+	}
+}
+
+// SelectProfile finds the active, system-defined inference profile for
+// modelID whose prefix keeps inference inside geo.
+func SelectProfile(ctx context.Context, l ProfileLister, geo Geography, modelID string) (string, error) {
+	prefixes := GeographyPrefixes(geo)
+	if len(prefixes) == 0 {
+		return "", fmt.Errorf("no inference profile geography is defined for %q", geo)
+	}
+
+	found := map[string]string{}
+
+	var nextToken *string
+
+	for {
+		out, err := l.ListInferenceProfiles(ctx, &bedrock.ListInferenceProfilesInput{
+			NextToken:  nextToken,
+			TypeEquals: bedrocktypes.InferenceProfileTypeSystemDefined,
+		})
+		if err != nil {
+			return "", err
+		}
+
+		for i := range out.InferenceProfileSummaries {
+			s := out.InferenceProfileSummaries[i]
+			if s.Status != bedrocktypes.InferenceProfileStatusActive {
+				continue
+			}
+
+			id := aws.ToString(s.InferenceProfileId)
+
+			for _, prefix := range prefixes {
+				// The profile ID is exactly prefix + modelID. A suffix check
+				// alone would also match a different, longer model ID.
+				if id == prefix+modelID {
+					found[prefix] = id
+				}
+			}
+		}
+
+		if out.NextToken == nil {
+			break
+		}
+
+		nextToken = out.NextToken
+	}
+
+	for _, prefix := range prefixes {
+		if id, ok := found[prefix]; ok {
+			logrus.WithFields(logrus.Fields{"profile": id, "geography": geo}).Debug("selected inference profile")
+
+			return id, nil
+		}
+	}
+
+	return "", fmt.Errorf(
+		"no Amazon Bedrock inference profile for %s is available in the %s geography\n\n"+
+			"This usually means model access is not enabled for your account, or the model\n"+
+			"is not offered in your app's region. Enable it in the Bedrock console under\n"+
+			"\"Model access\", or pass an explicit profile ID with --model.",
+		modelID, geo,
+	)
+}
+```
+
+- [ ] **Step 5: Pin the default model**
+
+In `diagnose/bedrock.go`, change the `DefaultModelID` constant to:
+
+```go
+	// DefaultModelID is the Bedrock model used when --model is not given.
+	// Pinned deliberately: a fixed model means a predictable response shape,
+	// cost profile, and diagnosis quality. SelectProfile resolves it to a
+	// geography-appropriate inference profile at runtime, because the profile
+	// prefix is per-model and AWS revises it.
+	DefaultModelID = "anthropic.claude-sonnet-5"
+```
+
+Leave `ModelIDForGeography` in place — it still handles the `--model` case,
+where a user may pass a bare model ID that needs a prefix.
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+Run: `go test ./diagnose -v`
+Expected: PASS. If an SDK type name differs (`InferenceProfileTypeSystemDefined`,
+`InferenceProfileStatusActive`, `InferenceProfileSummary`), the compiler is
+authoritative — check with `go doc github.com/aws/aws-sdk-go-v2/service/bedrock/types <Name>`
+and fix the code, not the test's intent.
+
+- [ ] **Step 7: Commit**
+
+Stage `go.mod`, `go.sum`, `diagnose/profile.go`, `diagnose/profile_test.go`,
+and `diagnose/bedrock.go`, then commit with the message:
+`feat: discover the in-geography Bedrock inference profile at runtime`
