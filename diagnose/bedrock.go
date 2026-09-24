@@ -26,8 +26,11 @@ const (
 	maxResponseTokens = 4096
 
 	// DefaultModelID is the Bedrock model used when --model is not given.
-	// It is combined with the app's geography by ModelIDForGeography.
-	DefaultModelID = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+	// Pinned deliberately: a fixed model means a predictable response shape,
+	// cost profile, and diagnosis quality. SelectProfile resolves it to a
+	// geography-appropriate inference profile at runtime, because the profile
+	// prefix is per-model and AWS revises it.
+	DefaultModelID = "anthropic.claude-sonnet-5"
 )
 
 // Converser is the subset of the Bedrock runtime client this package uses,
