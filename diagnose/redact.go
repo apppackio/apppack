@@ -21,9 +21,14 @@ type redaction struct {
 var redactions = []redaction{
 	// KEY=value or KEY: value where the key name suggests a credential.
 	// Requires an actual value, so "SECRET_KEY is not set" is left alone.
+	// Keywords must be whole identifier segments, enforced by:
+	// - Either preceded by underscore (e.g., api_KEY) or standalone (e.g., SECRET_KEY, TOKEN)
+	// - Optionally followed by underscore and suffix (e.g., db_PASSWORD_SALT)
+	// This prevents matching keywords within camelCase (e.g., InvalidTokenError).
+	// Keys may be quoted (e.g., "SECRET_KEY" in JSON), and values may be quoted with spaces.
 	{
-		regexp.MustCompile(`(?i)\b([A-Za-z0-9_]*(?:SECRET|PASSWORD|PASSWD|TOKEN|CREDENTIAL|API_?KEY|ACCESS_?KEY)[A-Za-z0-9_]*)(\s*[=:]\s*)"?([^\s"']+)"?`),
-		`${1}${2}[REDACTED]`,
+		regexp.MustCompile(`(["'])?([A-Za-z0-9_]*_(?i:SECRET|PASSWORD|PASSWD|CREDENTIAL|API_?KEY|ACCESS_?KEY|TOKEN)(?:_[A-Za-z0-9_]*)?|(?i:SECRET|PASSWORD|PASSWD|CREDENTIAL|API_?KEY|ACCESS_?KEY|TOKEN)(?:_[A-Za-z0-9_]*)?)(["'])?(\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s"']+)`),
+		`${1}${2}${3}${4}[REDACTED]`,
 	},
 	// Connection-string userinfo: proto://user:password@host
 	{

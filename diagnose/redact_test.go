@@ -38,6 +38,14 @@ func TestRedact(t *testing.T) {
 			`Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NSJ9.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk`,
 			`Bearer [REDACTED]`,
 		},
+		"json key-value": {
+			`"SECRET_KEY": "abc123xyz"`,
+			`"SECRET_KEY": [REDACTED]`,
+		},
+		"quoted value with spaces": {
+			`SECRET_KEY = "hello world secret"`,
+			`SECRET_KEY = [REDACTED]`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -52,12 +60,16 @@ func TestRedactLeavesInnocentTextAlone(t *testing.T) {
 	t.Parallel()
 
 	for name, in := range map[string]string{
-		"key name with no value":  `SECRET_KEY is not set`,
-		"missing env var error":   `KeyError: 'DATABASE_PASSWORD'`,
-		"prose":                   `the token could not be validated`,
-		"url without credentials": `postgres://db.internal:5432/mydb`,
-		"ordinary assignment":     `PORT=8080`,
-		"module path":             `django.core.exceptions.ImproperlyConfigured`,
+		"key name with no value":           `SECRET_KEY is not set`,
+		"missing env var error":            `KeyError: 'DATABASE_PASSWORD'`,
+		"prose":                            `the token could not be validated`,
+		"url without credentials":          `postgres://db.internal:5432/mydb`,
+		"ordinary assignment":              `PORT=8080`,
+		"module path":                      `django.core.exceptions.ImproperlyConfigured`,
+		"error with InvalidTokenError":     `InvalidTokenError: token has expired`,
+		"error with TokenError":            `TokenError: invalid or expired signature`,
+		"error with AuthTokenMissingError": `AuthTokenMissingError: no token provided in request headers`,
+		"tokenized identifier":             `tokenized_value=metadata_only`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
