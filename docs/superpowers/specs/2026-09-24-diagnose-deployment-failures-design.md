@@ -85,24 +85,39 @@ The security cost is acceptable because the tools are Go functions in the CLI. T
 model cannot invoke anything outside the allowlist, cannot reach a shell, and cannot
 make an arbitrary AWS call.
 
-### Logs are sent unmodified; output is scrubbed
+### Logs are sent unmodified, and there is no client-side redaction
 
 Application logs routinely contain secrets -- a traceback dumping settings, a failed
-connection logging a full `DATABASE_URL`. Three options were considered:
+connection logging a full `DATABASE_URL`. Four options were considered:
 
-- Send as-is. Justified because those logs already sit in CloudWatch in the same
-  account, and Bedrock is another AWS service reached with the same credentials.
+- Send as-is, no scrubbing. Justified because those logs already sit in CloudWatch in
+  the same account, and Bedrock is another AWS service reached with the same
+  credentials.
 - Pattern-based redaction before sending. Cheap, partial, and mangles innocent lines.
 - Value-matched redaction -- fetch the real config values and scrub occurrences.
   Most reliable, but requires reading every secret, contradicting constraint 2.
+- Pattern-based redaction of the model's *output*, on the theory that the realistic
+  leak is a diagnosis quoting a secret back and the user pasting it into a ticket.
 
-**Decision: send as-is, and scrub the model's output.** The realistic leak is not
-Bedrock seeing a secret -- it already has the logs' contents by construction, and does
-not retain them. The realistic leak is the *diagnosis* quoting a secret back and the
-user pasting it into a GitHub issue. Mitigation therefore belongs on the output side.
+**Decision: send as-is, scrub nothing, and instruct the model not to echo secrets.**
 
-This means redaction is best-effort, and the documentation must say so rather than
-implying a guarantee.
+Output redaction was specified first and then removed. Two things killed it. The
+first is that it protects nothing: the diagnosis is derived from logs the user can
+already dump to their own console in full with `apppack logs`, so redacting the
+derivative while the source prints unredacted is theatre. The CLI has never claimed
+to keep secrets off the user's terminal, and this command does not change that.
+
+The second is that it actively damaged the product. A regex that blanks anything
+near the words `TOKEN` or `SECRET` turns `InvalidTokenError: token has expired` into
+`InvalidTokenError: [REDACTED] has expired` -- destroying the evidentiary word in
+exactly the class of auth failure this tool exists to diagnose. Trading working
+diagnoses for a guarantee that was never real is a bad trade.
+
+The control that remains is the system prompt: the model is instructed never to
+repeat a value that looks like a credential, and to refer to it by name instead.
+This is a soft control and the documentation must say so -- a user should treat a
+diagnosis with the same care they treat log output, because that is what it is
+derived from.
 
 ### Model is configurable; Claude is the default
 
@@ -168,7 +183,6 @@ command structure.
 | `diagnose/evidence.go` | Read-only evidence gathering, wrapping existing `App` methods |
 | `diagnose/tools.go`    | Tool registry, JSON schemas, argument validation |
 | `diagnose/bedrock.go`  | Converse client, region mapping, the tool loop |
-| `diagnose/redact.go`   | Output scrubbing |
 | `diagnose/prompt.go`   | System prompt and phase-specific guidance |
 
 The package takes a `*app.App` and constructs no AWS clients other than
@@ -231,11 +245,14 @@ the model following instructions.
    instruction. This is mitigation, not prevention. The actual guarantee comes from
    invariant 1: a successful injection yields a wrong answer, never an action.
 
-5. **Output is scrubbed.** A redaction pass over the model's response runs before
-   printing, catching credential-shaped strings: assignments whose key matches
-   `KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL`, connection-string userinfo
-   (`proto://user:pass@host`), AWS access key IDs, and JWTs. The system prompt also
-   instructs the model not to echo values that look like credentials.
+5. **The model is instructed not to echo secrets.** The system prompt requires it
+   never to repeat a value that looks like a credential, password, token, API key,
+   or connection string, and to refer to it by name instead. Unlike invariants 1-4
+   this is a soft control, and it is the only one covering this risk: there is no
+   client-side redaction. That is deliberate -- see the decision above. The
+   diagnosis derives from logs the user can already print in full with
+   `apppack logs`, so it warrants the same handling as log output, and the
+   documentation must say so rather than implying the output is sanitised.
 
 6. **Cost is bounded.** A hard cap on tool-call rounds and a total token budget.
 
@@ -263,7 +280,7 @@ front door.
 
 Table-driven, per the repo's conventions, with `testify` assertions.
 
-- Redaction patterns, including near-misses that must **not** be mangled
+- The system prompt contains the no-credential-echo instruction
 - Argument validation rejecting out-of-enum services and phases, and out-of-bounds
   numerics
 - The registry allowlist assertion (invariant 1)
