@@ -43,7 +43,7 @@ func getSignInToken(ctx context.Context, creds aws.Credentials) (*signInToken, e
 		url.QueryEscape(string(byteArr)),
 	)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenRequestEndpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenRequestEndpoint, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build token request: %w", err)
 	}
