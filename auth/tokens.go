@@ -30,7 +30,7 @@ type Tokens struct {
 func (t *Tokens) GetUserInfo() (*UserInfo, error) {
 	logrus.WithFields(logrus.Fields{"url": userInfoURL}).Debug("fetching user info")
 
-	req, err := http.NewRequest(http.MethodGet, userInfoURL, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, userInfoURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,8 @@ func (t *Tokens) GetUserInfo() (*UserInfo, error) {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	// Read-only: a Close failure here tells the caller nothing actionable.
+	defer func() { _ = resp.Body.Close() }()
 
 	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -63,7 +64,9 @@ func (t *Tokens) GetUserInfo() (*UserInfo, error) {
 }
 
 func (t *Tokens) WriteToCache() error {
-	data, err := json.Marshal(t)
+	// Serialising the tokens is the point: they are cached for reuse in
+	// ~/.cache/io.apppack, created 0600 in the user's own cache directory.
+	data, err := json.Marshal(t) // #nosec G117 -- caching the token is the purpose of this function
 	if err != nil {
 		return err
 	}
@@ -109,7 +112,7 @@ func (t *Tokens) IsExpired() (*bool, error) {
 func (t *Tokens) GetAppList() ([]*AppRole, error) {
 	logrus.WithFields(logrus.Fields{"url": appListURL}).Debug("fetching app list")
 
-	req, err := http.NewRequest(http.MethodGet, appListURL, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, appListURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +124,8 @@ func (t *Tokens) GetAppList() ([]*AppRole, error) {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	// Read-only: a Close failure here tells the caller nothing actionable.
+	defer func() { _ = resp.Body.Close() }()
 
 	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -159,7 +163,7 @@ func (t *Tokens) GetAppRole(name string) (*AppRole, error) {
 func (t *Tokens) GetAdminList() ([]*AdminRole, error) {
 	logrus.WithFields(logrus.Fields{"url": adminListURL}).Debug("fetching admin list")
 
-	req, err := http.NewRequest(http.MethodGet, adminListURL, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, adminListURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +175,8 @@ func (t *Tokens) GetAdminList() ([]*AdminRole, error) {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	// Read-only: a Close failure here tells the caller nothing actionable.
+	defer func() { _ = resp.Body.Close() }()
 
 	contents, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -242,6 +247,20 @@ func (t *Tokens) GetCredentials(role Role, duration int) (*types.Credentials, er
 	svc := sts.NewFromConfig(cfg)
 	roleARN := role.GetRoleARN()
 	logrus.WithFields(logrus.Fields{"role": roleARN}).Debug("assuming role")
+
+	// STS rejects anything outside this range. Checking locally gives a
+	// clearer error than the API's, and keeps the int32 conversion in range.
+	const (
+		minSessionSeconds = 900   // 15 minutes
+		maxSessionSeconds = 43200 // 12 hours
+	)
+
+	if duration < minSessionSeconds || duration > maxSessionSeconds {
+		return nil, fmt.Errorf(
+			"session duration must be between %d and %d seconds, got %d",
+			minSessionSeconds, maxSessionSeconds, duration,
+		)
+	}
 
 	durationSeconds := int32(duration)
 	resp, err := svc.AssumeRoleWithWebIdentity(context.Background(), &sts.AssumeRoleWithWebIdentityInput{

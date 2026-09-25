@@ -31,7 +31,9 @@ func getSignInToken(ctx context.Context, creds aws.Credentials) (*signInToken, e
 		SessionToken: creds.SessionToken,
 	}
 
-	byteArr, err := json.Marshal(&urlCreds)
+	// AWS's federation endpoint requires the temporary credentials in the
+	// request; there is no variant of this flow that omits them.
+	byteArr, err := json.Marshal(&urlCreds) // #nosec G117 -- required by the AWS federation signin API
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal credentials: %w", err)
 	}
@@ -50,7 +52,8 @@ func getSignInToken(ctx context.Context, creds aws.Credentials) (*signInToken, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to request signin token: %w", err)
 	}
-	defer resp.Body.Close()
+	// Read-only: a Close failure here tells the caller nothing actionable.
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

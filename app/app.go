@@ -632,10 +632,7 @@ func (a *App) StartTask(taskFamily *string, command []string, taskOverride *ecst
 		runTaskArgs = a.ECSConfig.RunTaskArgs
 	}
 
-	var cmd []string
-	for i := range command {
-		cmd = append(cmd, command[i])
-	}
+	cmd := append([]string(nil), command...)
 
 	email, err := auth.WhoAmI()
 	if err != nil {
@@ -810,7 +807,7 @@ func (a *App) StartBuild(createReviewApp bool, ref string) (*codebuildetypes.Bui
 }
 
 // ListBuilds lists recent CodeBuild runs
-func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
+func (a *App) RecentBuilds(count int32) ([]BuildStatus, error) {
 	ddbSvc := dynamodb.NewFromConfig(a.Session)
 
 	primaryID := "APP#" + a.Name
@@ -828,7 +825,7 @@ func (a *App) RecentBuilds(count int) ([]BuildStatus, error) {
 			":id2": &dynamodbtypes.AttributeValueMemberS{Value: "BUILD#"},
 		},
 
-		Limit:            aws.Int32(int32(count)),
+		Limit:            aws.Int32(count),
 		ScanIndexForward: aws.Bool(false),
 	})
 	if err != nil {
