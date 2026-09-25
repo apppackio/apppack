@@ -140,7 +140,7 @@ func execCmd(command string, args, env []string) error {
 	// Exiting from here is the point: `aws-exec` stands in for the command it
 	// runs, so it must exit with that command's status rather than return and
 	// let Cobra exit 0.
-	os.Exit(cmd.ProcessState.ExitCode()) // skipcq: RVV-A0003
+	os.Exit(cmd.ProcessState.ExitCode())
 
 	return nil
 }

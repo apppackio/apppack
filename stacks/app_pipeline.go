@@ -873,7 +873,7 @@ func AppDataLossConfirmForm() (*huh.Form, *bool) {
 	return form, &confirmed
 }
 
-func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
+func (a *AppStack) AskQuestions(cfg aws.Config) error {
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(
