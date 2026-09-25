@@ -123,9 +123,7 @@ func listRDSInstanceClasses(cfg aws.Config, engine, version *string) ([]string, 
 			return nil, err
 		}
 
-		for _, instanceOption := range resp.OrderableDBInstanceOptions {
-			instanceClassResults = append(instanceClassResults, instanceOption)
-		}
+		instanceClassResults = append(instanceClassResults, resp.OrderableDBInstanceOptions...)
 	}
 
 	var instanceClasses []string

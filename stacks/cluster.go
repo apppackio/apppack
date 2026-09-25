@@ -66,7 +66,8 @@ func splitSubnet(cidrStr string) ([]string, []string, error) {
 func checkHostedZone(cfg aws.Config, zone *route53types.HostedZone) error {
 	r53svc := route53.NewFromConfig(cfg)
 
-	results, err := net.LookupNS(*zone.Name)
+	// Resolver form rather than net.LookupNS so the lookup is cancellable.
+	results, err := net.DefaultResolver.LookupNS(context.Background(), *zone.Name)
 	if err != nil {
 		return err
 	}

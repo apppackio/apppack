@@ -28,8 +28,11 @@ func (t *TimeFrame) Clone() *TimeFrame {
 	}
 }
 
-// Period returns the resolution in seconds to graph for the time frame
-func (t *TimeFrame) Period() int64 {
+// Period returns the resolution in seconds to graph for the time frame.
+//
+// int32 because that is what CloudWatch's MetricStat.Period takes; every
+// caller feeds it straight to aws.Int32.
+func (t *TimeFrame) Period() int32 {
 	switch {
 	case t.Duration.Hours() <= 24:
 		return 60
@@ -117,7 +120,7 @@ func (m *ServiceUtilizationMetrics) MetricDataQueries() []types.MetricDataQuery 
 						},
 					},
 				},
-				Period: aws.Int32(int32(m.Options.Timeframe.Period())),
+				Period: aws.Int32(m.Options.Timeframe.Period()),
 				Stat:   aws.String("Maximum"),
 			},
 		},
@@ -138,7 +141,7 @@ func (m *ServiceUtilizationMetrics) MetricDataQueries() []types.MetricDataQuery 
 						},
 					},
 				},
-				Period: aws.Int32(int32(m.Options.Timeframe.Period())),
+				Period: aws.Int32(m.Options.Timeframe.Period()),
 				Stat:   aws.String("Maximum"),
 			},
 		},
@@ -195,7 +198,7 @@ func (m *ResponseTimeMetrics) MetricDataQueries() []types.MetricDataQuery {
 						},
 					},
 				},
-				Period: aws.Int32(int32(m.Options.Timeframe.Period())),
+				Period: aws.Int32(m.Options.Timeframe.Period()),
 				Stat:   &m.Stat,
 			},
 		},
@@ -257,7 +260,7 @@ func (m *StatusCodeMetrics) MetricDataQueries() []types.MetricDataQuery {
 						},
 					},
 				},
-				Period: aws.Int32(int32(m.Options.Timeframe.Period())),
+				Period: aws.Int32(m.Options.Timeframe.Period()),
 				Stat:   aws.String("Sum"),
 			},
 		},
