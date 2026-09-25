@@ -46,7 +46,7 @@ require (
 	github.com/charmbracelet/huh v0.7.0
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260316093931-f2fb44ab3145
 	github.com/cli/cli/v2 v2.83.0
-	github.com/go-jose/go-jose/v4 v4.1.1
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/rogpeppe/go-internal v1.14.1
 )
 
