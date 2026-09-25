@@ -142,7 +142,9 @@ func appLogs(ctx context.Context, a *app.App, service string, sinceMinutes, limi
 		LogGroupName:        aws.String(a.Settings.LogGroup.Name),
 		LogStreamNamePrefix: aws.String(service),
 		StartTime:           aws.Int64(start),
-		Limit:               aws.Int32(int32(limit)),
+		// #nosec G115 -- limit reaches here only via ValidateInt, which
+		// clamps it to [1, 1000] before any tool can pass it on.
+		Limit: aws.Int32(int32(limit)),
 	})
 	if err != nil {
 		return "", err
