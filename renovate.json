@@ -7,6 +7,17 @@
   ],
   "automerge": true,
   "automergeType": "pr",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The lint job installs golangci-lint from a version pin inside a run script, which no built-in manager sees.",
+      "managerFilePatterns": ["/^\\.github/workflows/go_tests\\.yml$/"],
+      "matchStrings": [
+        "go install (?<depName>github\\.com/golangci/golangci-lint/v2)/cmd/golangci-lint@(?<currentValue>v\\S+)"
+      ],
+      "datasourceTemplate": "go"
+    }
+  ],
   "dependencyDashboard": true,
   "dependencyDashboardOSVVulnerabilitySummary": "all",
   "minimumReleaseAge": "7 days",
@@ -22,9 +33,13 @@
       ]
     },
     {
-      "description": "go.mod and .tool-versions pin the same toolchain; bump them together.",
+      "description": "The workflows' go-version inputs (depName `go`), .tool-versions (depName `golang`) and the golangci-lint pin all track the same toolchain; bump them in one PR. golangci-lint especially cannot lag: it type-checks through a vendored x/tools that only reads export data from Go releases it already knows about.",
       "groupName": "go runtime",
-      "matchDatasources": ["golang-version"]
+      "matchDepNames": [
+        "go",
+        "golang",
+        "github.com/golangci/golangci-lint/v2"
+      ]
     }
   ],
   "platformAutomerge": true,
