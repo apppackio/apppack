@@ -1,43 +1,54 @@
 version = "2"
+
+[run]
 go = "1.25.4"
-sort-results = true
 
 [linters]
-enable-all = true
+# "standard" is errcheck, govet, ineffassign, staticcheck, unused.
+#
+# Everything below is enabled deliberately. Prefer adding a linter you have
+# decided you want over enabling all of them and pruning the result -- `all`
+# turns on mutually contradictory style linters (it enables both `wsl` and
+# `wsl_v5`, and `noinlineerr` forbids `if err := f(); err != nil`) and buries
+# real findings under thousands of stylistic ones.
+default = "standard"
 
-disable = [
-    # don't have control over serialized key names
-    "tagliatelle",
-    # It's a CLI. We use globals
-    "gochecknoglobals",
-    # Cobra uses inits
-    "gochecknoinits",
-    # too verbose
-    "exhaustruct",
-    # don't care
-    "godot",
-    # no configuration = blocks all imports (not useful)
-    "depguard",
+enable = [
+    # Security. This CLI handles AWS credentials and shells out.
+    "gosec",
 
-    # assess later
-    "wrapcheck",
-    "varnamelen",
-    "mnd",
-    "lll",
-    "cyclop",
-    "prealloc",
+    # Bug classes, not style.
+    "bodyclose",       # HTTP response bodies that are never closed
+    "noctx",           # HTTP requests built without a context
+    "errorlint",       # error comparison/wrapping that breaks errors.Is/As
+    "forcetypeassert", # unchecked type assertions -- these panic
+    "nilerr",          # returning nil after checking err != nil
+
+    # Cheap correctness.
+    "copyloopvar",  # redundant loop-variable copies
+    "misspell",     # typos, including in user-facing strings
+    "testifylint",  # testify assertions that don't test what they look like
 ]
+
+[linters.exclusions]
+paths = ["version"]
+
+# Cobra's flag-marking helpers return an error only when the flag name does
+# not exist, which is a programming error caught immediately by any manual
+# run. Checking them at every call site adds noise without adding safety.
+[[linters.exclusions.rules]]
+linters = ["errcheck"]
+text = "Error return value of `\\w+\\.MarkPersistentFlagRequired` is not checked"
+
+[[linters.exclusions.rules]]
+linters = ["errcheck"]
+text = "Error return value of `\\(\\*github\\.com/spf13/pflag\\.FlagSet\\)\\.Mark(Hidden|Deprecated)` is not checked"
+
+[issues]
+# Report everything. The defaults (50 per linter, 3 per rule) silently
+# truncate, which makes the total vary between runs on identical code.
+max-issues-per-linter = 0
+max-same-issues = 0
 
 [formatters]
 enable = ["gofumpt", "gci"]
-
-
-[issues]
-exclude = [
-    "Error return value of `\\w+\\.MarkPersistentFlagRequired` is not checked",
-    "Error return value of `\\(\\*github\\.com/spf13/pflag\\.FlagSet\\)\\.Mark(Hidden|Deprecated)` is not checked",
-    "use of `fmt\\.Print(|f|ln)` forbidden by pattern"
-]
-exclude-dirs = [
-    "version"
-]
