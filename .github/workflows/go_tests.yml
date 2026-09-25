@@ -13,7 +13,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.25.14"
+          go-version: "1.27.1"
       - name: Test
         run: go test ./... -v
 
@@ -25,7 +25,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.25.14"
+          go-version: "1.27.1"
       - name: Vet
         run: go vet ./...
       # Same tool as `make fmt` and `make lint`, so a clean local run is a
