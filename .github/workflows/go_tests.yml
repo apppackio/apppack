@@ -13,7 +13,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.25"
+          go-version: "1.25.14"
       - name: Test
         run: go test ./... -v
 
@@ -25,14 +25,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.25"
+          go-version: "1.25.14"
       - name: Vet
         run: go vet ./...
       # Same tool as `make fmt` and `make lint`, so a clean local run is a
       # clean CI run. golangci-lint-action can't be used here: it only ever
       # invokes `golangci-lint run`, with no way to also select `fmt`.
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.3
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
       # Fails if .golangci.toml uses keys this version does not understand.
       # The config previously declared version 2 while written in v1 syntax,
       # so every unrecognised key -- including the linter set and every
