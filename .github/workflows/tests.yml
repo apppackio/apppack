@@ -1,11 +1,18 @@
 ---
-name: unit-tests
+name: tests
 
 on:
+  pull_request:
+  # Branch pushes are covered by `pull_request`, so `push` is limited to
+  # main. A bare `push:` here would run everything twice on every PR.
   push:
+    branches:
+      - main
 
 jobs:
-  unit-tests:
+  # `go test ./...` covers the package tests and the testscript-driven CLI
+  # tests in integration_test.go, so this is not a unit-test-only job.
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

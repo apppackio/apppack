@@ -11,7 +11,7 @@
     {
       "customType": "regex",
       "description": "The lint job installs golangci-lint from a version pin inside a run script, which no built-in manager sees.",
-      "managerFilePatterns": ["/^\\.github/workflows/go_tests\\.yml$/"],
+      "managerFilePatterns": ["/^\\.github/workflows/tests\\.yml$/"],
       "matchStrings": [
         "go install (?<depName>github\\.com/golangci/golangci-lint/v2)/cmd/golangci-lint@(?<currentValue>v\\S+)"
       ],
