@@ -226,7 +226,9 @@ func watchBuildOrExit(a *app.App, buildStatus *app.BuildStatus) {
 	}
 
 	reportWatchBuildErr(a, err)
-	os.Exit(1)
+	// Same contract as checkErr, which this replaces: report and exit
+	// non-zero so a failed build fails the caller's script.
+	os.Exit(1) // skipcq: RVV-A0003
 }
 
 func watchBuild(a *app.App, buildStatus *app.BuildStatus) error {
