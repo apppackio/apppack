@@ -931,13 +931,13 @@ var (
 func init() {
 	rootCmd.AddCommand(buildCmd)
 	buildCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	buildCmd.MarkPersistentFlagRequired("app-name")
+	_ = buildCmd.MarkPersistentFlagRequired("app-name")
 	buildCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	buildCmd.AddCommand(buildStartCmd)
 	buildStartCmd.Flags().BoolVarP(&watchBuildFlag, "watch", "w", false, "watch build process")
 	buildStartCmd.Flags().BoolVar(&watchBuildFlag, "wait", false, "watch build process")
-	buildStartCmd.Flags().MarkDeprecated("wait", "please use --watch instead")
+	_ = buildStartCmd.Flags().MarkDeprecated("wait", "please use --watch instead")
 	buildStartCmd.Flags().StringVar(&refFlag, "ref", "", "git reference (branch, tag, or commit hash) to build")
 	buildCmd.AddCommand(buildListCmd)
 	buildCmd.AddCommand(buildStatusCmd)

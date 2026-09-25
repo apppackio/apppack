@@ -105,26 +105,26 @@ var stacksCmd = &cobra.Command{
 		w.Init(os.Stdout, 8, 8, 0, '\t', 0)
 		for _, hs := range humanStacks {
 			if currentGroup != hs.Type {
-				w.Flush()
+				_ = w.Flush()
 				currentGroup = hs.Type
 				fmt.Println()
 				caser := cases.Title(language.English)
 				ui.PrintHeaderln(caser.String(currentGroup + " Stacks"))
 				if hs.Cluster != "" {
-					fmt.Fprintf(w, "%s\t%s\t\n", aurora.Faint("Name"), aurora.Faint("Cluster"))
+					_, _ = fmt.Fprintf(w, "%s\t%s\t\n", aurora.Faint("Name"), aurora.Faint("Cluster"))
 				} else {
-					fmt.Fprintf(w, "%s\t\n", aurora.Faint("Name"))
+					_, _ = fmt.Fprintf(w, "%s\t\n", aurora.Faint("Name"))
 				}
 			}
 
-			fmt.Fprint(w, hs.Name)
+			_, _ = fmt.Fprint(w, hs.Name)
 			if hs.Cluster != "" {
-				fmt.Fprintf(w, "\t%s\t\n", hs.Cluster)
+				_, _ = fmt.Fprintf(w, "\t%s\t\n", hs.Cluster)
 			} else {
-				fmt.Fprintf(w, "\t\n")
+				_, _ = fmt.Fprintf(w, "\t\n")
 			}
 		}
-		w.Flush()
+		_ = w.Flush()
 	},
 }
 

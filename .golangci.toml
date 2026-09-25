@@ -33,17 +33,6 @@ enable = [
 [linters.exclusions]
 paths = ["version"]
 
-# Cobra's flag-marking helpers return an error only when the flag name does
-# not exist, which is a programming error caught immediately by any manual
-# run. Checking them at every call site adds noise without adding safety.
-[[linters.exclusions.rules]]
-linters = ["errcheck"]
-text = "Error return value of `\\w+\\.MarkPersistentFlagRequired` is not checked"
-
-[[linters.exclusions.rules]]
-linters = ["errcheck"]
-text = "Error return value of `\\(\\*github\\.com/spf13/pflag\\.FlagSet\\)\\.Mark(Hidden|Deprecated)` is not checked"
-
 # gosec's file rules (G304 path from variable, G302/G306 permissions) are
 # about untrusted input reaching the filesystem. In tests the paths are
 # fixtures under t.TempDir(), so the rules report noise rather than risk.
@@ -58,6 +47,11 @@ text = "G30[246]"
 # truncate, which makes the total vary between runs on identical code.
 max-issues-per-linter = 0
 max-same-issues = 0
+
+# Off because it hides findings: with it on, two linters flagging the same
+# line report once, so silencing the first makes the second appear out of
+# nowhere later.
+uniq-by-line = false
 
 [formatters]
 enable = ["gofumpt", "gci"]

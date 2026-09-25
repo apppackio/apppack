@@ -110,7 +110,8 @@ func (e *environ) Set(key, val string) {
 }
 
 func execCmd(command string, args, env []string) error {
-	cmd := osexec.Command(command, args...)
+	// #nosec G204 -- running the command the user named is what aws-exec does
+	cmd := osexec.CommandContext(context.Background(), command, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -136,8 +137,7 @@ func execCmd(command string, args, env []string) error {
 		return fmt.Errorf("failed to wait for command termination: %w", err)
 	}
 
-	waitStatus := cmd.ProcessState.Sys().(syscall.WaitStatus)
-	os.Exit(waitStatus.ExitStatus())
+	os.Exit(cmd.ProcessState.ExitCode())
 
 	return nil
 }
@@ -158,6 +158,7 @@ func execSyscall(command string, args, env []string) error {
 	argv = append(argv, command)
 	argv = append(argv, args...)
 
+	// #nosec G204 -- running the command the user named is what aws-exec does
 	return syscall.Exec(argv0, argv, env)
 }
 
@@ -180,5 +181,5 @@ var awsExecCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(awsExecCmd)
 	awsExecCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	awsExecCmd.MarkPersistentFlagRequired("app-name")
+	_ = awsExecCmd.MarkPersistentFlagRequired("app-name")
 }

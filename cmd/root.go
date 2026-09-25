@@ -192,7 +192,9 @@ func IsUnderHomebrew(apppackBinary string) bool {
 		return false
 	}
 
-	brewPrefixBytes, err := exec.Command(brewExe, "--prefix").Output()
+	// #nosec G204 -- brewExe comes from safeexec.LookPath, which exists to
+	// make this lookup safe; the argument is a literal.
+	brewPrefixBytes, err := exec.CommandContext(context.Background(), brewExe, "--prefix").Output()
 	if err != nil {
 		return false
 	}

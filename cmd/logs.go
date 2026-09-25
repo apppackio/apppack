@@ -155,7 +155,7 @@ var logsOpenCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(logsCmd)
 	logsCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	logsCmd.MarkPersistentFlagRequired("app-name")
+	_ = logsCmd.MarkPersistentFlagRequired("app-name")
 	logsCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	logsCmd.AddCommand(logsOpenCmd)

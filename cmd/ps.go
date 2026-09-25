@@ -375,7 +375,7 @@ var (
 func init() {
 	rootCmd.AddCommand(psCmd)
 	psCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	psCmd.MarkPersistentFlagRequired("app-name")
+	_ = psCmd.MarkPersistentFlagRequired("app-name")
 	psCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	psCmd.AddCommand(psResizeCmd)
