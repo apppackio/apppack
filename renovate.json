@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    ":configMigration",
+    "group:monorepos",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "automerge": true,
+  "automergeType": "pr",
+  "dependencyDashboard": true,
+  "dependencyDashboardOSVVulnerabilitySummary": "all",
+  "minimumReleaseAge": "7 days",
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "description": "The AWS SDK ships ~35 separately versioned modules that release in lockstep. Ungrouped, they would never drain at prConcurrentLimit 1.",
+      "groupName": "aws sdk",
+      "matchPackageNames": [
+        "github.com/aws/aws-sdk-go-v2",
+        "github.com/aws/aws-sdk-go-v2/**",
+        "github.com/aws/smithy-go"
+      ]
+    },
+    {
+      "description": "go.mod and .tool-versions pin the same toolchain; bump them together.",
+      "groupName": "go runtime",
+      "matchDatasources": ["golang-version"]
+    }
+  ],
+  "platformAutomerge": true,
+  "lockFileMaintenance": {
+    "dependencyDashboardApproval": true,
+    "enabled": true,
+    "schedule": ["at any time"]
+  },
+  "prConcurrentLimit": 1,
+  "prHourlyLimit": 0,
+  "rangeStrategy": "pin"
+}
