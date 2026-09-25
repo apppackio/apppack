@@ -170,17 +170,17 @@ func TestVerifyChecksum(t *testing.T) {
 
 	// Test successful verification
 	err = VerifyChecksum(tmpFile, expected)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test failed verification
 	err = VerifyChecksum(tmpFile, "wronghash")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "checksum mismatch")
 }
 
 func TestVerifyChecksumFileNotFound(t *testing.T) {
 	err := VerifyChecksum("/nonexistent/file.txt", "somehash")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "opening file")
 }
 
@@ -191,7 +191,7 @@ func writeTarGz(t *testing.T, path string, contents []byte) {
 
 	f, err := os.Create(path)
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gzw := gzip.NewWriter(f)
 	tw := tar.NewWriter(gzw)
@@ -216,7 +216,7 @@ func writeZip(t *testing.T, path string, contents []byte) {
 
 	f, err := os.Create(path)
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	zw := zip.NewWriter(f)
 	w, err := zw.Create("apppack.exe")

@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -82,7 +83,7 @@ func modifyAppStack(cfg aws.Config, stack *stacks.AppStack, name string, flags *
 	}
 
 	ui.Spinner.Stop()
-	ui.PrintSuccess(fmt.Sprintf("modified app %s", name))
+	ui.PrintSuccess("modified app " + name)
 
 	return nil
 }
@@ -162,7 +163,7 @@ If no flags are provided, an interactive prompt will be provided.`,
 
 		// Prevent modifying review apps - they should be managed at the pipeline level
 		if stacks.IsReviewAppName(name) {
-			checkErr(fmt.Errorf("cannot modify review app directly. Review apps are managed at the pipeline level. To change settings, modify the pipeline instead"))
+			checkErr(errors.New("cannot modify review app directly. Review apps are managed at the pipeline level. To change settings, modify the pipeline instead"))
 		}
 
 		ui.StartSpinner()

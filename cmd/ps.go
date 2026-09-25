@@ -346,7 +346,7 @@ apppack -a my-app ps restart web --force  # kill running containers (forced rest
 		if psRestartForce {
 			printSuccess(fmt.Sprintf("forcefully restarted %s (running containers stopped; ECS will relaunch them)", processType))
 		} else {
-			printSuccess(fmt.Sprintf("triggered rolling restart of %s", processType))
+			printSuccess("triggered rolling restart of " + processType)
 		}
 	},
 }
@@ -375,7 +375,7 @@ var (
 func init() {
 	rootCmd.AddCommand(psCmd)
 	psCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	psCmd.MarkPersistentFlagRequired("app-name")
+	_ = psCmd.MarkPersistentFlagRequired("app-name")
 	psCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	psCmd.AddCommand(psResizeCmd)

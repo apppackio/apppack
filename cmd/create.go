@@ -325,7 +325,7 @@ func init() {
 	createCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "do not prompt for missing flags")
 	createCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region to create resources in")
 	createCmd.PersistentFlags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
-	createCmd.PersistentFlags().MarkHidden("release")
+	_ = createCmd.PersistentFlags().MarkHidden("release")
 
 	createCmd.AddCommand(appCmd)
 
@@ -371,7 +371,7 @@ func init() {
 	createCmd.AddCommand(createClusterCmd)
 	createClusterCmd.Flags().String("domain", "", "cluster domain name")
 	createClusterCmd.Flags().String("instance-class", "", "ec2 cluster autoscaling instance class -- see https://aws.amazon.com/ec2/pricing/on-demand/")
-	createClusterCmd.Flags().MarkHidden("instance-class")
+	_ = createClusterCmd.Flags().MarkHidden("instance-class")
 	createClusterCmd.Flags().String("cidr", stacks.DefaultClusterStackParameters.Cidr, "network CIDR for VPC")
 	createClusterCmd.Flags().Bool("create-region", false, "also create the region stack if it does not exist")
 

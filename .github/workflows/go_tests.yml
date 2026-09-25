@@ -28,12 +28,18 @@ jobs:
           go-version: "1.25"
       - name: Vet
         run: go vet ./...
-      # Same tool and subcommand as `make fmt`, so a clean local run is a
+      # Same tool as `make fmt` and `make lint`, so a clean local run is a
       # clean CI run. golangci-lint-action can't be used here: it only ever
-      # invokes `golangci-lint run`, with no way to select `fmt`.
-      # Deliberately not `golangci-lint run` -- that still reports ~29
-      # pre-existing errcheck findings and would land red.
+      # invokes `golangci-lint run`, with no way to also select `fmt`.
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.3
+      # Fails if .golangci.toml uses keys this version does not understand.
+      # The config previously declared version 2 while written in v1 syntax,
+      # so every unrecognised key -- including the linter set and every
+      # exclusion -- was silently ignored for an unknown length of time.
+      - name: Verify lint config
+        run: golangci-lint config verify
       - name: Format
         run: golangci-lint fmt --diff
+      - name: Lint
+        run: golangci-lint run

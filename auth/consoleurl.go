@@ -31,17 +31,17 @@ func getSignInToken(ctx context.Context, creds aws.Credentials) (*signInToken, e
 		SessionToken: creds.SessionToken,
 	}
 
-	byteArr, err := json.Marshal(&urlCreds)
+	// AWS's federation endpoint requires the temporary credentials in the
+	// request; there is no variant of this flow that omits them.
+	byteArr, err := json.Marshal(&urlCreds) // #nosec G117 -- required by the AWS federation signin API
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal credentials: %w", err)
 	}
 
-	tokenRequestEndpoint := fmt.Sprintf(
-		"https://signin.aws.amazon.com/federation?Action=getSigninToken&Session=%s",
-		url.QueryEscape(string(byteArr)),
-	)
+	tokenRequestEndpoint := "https://signin.aws.amazon.com/federation?Action=getSigninToken&Session=" +
+		url.QueryEscape(string(byteArr))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenRequestEndpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenRequestEndpoint, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build token request: %w", err)
 	}
@@ -50,7 +50,8 @@ func getSignInToken(ctx context.Context, creds aws.Credentials) (*signInToken, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to request signin token: %w", err)
 	}
-	defer resp.Body.Close()
+	// Read-only: a Close failure here tells the caller nothing actionable.
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

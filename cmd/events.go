@@ -104,7 +104,7 @@ var eventsCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(eventsCmd)
 	eventsCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	eventsCmd.MarkPersistentFlagRequired("app-name")
+	_ = eventsCmd.MarkPersistentFlagRequired("app-name")
 	eventsCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	eventsCmd.Flags().BoolP("wait-for-steady", "w", false, "wait for service to reach a steady state")
 }

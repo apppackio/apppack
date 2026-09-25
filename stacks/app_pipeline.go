@@ -527,7 +527,7 @@ func AppRepositoryURLForm(defaultURL string) (*huh.Form, *string) {
 				Value(&url).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("repository URL is required")
+						return errors.New("repository URL is required")
 					}
 
 					return nil
@@ -553,7 +553,7 @@ func AppBranchForm(defaultBranch string) (*huh.Form, *string) {
 				Value(&branch).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("branch is required")
+						return errors.New("branch is required")
 					}
 
 					return nil
@@ -610,7 +610,7 @@ func AppHealthCheckPathForm(defaultPath string) (*huh.Form, *string) {
 				Value(&path).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("healthcheck path is required")
+						return errors.New("healthcheck path is required")
 					}
 
 					return nil
@@ -817,7 +817,7 @@ func AppSESDomainForm(verbose, defaultDomain string) (*huh.Form, *string) {
 				Value(&domain).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("SES domain is required")
+						return errors.New("SES domain is required")
 					}
 
 					return nil
@@ -843,7 +843,7 @@ func AppUsersForm(stackType string) (*huh.Form, *string) {
 				Value(&users).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("at least one user email is required")
+						return errors.New("at least one user email is required")
 					}
 
 					return nil
@@ -873,7 +873,7 @@ func AppDataLossConfirmForm() (*huh.Form, *bool) {
 	return form, &confirmed
 }
 
-func (a *AppStack) AskQuestions(cfg aws.Config) error { // skipcq: GO-R1005
+func (a *AppStack) AskQuestions(cfg aws.Config) error {
 	var err error
 	if a.Stack == nil {
 		err = AskForCluster(

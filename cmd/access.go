@@ -224,7 +224,7 @@ func init() {
 	rootCmd.AddCommand(accessCmd)
 
 	accessCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	accessCmd.MarkPersistentFlagRequired("app-name")
+	_ = accessCmd.MarkPersistentFlagRequired("app-name")
 	accessCmd.PersistentFlags().StringVarP(
 		&AccountIDorAlias,
 		"account",

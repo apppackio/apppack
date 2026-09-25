@@ -230,7 +230,7 @@ var configImportCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(configCmd)
 	configCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	configCmd.MarkPersistentFlagRequired("app-name")
+	_ = configCmd.MarkPersistentFlagRequired("app-name")
 	configCmd.PersistentFlags().BoolVar(
 		&UseAWSCredentials,
 		"aws-credentials",
