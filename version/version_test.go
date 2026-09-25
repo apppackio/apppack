@@ -131,7 +131,7 @@ func tempFilePath() string {
 		log.Fatal(err)
 	}
 
-	os.Remove(file.Name())
+	_ = os.Remove(file.Name())
 
 	return file.Name()
 }

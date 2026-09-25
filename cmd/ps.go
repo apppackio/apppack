@@ -346,7 +346,7 @@ apppack -a my-app ps restart web --force  # kill running containers (forced rest
 		if psRestartForce {
 			printSuccess(fmt.Sprintf("forcefully restarted %s (running containers stopped; ECS will relaunch them)", processType))
 		} else {
-			printSuccess(fmt.Sprintf("triggered rolling restart of %s", processType))
+			printSuccess("triggered rolling restart of " + processType)
 		}
 	},
 }

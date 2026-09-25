@@ -287,7 +287,7 @@ func ClusterDomainForm(defaultDomain string) (*huh.Form, *string) {
 				Value(&domain).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("domain is required")
+						return errors.New("domain is required")
 					}
 					return nil
 				}),

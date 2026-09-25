@@ -78,21 +78,21 @@ func indent(text, indent string) string {
 		return indent
 	}
 
+	var result strings.Builder
+
 	if text[len(text)-1:] == "\n" {
-		result := ""
 		for _, j := range strings.Split(text[:len(text)-1], "\n") {
-			result += indent + j + "\n"
+			result.WriteString(indent + j + "\n")
 		}
 
-		return result
+		return result.String()
 	}
 
-	result := ""
 	for _, j := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
-		result += indent + j + "\n"
+		result.WriteString(indent + j + "\n")
 	}
 
-	return result[:len(result)-1]
+	return strings.TrimSuffix(result.String(), "\n")
 }
 
 func printBuild(buildStatus *app.BuildStatus) {

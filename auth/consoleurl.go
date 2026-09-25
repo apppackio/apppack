@@ -38,10 +38,8 @@ func getSignInToken(ctx context.Context, creds aws.Credentials) (*signInToken, e
 		return nil, fmt.Errorf("failed to marshal credentials: %w", err)
 	}
 
-	tokenRequestEndpoint := fmt.Sprintf(
-		"https://signin.aws.amazon.com/federation?Action=getSigninToken&Session=%s",
-		url.QueryEscape(string(byteArr)),
-	)
+	tokenRequestEndpoint := "https://signin.aws.amazon.com/federation?Action=getSigninToken&Session=" +
+		url.QueryEscape(string(byteArr))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenRequestEndpoint, http.NoBody)
 	if err != nil {

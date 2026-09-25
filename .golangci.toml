@@ -11,6 +11,10 @@ go = "1.25.4"
 # turns on mutually contradictory style linters (it enables both `wsl` and
 # `wsl_v5`, and `noinlineerr` forbids `if err := f(); err != nil`) and buries
 # real findings under thousands of stylistic ones.
+#
+# The line this set draws is correctness over taste. Style-opinion linters
+# (revive unconfigured, gocritic, wsl, paralleltest, wrapcheck, mnd, lll,
+# cyclop) are left off on purpose.
 default = "standard"
 
 enable = [
@@ -23,16 +27,52 @@ enable = [
     "errorlint",       # error comparison/wrapping that breaks errors.Is/As
     "forcetypeassert", # unchecked type assertions -- these panic
     "nilerr",          # returning nil after checking err != nil
+    "errchkjson",      # json.Marshal errors that cannot happen, and ones that can
+    "makezero",        # append to a slice made with a non-zero length
+    "durationcheck",   # durations multiplied by durations
+    "reassign",        # assigning to another package's variables
+    "recvcheck",       # mixed pointer/value receivers on one type
+    "asasalint", # []any passed to a variadic any
+    "bidichk",   # unicode direction overrides hidden in source
+    "fatcontext", # contexts accumulated in a loop
+    "containedctx", # contexts stored in structs rather than passed
 
     # Cheap correctness.
-    "copyloopvar",  # redundant loop-variable copies
-    "misspell",     # typos, including in user-facing strings
-    "testifylint",  # testify assertions that don't test what they look like
+    "copyloopvar", # redundant loop-variable copies
+    "misspell",    # typos, including in user-facing strings
+    "unconvert",   # conversions that do nothing
+    "wastedassign",
+    "predeclared",  # shadowing builtins like len or cap
+    "intrange",     # Go 1.22 `for i := range n`
+    "mirror",       # string/[]byte variants used against the grain
+    "perfsprint",   # fmt.Errorf with no formatting -> errors.New
+    "usestdlibvars", # "GET" -> http.MethodGet, 200 -> http.StatusOK
+    "exhaustive",   # switch over an enum missing cases
+    "unparam",      # parameters and results nothing uses
+    "nakedret",     # naked returns in long functions
+    "gocheckcompilerdirectives", # //go: directives that are silently ignored
+
+    # Tests.
+    "testifylint",      # testify assertions that don't test what they look like
+    "thelper",          # helpers that don't call t.Helper()
+    "tparallel",        # inconsistent t.Parallel between test and subtests
+    "usetesting",       # os.MkdirTemp where t.TempDir belongs
+    "testableexamples", # Example functions with no output comment
+
+    # Suppressions that have outlived their reason.
+    "nolintlint",
 ]
 
-[linters.exclusions]
-paths = ["version"]
+[linters.settings.exhaustive]
+# A switch with a default case is exhaustive. Without this, every switch on
+# reflect.Kind would have to list all 27 constants.
+default-signifies-exhaustive = true
 
+[linters.settings.nolintlint]
+require-explanation = true
+require-specific = true
+
+[linters.exclusions]
 # gosec's file rules (G304 path from variable, G302/G306 permissions) are
 # about untrusted input reaching the filesystem. In tests the paths are
 # fixtures under t.TempDir(), so the rules report noise rather than risk.
