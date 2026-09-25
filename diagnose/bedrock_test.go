@@ -149,7 +149,7 @@ func TestRunStopsAtMaxRounds(t *testing.T) {
 	}})
 
 	responses := make([]*bedrockruntime.ConverseOutput, 0, diagnose.MaxRounds+2)
-	for i := 0; i < diagnose.MaxRounds+2; i++ {
+	for range diagnose.MaxRounds + 2 {
 		responses = append(responses, toolUseResponse("t", "get_ecs_events", map[string]any{"service": "web"}))
 	}
 

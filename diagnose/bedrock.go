@@ -137,7 +137,7 @@ func Run(
 
 	totalTokens := 0
 
-	for round := 0; round < MaxRounds; round++ {
+	for range MaxRounds {
 		out, err := c.Converse(ctx, &bedrockruntime.ConverseInput{
 			ModelId:  aws.String(modelID),
 			Messages: messages,
