@@ -119,3 +119,47 @@ func (a *ConfigVariables) ToConsole(w *ansiterm.TabWriter) {
 		printRow(w, configVar.Name, configVar.Value)
 	}
 }
+
+// GetParametersByPathFunc is the SSM call ConfigKeys depends on, extracted so
+// it can be tested without an AWS client.
+type GetParametersByPathFunc func(*ssm.GetParametersByPathInput) (*ssm.GetParametersByPathOutput, error)
+
+// ConfigKeys returns the names of the config variables under prefix WITHOUT
+// decrypting any values.
+//
+// This exists separately from SsmParameters because that function sets
+// WithDecryption: true and returns plaintext secrets. `apppack diagnose` may
+// see which variables are defined but never their values, so it calls this.
+// SecureString values come back as ciphertext here and are discarded without
+// ever being returned to a caller.
+func ConfigKeys(get GetParametersByPathFunc, prefix string) ([]string, error) {
+	withDecryption := false
+	keys := []string{}
+
+	input := ssm.GetParametersByPathInput{
+		Path:           &prefix,
+		WithDecryption: &withDecryption,
+	}
+
+	for {
+		resp, err := get(&input)
+		if err != nil {
+			return nil, err
+		}
+
+		for i := range resp.Parameters {
+			parts := strings.Split(*resp.Parameters[i].Name, "/")
+			keys = append(keys, parts[len(parts)-1])
+		}
+
+		if resp.NextToken == nil {
+			break
+		}
+
+		input.NextToken = resp.NextToken
+	}
+
+	sort.Strings(keys)
+
+	return keys, nil
+}
