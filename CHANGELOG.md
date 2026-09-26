@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Upgraded GoReleaser.
 * Dropped five unused dependencies.
 
+### Fixed
+
+* `ps resize` no longer warns "Service does not exist" when resizing `shell`, `postdeploy`, or `pr-predestroy`. These run as one-off tasks rather than ECS services, so there is no service to look up. The resize itself always worked; only the warning was wrong. `release` and `scheduler` were already exempt.
+
 ## [4.8.4] - 2026-09-24
 
 ### Changed
