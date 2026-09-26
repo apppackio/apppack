@@ -22,7 +22,60 @@ jobs:
         with:
           go-version-file: .tool-versions
       - name: Test
-        run: go test ./... -v
+        run: go test ./... -v -cover -coverprofile=coverage.out
+      # `go tool cover -func` is deliberately not used for the total. It
+      # only attributes blocks that land inside an *ast.FuncDecl, so every
+      # `Run: func(...)` hanging off a package-level `&cobra.Command{...}`
+      # is left out -- that is most of cmd/, and the total comes out
+      # several points high. Summing the profile's own statement counts
+      # agrees with the per-package figures `go test -cover` prints.
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ ! -f coverage.out ]; then
+            echo "No coverage profile was produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "## Coverage"
+            echo
+            awk '
+              NR > 1 {
+                pkg = $1
+                sub(/:[0-9]+\.[0-9]+,[0-9]+\.[0-9]+$/, "", pkg)
+                sub(/\/[^\/]+$/, "", pkg)
+                sub(/^github\.com\/apppackio\/apppack\/?/, "", pkg)
+                if (pkg == "") pkg = "(root)"
+                stmts[pkg] += $2
+                total += $2
+                if ($3 > 0) { hit[pkg] += $2; covered += $2 }
+              }
+              END {
+                if (total == 0) { print "The coverage profile is empty."; exit }
+                printf "**%.1f%%** of %d statements\n\n", covered * 100 / total, total
+                print "| Package | Coverage | Statements |"
+                print "|---|---:|---:|"
+                # Least-covered first. Sorted here rather than through
+                # `sort` so the header lines stay out of the pipeline.
+                n = 0
+                for (p in stmts) { n = n + 1; name[n] = p }
+                for (i = 2; i <= n; i++) {
+                  key = name[i]
+                  pct = hit[key] * 100 / stmts[key]
+                  j = i - 1
+                  while (j >= 1 && hit[name[j]] * 100 / stmts[name[j]] > pct) {
+                    name[j + 1] = name[j]
+                    j = j - 1
+                  }
+                  name[j + 1] = key
+                }
+                for (i = 1; i <= n; i++) {
+                  p = name[i]
+                  printf "| `%s` | %.1f%% | %d |\n", p, hit[p] * 100 / stmts[p], stmts[p]
+                }
+              }
+            ' coverage.out
+          } >> "$GITHUB_STEP_SUMMARY"
 
   checks:
     runs-on: ubuntu-latest
