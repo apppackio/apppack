@@ -238,6 +238,7 @@ func (t *Tokens) GetCredentials(role Role, duration int) (*types.Credentials, er
 
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion("us-east-1"), // STS is a global service, use us-east-1 as default
+		WithUserAgentAppID(),
 		ignoreSharedConfigFiles(),
 	)
 	if err != nil {

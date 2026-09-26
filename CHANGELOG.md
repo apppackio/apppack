@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* AWS API calls made by the CLI now identify themselves in CloudTrail. Requests carry `app/apppack-cli#<version>` in their user agent, so AppPack activity in your account is distinguishable from any other Go SDK client.
 * Upgraded GoReleaser.
 * Dropped five unused dependencies.
 

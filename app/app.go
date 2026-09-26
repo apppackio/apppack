@@ -1363,7 +1363,7 @@ func Init(name string, awsCredentials bool, sessionDuration int) (*App, error) {
 	}
 
 	if awsCredentials {
-		cfg, err := config.LoadDefaultConfig(context.Background())
+		cfg, err := config.LoadDefaultConfig(context.Background(), auth.WithUserAgentAppID())
 		if err != nil {
 			return nil, auth.FriendlyAWSConfigError(err)
 		}
