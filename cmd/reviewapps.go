@@ -179,7 +179,7 @@ func init() {
 	reviewappsCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	reviewappsCmd.AddCommand(reviewappsCreateCmd)
 	reviewappsCreateCmd.Flags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
-	_ = upgradeCmd.PersistentFlags().MarkHidden("release")
+	_ = reviewappsCreateCmd.PersistentFlags().MarkHidden("release")
 	reviewappsCmd.AddCommand(reviewappsDestroyCmd)
 
 	reviewappsCmd.PersistentFlags().StringVarP(
