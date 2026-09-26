@@ -10,9 +10,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/route53/types"
 )
 
-// isHostedZoneForDomain verifies that the dnsName would be a valid record in the hosted zone
+// IsHostedZoneForDomain verifies that the dnsName would be a valid record in
+// the hosted zone.
+//
+// The match has to land on a label boundary. A plain suffix test would put
+// "notexample.com" in the "example.com" zone.
 func IsHostedZoneForDomain(dnsName string, hostedZone *types.HostedZone) bool {
-	return strings.HasSuffix(dnsName, strings.TrimSuffix(*hostedZone.Name, "."))
+	zoneName := strings.TrimSuffix(*hostedZone.Name, ".")
+	name := strings.TrimSuffix(dnsName, ".")
+
+	return name == zoneName || strings.HasSuffix(name, "."+zoneName)
 }
 
 // HostedZoneForDomain searches AWS Hosted Zones for a place for this domain
