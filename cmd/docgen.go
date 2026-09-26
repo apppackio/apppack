@@ -26,8 +26,6 @@ import (
 	"github.com/spf13/cobra/doc"
 )
 
-var directory string
-
 func filePrepender(filename string) string {
 	name := filepath.Base(filename)
 	base := strings.TrimSuffix(name, path.Ext(name))
@@ -46,19 +44,35 @@ title: %s
 `, strings.Join(commandParts, " "))
 }
 
-// docgenCmd represents the docgen command
-var docgenCmd = &cobra.Command{
-	Use:    "docgen",
-	Short:  "generate command documentation as markdown",
-	Hidden: true,
-	Run: func(_ *cobra.Command, _ []string) {
-		checkErr(os.MkdirAll(directory, os.FileMode(0o750)))
-		identity := func(s string) string { return s }
-		checkErr(doc.GenMarkdownTreeCustom(rootCmd, directory, filePrepender, identity))
-	},
+func newDocgenCmd() *cobra.Command {
+	var directory string
+
+	cmd := &cobra.Command{
+		Use:    "docgen",
+		Short:  "generate command documentation as markdown",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Documents the tree this command is attached to, so a test can
+			// generate from its own tree rather than the package-level one.
+			return generateDocs(cmd.Root(), directory)
+		},
+	}
+
+	cmd.Flags().StringVarP(&directory, "directory", "d", "./docs", "output directory")
+
+	return cmd
+}
+
+func generateDocs(root *cobra.Command, directory string) error {
+	if err := os.MkdirAll(directory, os.FileMode(0o750)); err != nil {
+		return err
+	}
+
+	identity := func(s string) string { return s }
+
+	return doc.GenMarkdownTreeCustom(root, directory, filePrepender, identity)
 }
 
 func init() {
-	rootCmd.AddCommand(docgenCmd)
-	docgenCmd.Flags().StringVarP(&directory, "directory", "d", "./docs", "output directory")
+	registerCommand(newDocgenCmd)
 }
