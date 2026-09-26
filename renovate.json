@@ -40,6 +40,11 @@
         "golang",
         "github.com/golangci/golangci-lint/v2"
       ]
+    },
+    {
+      "description": "A pin fixes a floating tag to the version already in use, so there is no newer release to age. Renovate synthesizes pin updates with no releaseTimestamp, and the default minimumReleaseAgeBehaviour of timestamp-required holds those pending forever.",
+      "matchUpdateTypes": ["pin"],
+      "minimumReleaseAge": null
     }
   ],
   "platformAutomerge": true,
