@@ -249,7 +249,7 @@ var psResizeCmd = &cobra.Command{
 		_, err = a.DeployStatus.FindProcess(processType)
 		if err != nil {
 			switch processType {
-			case "release", "scheduler", "shell", "postdeploy", "pr-predestroy":
+			case "release", "scheduler", "postdeploy", "pr-predestroy":
 				// These are task-based process types, not ECS services.
 				// They won't appear in the service list but can still be resized.
 			default:
