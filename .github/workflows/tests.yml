@@ -22,7 +22,13 @@ jobs:
         with:
           go-version-file: .tool-versions
       - name: Test
-        run: go test ./... -v
+        run: go test ./... -v -cover -coverprofile=coverage.out
+      # Tees rather than redirecting so the table lands in the job log
+      # too: a step summary cannot be read back through the API, so a
+      # silent breakage would otherwise look exactly like success.
+      - name: Coverage summary
+        if: always()
+        run: .github/scripts/coverage-summary.sh | tee -a "$GITHUB_STEP_SUMMARY"
 
   checks:
     runs-on: ubuntu-latest
