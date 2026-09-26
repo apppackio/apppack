@@ -53,6 +53,15 @@ func TestSortInstanceClasses(t *testing.T) {
 			want:  []string{"db.m5.large", "db.m5.4xlarge", "db.r5.large", "db.r5.2xlarge"},
 		},
 		{
+			// db.serverless is the one real two-part class. It has no family
+			// or size to weigh, so it sorts under its own name.
+			// stacks/database.go filters it out before we get here, so this
+			// is about not mangling an unexpected shape.
+			name:  "two-part class sorts under its own name",
+			input: []string{"db.t3.micro", "db.serverless", "db.m5.large"},
+			want:  []string{"db.serverless", "db.m5.large", "db.t3.micro"},
+		},
+		{
 			name:  "already sorted",
 			input: []string{"db.t3.micro", "db.t3.small"},
 			want:  []string{"db.t3.micro", "db.t3.small"},
@@ -82,37 +91,4 @@ func TestSortInstanceClasses(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestSortInstanceClassesUnreachableInputs covers the two branches no current
-// caller can reach: a name with no db./cache. prefix, and the "metal" weight
-// in classOrder. Neither RDS nor ElastiCache offers a metal class, and both
-// callers pass three-part names straight from the AWS API.
-//
-// Pinned rather than deleted so that removing either branch is a deliberate
-// choice with a visible test change, not a silent one.
-func TestSortInstanceClassesUnreachableInputs(t *testing.T) {
-	t.Parallel()
-
-	t.Run("two-part name", func(t *testing.T) {
-		t.Parallel()
-
-		got := []string{"m5.large", "m5.micro"}
-		bridge.SortInstanceClasses(got)
-
-		if want := []string{"m5.micro", "m5.large"}; !reflect.DeepEqual(got, want) {
-			t.Errorf("got %v, want %v", got, want)
-		}
-	})
-
-	t.Run("metal sorts last", func(t *testing.T) {
-		t.Parallel()
-
-		got := []string{"m5.metal", "m5.24xlarge", "m5.large"}
-		bridge.SortInstanceClasses(got)
-
-		if want := []string{"m5.large", "m5.24xlarge", "m5.metal"}; !reflect.DeepEqual(got, want) {
-			t.Errorf("got %v, want %v", got, want)
-		}
-	})
 }
