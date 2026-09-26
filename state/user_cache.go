@@ -40,11 +40,12 @@ func WriteToCache(name string, data []byte) (err error) {
 		return err
 	}
 
-	err = os.Mkdir(path, os.FileMode(0o700))
+	// MkdirAll, not Mkdir: on a machine where the user cache directory does
+	// not exist yet -- a slim container, a fresh CI user -- the parent has to
+	// be created too, and it already returns nil when the directory is there.
+	err = os.MkdirAll(path, os.FileMode(0o700))
 	if err != nil {
-		if !os.IsExist(err) {
-			return err
-		}
+		return err
 	}
 
 	logrus.WithFields(logrus.Fields{"filename": filename}).Debug("writing to user cache")
