@@ -38,7 +38,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0
 	github.com/juju/ansiterm v1.0.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
-	github.com/mattn/go-isatty v0.0.20
+	github.com/mattn/go-isatty v0.0.24
 	github.com/mum4k/termdash v0.20.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/rogpeppe/go-internal v1.14.1
