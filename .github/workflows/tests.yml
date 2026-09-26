@@ -41,18 +41,20 @@ jobs:
           go-version-file: .tool-versions
       - name: Vet
         run: go vet ./...
-      # Same tool as `make fmt` and `make lint`, so a clean local run is a
-      # clean CI run. golangci-lint-action can't be used here: it only ever
-      # invokes `golangci-lint run`, with no way to also select `fmt`.
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
-      # Fails if .golangci.toml uses keys this version does not understand.
-      # The config previously declared version 2 while written in v1 syntax,
-      # so every unrecognised key -- including the linter set and every
-      # exclusion -- was silently ignored for an unknown length of time.
-      - name: Verify lint config
-        run: golangci-lint config verify
-      - name: Format
-        run: golangci-lint fmt --diff
+      # One `golangci-lint run` covers both `make lint` and `make fmt`:
+      # `run` also reports the formatters a config enables explicitly, and
+      # .golangci.toml enables gofumpt and gci. See
+      # https://github.com/golangci/golangci-lint-action/issues/1304.
+      #
+      # The action checks .golangci.toml against the JSON schema first
+      # (`verify` defaults to true). That matters: the config once declared
+      # version 2 while written in v1 syntax, so every unrecognised key --
+      # including the linter set and every exclusion -- was silently ignored
+      # for an unknown length of time.
+      #
+      # `version-file` reads the pin from .tool-versions, so CI and a local
+      # run use the same golangci-lint.
       - name: Lint
-        run: golangci-lint run
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version-file: .tool-versions
