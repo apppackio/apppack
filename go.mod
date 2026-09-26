@@ -27,7 +27,7 @@ require (
 	github.com/aws/session-manager-plugin v0.0.0-20260615221425-930a08e65d3a
 	github.com/aws/smithy-go v1.28.1
 	github.com/briandowns/spinner v1.23.2
-	github.com/charmbracelet/bubbletea v1.3.5
+	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v0.7.0
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260316093931-f2fb44ab3145
 	github.com/cli/safeexec v1.0.1
