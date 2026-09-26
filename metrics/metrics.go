@@ -76,7 +76,7 @@ func (m *ServiceUtilizationMetrics) GetOptions() *MetricOptions { return m.Optio
 func (m *ServiceUtilizationMetrics) GetService() string { return m.Service }
 
 func (m *ServiceUtilizationMetrics) Title() string {
-	return m.Service + " utilization (%%)"
+	return m.Service + " utilization (%)"
 }
 
 func (m *ServiceUtilizationMetrics) ShortName() string {

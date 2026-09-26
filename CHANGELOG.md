@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* `dash` no longer labels the utilization graphs `web utilization (%%)`. The stray second percent sign came from a format string that is handed straight to the renderer, so it was never consumed.
+* Logging in works on machines that have no user cache directory yet. Saving the auth token failed with `mkdir .../io.apppack: no such file or directory` on slim containers and fresh CI users, because only the last segment of the path was being created.
 * `ps resize` no longer warns "Service does not exist" when resizing `postdeploy` or `pr-predestroy`.
 
 ## [4.8.4] - 2026-09-24
