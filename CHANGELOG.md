@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Upgraded GoReleaser.
 * Dropped five unused dependencies.
 
+### Fixed
+
+* `ps resize` no longer warns "Service does not exist" when resizing `postdeploy` or `pr-predestroy`.
+
 ## [4.8.4] - 2026-09-24
 
 ### Changed
