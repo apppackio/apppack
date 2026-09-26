@@ -3,7 +3,13 @@ name: goreleaser
 
 on:
   pull_request:
+  # Branch pushes are covered by `pull_request`, so `push` is limited to
+  # main and release tags. A bare `push:` here would build every PR twice.
   push:
+    branches:
+      - main
+    tags:
+      - 'v*'
 
 jobs:
   goreleaser:
