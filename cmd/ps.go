@@ -94,7 +94,7 @@ func printTask(t *ecstypes.Task, count *int) {
 
 	name := *tag
 	if count != nil {
-		name = fmt.Sprintf("%s.%d", name, count)
+		name = fmt.Sprintf("%s.%d", name, *count)
 	}
 
 	cpu, err := strconv.ParseFloat(*t.Cpu, 32)
