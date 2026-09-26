@@ -51,21 +51,50 @@ var (
 	MaxSessionDurationSeconds = 3600
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:                   "apppack",
-	Short:                 "the CLI interface to AppPack.io",
-	Long:                  `AppPack is a tool to manage applications deployed on AWS via AppPack.io`,
-	DisableAutoGenTag:     true,
-	DisableFlagsInUseLine: true,
-	PersistentPreRun: func(_ *cobra.Command, _ []string) {
-		if debug {
-			logrus.SetOutput(os.Stdout)
-			logrus.SetLevel(logrus.DebugLevel)
-		} else {
-			logrus.SetLevel(logrus.ErrorLevel)
-		}
-	},
+// newRootCmd builds the base command. It is a constructor rather than a
+// package-level value so a test can build a tree of its own instead of
+// sharing the one the CLI runs, where one test's flags would be visible to
+// the next.
+func newRootCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:                   "apppack",
+		Short:                 "the CLI interface to AppPack.io",
+		Long:                  `AppPack is a tool to manage applications deployed on AWS via AppPack.io`,
+		DisableAutoGenTag:     true,
+		DisableFlagsInUseLine: true,
+		// Execute prints the error itself, and a command that fails at
+		// runtime has not been used wrongly -- dumping the usage block after
+		// it just buries the message.
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		PersistentPreRun: func(_ *cobra.Command, _ []string) {
+			if debug {
+				logrus.SetOutput(os.Stdout)
+				logrus.SetLevel(logrus.DebugLevel)
+			} else {
+				logrus.SetLevel(logrus.ErrorLevel)
+			}
+		},
+	}
+
+	root.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
+	root.PersistentFlags().BoolVar(&AsJSON, "json", false, "output as JSON")
+
+	return root
+}
+
+// rootCmd is the tree the CLI runs, and what every command that still
+// registers itself from an init() attaches to.
+var rootCmd = newRootCmd()
+
+// commandFactories holds the constructors for commands that build themselves
+// on demand. Registering through registerCommand attaches the command to
+// rootCmd for the real CLI and lets a test build an independent copy.
+var commandFactories []func() *cobra.Command
+
+func registerCommand(newCmd func() *cobra.Command) {
+	commandFactories = append(commandFactories, newCmd)
+	rootCmd.AddCommand(newCmd())
 }
 
 // This code is partly cherry-picked from https://github.com/cli/cli/blob/82927b0cc2a831adda22b0a7bf43938bd15e1126/main.go
@@ -104,7 +133,13 @@ func Execute() {
 
 	// run command
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		// Only cobra's own errors reach here -- an unknown command, or a bad
+		// flag. Anything a command returns has already gone through
+		// checkErr. SilenceErrors stops cobra printing its copy, so this is
+		// the single report, on stderr and in the CLI's usual shape. It used
+		// to be fmt.Println, which put a second copy on stdout.
+		ui.Spinner.Stop()
+		fmt.Fprintln(os.Stderr, aurora.Red("✖ "+err.Error()))
 		os.Exit(1)
 	}
 
@@ -114,11 +149,6 @@ func Execute() {
 	if newRelease != nil {
 		printUpdateMessage(newRelease)
 	}
-}
-
-func init() {
-	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
-	rootCmd.PersistentFlags().BoolVar(&AsJSON, "json", false, "output as JSON")
 }
 
 func checkErr(err error) {
