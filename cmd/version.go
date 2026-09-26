@@ -18,6 +18,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -30,8 +31,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var forceUpdate bool
-
 // versionInfo is a JSON-serializable representation of version information.
 type versionInfo struct {
 	Version     string `json:"version"`
@@ -40,108 +39,164 @@ type versionInfo struct {
 	Environment string `json:"environment"`
 }
 
-// versionCmd represents the version command
-var versionCmd = &cobra.Command{
-	Use:                   "version",
-	Short:                 "show the version of the apppack command",
-	DisableFlagsInUseLine: true,
-	Run: func(_ *cobra.Command, _ []string) {
-		if AsJSON {
-			info := versionInfo{
-				Version:     version.Version,
-				Commit:      version.Commit,
-				BuildDate:   version.BuildDate,
-				Environment: version.Environment,
+func newVersionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:                   "version",
+		Short:                 "show the version of the apppack command",
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Read the flag off the command rather than the package-level
+			// AsJSON, so two command trees in the same test binary do not
+			// share it.
+			asJSON, err := cmd.Flags().GetBool("json")
+			if err != nil {
+				return err
 			}
-			checkErr(printJSON(info))
 
-			return
-		}
+			return runVersion(cmd.OutOrStdout(), asJSON)
+		},
+	}
 
-		if version.Environment != "production" {
-			fmt.Println(version.Environment)
-		} else {
-			fmt.Println(version.Version)
-		}
-	},
+	cmd.AddCommand(newVersionCheckCmd())
+	cmd.AddCommand(newVersionUpdateCmd())
+
+	return cmd
 }
 
-// versionCheckCmd checks if a newer version is available
-var versionCheckCmd = &cobra.Command{
-	Use:                   "check",
-	Short:                 "check if a newer version is available",
-	DisableFlagsInUseLine: true,
-	Run: func(_ *cobra.Command, _ []string) {
-		ctx := context.Background()
-		ui.StartSpinner()
-		ui.Spinner.Suffix = " checking for updates..."
+func runVersion(out io.Writer, asJSON bool) error {
+	if asJSON {
+		return fprintJSON(out, versionInfo{
+			Version:     version.Version,
+			Commit:      version.Commit,
+			BuildDate:   version.BuildDate,
+			Environment: version.Environment,
+		})
+	}
 
-		release, err := version.GetLatestReleaseInfo(ctx, http.DefaultClient, repo)
-		checkErr(err)
+	// A non-production build reports the environment it was built for --
+	// "development" for a local `go build`, where Version is not stamped.
+	if version.Environment != "production" {
+		_, err := fmt.Fprintln(out, version.Environment)
 
-		ui.Spinner.Stop()
+		return err
+	}
 
-		if version.VersionGreaterThan(release.Version, version.Version) {
-			fmt.Printf("%s %s → %s\n",
-				aurora.Yellow("Update available:"),
-				aurora.Cyan(strings.TrimPrefix(version.Version, "v")),
-				aurora.Cyan(strings.TrimPrefix(release.Version, "v")),
-			)
-			fmt.Printf("Run %s to update\n", aurora.White("apppack version update"))
-		} else {
-			printSuccess(fmt.Sprintf("Already up to date (version %s)", strings.TrimPrefix(version.Version, "v")))
-		}
-	},
+	_, err := fmt.Fprintln(out, version.Version)
+
+	return err
 }
 
-// versionUpdateCmd updates apppack to the latest version
-var versionUpdateCmd = &cobra.Command{
-	Use:                   "update",
-	Short:                 "update apppack to the latest version",
-	Long:                  "Downloads and installs the latest version of apppack from GitHub releases.",
-	DisableFlagsInUseLine: true,
-	Run: func(_ *cobra.Command, _ []string) {
-		ctx := context.Background()
+func newVersionCheckCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:                   "check",
+		Short:                 "check if a newer version is available",
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ui.StartSpinner()
+			ui.Spinner.Suffix = " checking for updates..."
 
-		// Get current binary path
-		appPath, err := safeexec.LookPath(os.Args[0])
-		checkErr(err)
+			release, err := version.GetLatestReleaseInfo(cmd.Context(), http.DefaultClient, repo)
 
-		// Block Homebrew installs
-		if IsUnderHomebrew(appPath) {
-			printWarning("AppPack was installed via Homebrew")
-			fmt.Printf("To update, run: %s\n", aurora.White("brew upgrade apppack"))
-
-			return
-		}
-
-		ui.StartSpinner()
-		ui.Spinner.Suffix = " checking for updates..."
-
-		release, err := version.GetLatestReleaseInfo(ctx, http.DefaultClient, repo)
-		checkErr(err)
-
-		// Check if update is needed
-		if !forceUpdate && !version.VersionGreaterThan(release.Version, version.Version) {
 			ui.Spinner.Stop()
-			printSuccess(fmt.Sprintf("Already up to date (version %s)", strings.TrimPrefix(version.Version, "v")))
 
-			return
-		}
+			if err != nil {
+				return err
+			}
 
-		ui.Spinner.Suffix = fmt.Sprintf(" downloading %s...", release.Version)
+			return reportUpdateAvailable(cmd.OutOrStdout(), release.Version)
+		},
+	}
+}
 
-		err = selfupdate.Update(ctx, http.DefaultClient, release, appPath)
-		checkErr(err)
+func reportUpdateAvailable(out io.Writer, latest string) error {
+	if !version.VersionGreaterThan(latest, version.Version) {
+		_, err := fmt.Fprintln(out, aurora.Green("✔ "+fmt.Sprintf("Already up to date (version %s)", strings.TrimPrefix(version.Version, "v"))))
 
+		return err
+	}
+
+	if _, err := fmt.Fprintf(out, "%s %s → %s\n",
+		aurora.Yellow("Update available:"),
+		aurora.Cyan(strings.TrimPrefix(version.Version, "v")),
+		aurora.Cyan(strings.TrimPrefix(latest, "v")),
+	); err != nil {
+		return err
+	}
+
+	_, err := fmt.Fprintf(out, "Run %s to update\n", aurora.White("apppack version update"))
+
+	return err
+}
+
+type versionUpdateOptions struct {
+	force bool
+}
+
+func newVersionUpdateCmd() *cobra.Command {
+	o := &versionUpdateOptions{}
+
+	cmd := &cobra.Command{
+		Use:                   "update",
+		Short:                 "update apppack to the latest version",
+		Long:                  "Downloads and installs the latest version of apppack from GitHub releases.",
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return o.run(cmd.Context(), cmd.OutOrStdout())
+		},
+	}
+
+	cmd.Flags().BoolVarP(&o.force, "force", "f", false, "force update even if already on latest version")
+
+	return cmd
+}
+
+func (o *versionUpdateOptions) run(ctx context.Context, out io.Writer) error {
+	appPath, err := safeexec.LookPath(os.Args[0])
+	if err != nil {
+		return err
+	}
+
+	// Homebrew owns the binary it installed; replacing it underneath brew
+	// leaves the formula and the file disagreeing.
+	if IsUnderHomebrew(appPath) {
+		_, _ = fmt.Fprintln(out, aurora.Yellow("⚠  AppPack was installed via Homebrew"))
+		_, err = fmt.Fprintf(out, "To update, run: %s\n", aurora.White("brew upgrade apppack"))
+
+		return err
+	}
+
+	ui.StartSpinner()
+	ui.Spinner.Suffix = " checking for updates..."
+
+	release, err := version.GetLatestReleaseInfo(ctx, http.DefaultClient, repo)
+	if err != nil {
 		ui.Spinner.Stop()
-		printSuccess("Updated to version " + strings.TrimPrefix(release.Version, "v"))
-	},
+
+		return err
+	}
+
+	if !o.force && !version.VersionGreaterThan(release.Version, version.Version) {
+		ui.Spinner.Stop()
+		_, err = fmt.Fprintln(out, aurora.Green("✔ "+fmt.Sprintf("Already up to date (version %s)", strings.TrimPrefix(version.Version, "v"))))
+
+		return err
+	}
+
+	ui.Spinner.Suffix = fmt.Sprintf(" downloading %s...", release.Version)
+
+	err = selfupdate.Update(ctx, http.DefaultClient, release, appPath)
+
+	ui.Spinner.Stop()
+
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintln(out, aurora.Green("✔ Updated to version "+strings.TrimPrefix(release.Version, "v")))
+
+	return err
 }
 
 func init() {
-	rootCmd.AddCommand(versionCmd)
-	versionCmd.AddCommand(versionCheckCmd)
-	versionCmd.AddCommand(versionUpdateCmd)
-	versionUpdateCmd.Flags().BoolVarP(&forceUpdate, "force", "f", false, "force update even if already on latest version")
+	registerCommand(newVersionCmd)
 }
