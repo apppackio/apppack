@@ -86,6 +86,7 @@ func AppAWSSession(appName string, sessionDuration int) (aws.Config, *AppRole, e
 			*creds.SessionToken,
 		)),
 		config.WithRegion(appRole.Region),
+		WithUserAgentAppID(),
 		ignoreSharedConfigFiles(),
 	)
 	if err != nil {
@@ -124,6 +125,7 @@ func AdminAWSSession(idOrAlias string, sessionDuration int, region string) (aws.
 			*creds.SessionToken,
 		)),
 		config.WithRegion(region),
+		WithUserAgentAppID(),
 		ignoreSharedConfigFiles(),
 	)
 	if err != nil {
