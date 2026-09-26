@@ -51,3 +51,17 @@ func WaitDone(t *testing.T, tm *teatest.TestModel) tea.Model {
 
 	return tm.FinalModel(t, teatest.WithFinalTimeout(3*time.Second))
 }
+
+// RenderView drives a huh form through Init and an initial WindowSizeMsg,
+// then returns its rendered View. This exercises the same code path huh
+// uses on first render (no TTY or keypresses involved), which is what
+// surfaces bugs in huh's initial viewport offset calculation for Select
+// fields (see https://github.com/apppackio/apppack/issues/181) — those bugs
+// are invisible to tests that only assert the bound value, since a keypress
+// or Enter repairs the viewport before the value is read.
+func RenderView(form *huh.Form, width, height int) string {
+	form.Init()
+	form.Update(tea.WindowSizeMsg{Width: width, Height: height})
+
+	return form.View()
+}

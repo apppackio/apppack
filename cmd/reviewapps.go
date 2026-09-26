@@ -179,7 +179,7 @@ func init() {
 	reviewappsCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	reviewappsCmd.AddCommand(reviewappsCreateCmd)
 	reviewappsCreateCmd.Flags().StringVar(&release, "release", "", "Specify a specific pre-release stack")
-	upgradeCmd.PersistentFlags().MarkHidden("release")
+	_ = upgradeCmd.PersistentFlags().MarkHidden("release")
 	reviewappsCmd.AddCommand(reviewappsDestroyCmd)
 
 	reviewappsCmd.PersistentFlags().StringVarP(
@@ -189,5 +189,5 @@ func init() {
 		"",
 		"AWS account ID or alias (not needed if you are only the administrator of one account)",
 	)
-	reviewappsCmd.PersistentFlags().MarkHidden("account")
+	_ = reviewappsCmd.PersistentFlags().MarkHidden("account")
 }

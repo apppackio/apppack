@@ -118,21 +118,27 @@ func DownloadFile(ctx context.Context, client *http.Client, url, destPath string
 	if err != nil {
 		return fmt.Errorf("downloading file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
 	}
 
+	// #nosec G304 -- destPath is inside this process's own temp directory.
 	out, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("creating file: %w", err)
 	}
-	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		_ = out.Close()
+
 		return fmt.Errorf("writing file: %w", err)
+	}
+
+	// A failed Close can mean the download never fully reached disk.
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("finalizing download: %w", err)
 	}
 
 	return nil
@@ -152,7 +158,7 @@ func DownloadChecksums(ctx context.Context, client *http.Client, ver string) (ma
 	if err != nil {
 		return nil, fmt.Errorf("downloading checksums: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
@@ -197,11 +203,13 @@ func ParseChecksums(content []byte) (map[string]string, error) {
 
 // VerifyChecksum computes SHA256 of a file and compares to expected hash.
 func VerifyChecksum(filepath, expected string) error {
+	// #nosec G304 -- filepath is the archive this process just downloaded
+	// into its own temp directory.
 	f, err := os.Open(filepath)
 	if err != nil {
 		return fmt.Errorf("opening file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -227,17 +235,18 @@ func ExtractBinary(archivePath, destDir string, platform *PlatformInfo) (string,
 }
 
 func extractTarGz(archivePath, destDir string) (string, error) {
+	// #nosec G304 -- archivePath is inside this process's own temp directory.
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return "", fmt.Errorf("opening archive: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gzr, err := gzip.NewReader(f)
 	if err != nil {
 		return "", fmt.Errorf("creating gzip reader: %w", err)
 	}
-	defer gzr.Close()
+	defer func() { _ = gzr.Close() }()
 
 	tr := tar.NewReader(gzr)
 
@@ -257,6 +266,8 @@ func extractTarGz(archivePath, destDir string) (string, error) {
 		if header.Typeflag == tar.TypeReg && filepath.Base(header.Name) == "apppack" {
 			binaryPath = filepath.Join(destDir, "apppack")
 
+			// #nosec G302,G304 -- binaryPath is inside this process's own
+			// temp directory, and an executable cannot be 0600.
 			outFile, err := os.OpenFile(binaryPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 			if err != nil {
 				return "", fmt.Errorf("creating binary file: %w", err)
@@ -265,10 +276,17 @@ func extractTarGz(archivePath, destDir string) (string, error) {
 			// Read one byte past the cap so we can detect (rather than
 			// silently truncate) a binary that exceeds maxBinarySize.
 			n, err := io.Copy(outFile, io.LimitReader(tr, maxBinarySize+1))
-			outFile.Close()
+			closeErr := outFile.Close()
 
 			if err != nil {
 				return "", fmt.Errorf("extracting binary: %w", err)
+			}
+
+			// The archive checksum covers the archive, not the file just
+			// written, so a failed Close here would otherwise go unnoticed
+			// and leave a truncated binary to be installed.
+			if closeErr != nil {
+				return "", fmt.Errorf("finalizing extracted binary: %w", closeErr)
 			}
 
 			if n > maxBinarySize {
@@ -291,7 +309,7 @@ func extractZip(archivePath, destDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("opening zip: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	var binaryPath string
 
@@ -305,9 +323,11 @@ func extractZip(archivePath, destDir string) (string, error) {
 				return "", fmt.Errorf("opening zip entry: %w", err)
 			}
 
+			// #nosec G302,G304 -- binaryPath is inside this process's own
+			// temp directory, and an executable cannot be 0600.
 			outFile, err := os.OpenFile(binaryPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 			if err != nil {
-				rc.Close()
+				_ = rc.Close()
 
 				return "", fmt.Errorf("creating binary file: %w", err)
 			}
@@ -315,11 +335,18 @@ func extractZip(archivePath, destDir string) (string, error) {
 			// Read one byte past the cap so we can detect (rather than
 			// silently truncate) a binary that exceeds maxBinarySize.
 			n, err := io.Copy(outFile, io.LimitReader(rc, maxBinarySize+1))
-			rc.Close()
-			outFile.Close()
+			_ = rc.Close()
+			closeErr := outFile.Close()
 
 			if err != nil {
 				return "", fmt.Errorf("extracting binary: %w", err)
+			}
+
+			// The archive checksum covers the archive, not the file just
+			// written, so a failed Close here would otherwise go unnoticed
+			// and leave a truncated binary to be installed.
+			if closeErr != nil {
+				return "", fmt.Errorf("finalizing extracted binary: %w", closeErr)
 			}
 
 			if n > maxBinarySize {
@@ -368,32 +395,44 @@ func replaceBinaryUnix(currentPath, newPath string) error {
 }
 
 func copyAndReplace(src, dst string, mode os.FileMode) error {
+	// #nosec G304 -- src is the binary this process just downloaded and
+	// checksum-verified into its own temp directory.
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("opening source: %w", err)
 	}
-	defer srcFile.Close()
+
+	defer func() { _ = srcFile.Close() }()
 
 	// Write to a temp file in the same directory first
 	tmpPath := dst + ".new"
 
+	// #nosec G302,G304 -- dst is the running binary's own path, and mode is
+	// copied from it; an executable cannot be 0600.
 	dstFile, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		dstFile.Close()
-		os.Remove(tmpPath)
+		_ = dstFile.Close()
+		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf("copying content: %w", err)
 	}
 
-	dstFile.Close()
+	// Close before renaming. A failed Close can mean the copy never reached
+	// disk, and renaming a truncated file over the running binary would
+	// leave the user without a working CLI.
+	if err := dstFile.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+
+		return fmt.Errorf("finalizing temp file: %w", err)
+	}
 
 	// Atomic rename within same filesystem
 	if err := os.Rename(tmpPath, dst); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 
 		return fmt.Errorf("renaming temp file: %w", err)
 	}
@@ -404,43 +443,59 @@ func copyAndReplace(src, dst string, mode os.FileMode) error {
 func replaceBinaryWindows(currentPath, newPath string) error {
 	oldPath := currentPath + ".old"
 
-	// Remove any existing .old file
-	os.Remove(oldPath)
+	// A leftover .old from a previous update is not fatal.
+	_ = os.Remove(oldPath)
 
 	// Rename current to .old
 	if err := os.Rename(currentPath, oldPath); err != nil {
 		return fmt.Errorf("backing up current binary: %w", err)
 	}
 
+	// rollback restores the backup after a failure. If the restore itself
+	// fails the user is left with no binary at currentPath, so that is
+	// reported alongside the original cause rather than discarded.
+	rollback := func(cause error) error {
+		if err := os.Rename(oldPath, currentPath); err != nil {
+			return errors.Join(cause, fmt.Errorf("restoring previous binary from %s: %w", oldPath, err))
+		}
+
+		return cause
+	}
+
 	// Copy new binary (can't rename cross-device)
+	// #nosec G304 -- newPath is the binary this process just downloaded and
+	// checksum-verified into its own temp directory.
 	srcFile, err := os.Open(newPath)
 	if err != nil {
-		// Attempt rollback
-		os.Rename(oldPath, currentPath)
-
-		return fmt.Errorf("opening new binary: %w", err)
+		return rollback(fmt.Errorf("opening new binary: %w", err))
 	}
-	defer srcFile.Close()
 
+	defer func() { _ = srcFile.Close() }()
+
+	// #nosec G302,G304 -- currentPath is this process's own executable, and
+	// an executable cannot be 0600.
 	dstFile, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 	if err != nil {
-		// Attempt rollback
-		os.Rename(oldPath, currentPath)
-
-		return fmt.Errorf("creating new binary: %w", err)
+		return rollback(fmt.Errorf("creating new binary: %w", err))
 	}
-	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		// Attempt rollback
-		os.Remove(currentPath)
-		os.Rename(oldPath, currentPath)
+		_ = dstFile.Close()
+		_ = os.Remove(currentPath)
 
-		return fmt.Errorf("copying new binary: %w", err)
+		return rollback(fmt.Errorf("copying new binary: %w", err))
+	}
+
+	// Close before reporting success, for the same reason as copyAndReplace:
+	// a failure here can mean the binary on disk is truncated.
+	if err := dstFile.Close(); err != nil {
+		_ = os.Remove(currentPath)
+
+		return rollback(fmt.Errorf("finalizing new binary: %w", err))
 	}
 
 	// Clean up old binary (may fail if still in use, that's ok)
-	os.Remove(oldPath)
+	_ = os.Remove(oldPath)
 
 	return nil
 }
@@ -463,7 +518,7 @@ func Update(ctx context.Context, client *http.Client, release *version.ReleaseIn
 		return fmt.Errorf("creating temp directory: %w", err)
 	}
 	// Cleanup on any exit path
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Download checksums
 	checksums, err := DownloadChecksums(ctx, client, release.Version)

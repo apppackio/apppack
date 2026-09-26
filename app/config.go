@@ -108,9 +108,9 @@ func (a *ConfigVariables) ToJSONUnmanaged() (*bytes.Buffer, error) {
 // printRow prints a single row of the table to the TabWriter
 func printRow(w *ansiterm.TabWriter, name, value string) {
 	w.SetForeground(ansiterm.Green)
-	fmt.Fprintf(w, "%s:", name)
+	_, _ = fmt.Fprintf(w, "%s:", name)
 	w.SetForeground(ansiterm.Default)
-	fmt.Fprintf(w, "\t%s\n", value)
+	_, _ = fmt.Fprintf(w, "\t%s\n", value)
 }
 
 // ToConsole prints the config vars to the console via the TabWriter

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    ":configMigration",
+    "group:monorepos",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "automerge": true,
+  "automergeType": "pr",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The lint job installs golangci-lint from a version pin inside a run script, which no built-in manager sees.",
+      "managerFilePatterns": ["/^\\.github/workflows/tests\\.yml$/"],
+      "matchStrings": [
+        "go install (?<depName>github\\.com/golangci/golangci-lint/v2)/cmd/golangci-lint@(?<currentValue>v\\S+)"
+      ],
+      "datasourceTemplate": "go"
+    }
+  ],
+  "dependencyDashboard": true,
+  "dependencyDashboardOSVVulnerabilitySummary": "all",
+  "minimumReleaseAge": "7 days",
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "description": "The AWS SDK ships ~35 separately versioned modules that release in lockstep. Ungrouped, they would never drain at prConcurrentLimit 1.",
+      "groupName": "aws sdk",
+      "matchPackageNames": [
+        "github.com/aws/aws-sdk-go-v2",
+        "github.com/aws/aws-sdk-go-v2/**",
+        "github.com/aws/smithy-go"
+      ]
+    },
+    {
+      "description": "The workflows' go-version inputs (depName `go`), .tool-versions (depName `golang`) and the golangci-lint pin all track the same toolchain; bump them in one PR. golangci-lint especially cannot lag: it type-checks through a vendored x/tools that only reads export data from Go releases it already knows about.",
+      "groupName": "go runtime",
+      "matchDepNames": [
+        "go",
+        "golang",
+        "github.com/golangci/golangci-lint/v2"
+      ]
+    }
+  ],
+  "platformAutomerge": true,
+  "lockFileMaintenance": {
+    "dependencyDashboardApproval": true,
+    "enabled": true,
+    "schedule": ["at any time"]
+  },
+  "prConcurrentLimit": 1,
+  "prHourlyLimit": 0,
+  "rangeStrategy": "pin"
+}

@@ -3,17 +3,34 @@ package version_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/apppackio/apppack/version"
-	"github.com/cli/cli/v2/pkg/httpmock"
 )
 
 // This code is largely cherry-picked from https://github.com/cli/cli/blob/82927b0cc2a831adda22b0a7bf43938bd15e1126/internal/update/update_test.go
 // It is licensed under the MIT license https://github.com/cli/cli/blob/82927b0cc2a831adda22b0a7bf43938bd15e1126/LICENSE
+
+// stubTripper serves a canned response to every request and records what it was asked for.
+type stubTripper struct {
+	body     string
+	requests []*http.Request
+}
+
+func (s *stubTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	s.requests = append(s.requests, req)
+
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(s.body)),
+		Request:    req,
+	}, nil
+}
 
 func TestCheckForUpdate(t *testing.T) {
 	scenarios := []struct {
@@ -76,28 +93,26 @@ func TestCheckForUpdate(t *testing.T) {
 
 	for _, s := range scenarios {
 		t.Run(s.Name, func(t *testing.T) {
-			reg := &httpmock.Registry{}
-			httpClient := &http.Client{}
-			httpmock.ReplaceTripper(httpClient, reg)
-
-			reg.Register(
-				httpmock.REST("GET", "repos/OWNER/REPO/releases/latest"),
-				httpmock.StringResponse(fmt.Sprintf(`{
-					"tag_name": "%s",
-					"html_url": "%s"
-				}`, s.LatestVersion, s.LatestURL)),
-			)
+			tripper := &stubTripper{body: fmt.Sprintf(`{
+				"tag_name": "%s",
+				"html_url": "%s"
+			}`, s.LatestVersion, s.LatestURL)}
+			httpClient := &http.Client{Transport: tripper}
 
 			rel, err := version.CheckForUpdate(context.Background(), httpClient, tempFilePath(), "OWNER/REPO", s.CurrentVersion)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if len(reg.Requests) != 1 {
-				t.Fatalf("expected 1 HTTP request, got %d", len(reg.Requests))
+			if len(tripper.requests) != 1 {
+				t.Fatalf("expected 1 HTTP request, got %d", len(tripper.requests))
 			}
 
-			requestPath := reg.Requests[0].URL.Path
+			if method := tripper.requests[0].Method; method != http.MethodGet {
+				t.Errorf("HTTP method: %q", method)
+			}
+
+			requestPath := tripper.requests[0].URL.Path
 			if requestPath != "/repos/OWNER/REPO/releases/latest" {
 				t.Errorf("HTTP path: %q", requestPath)
 			}
@@ -131,7 +146,7 @@ func tempFilePath() string {
 		log.Fatal(err)
 	}
 
-	os.Remove(file.Name())
+	_ = os.Remove(file.Name())
 
 	return file.Name()
 }

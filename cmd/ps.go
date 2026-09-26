@@ -94,7 +94,7 @@ func printTask(t *ecstypes.Task, count *int) {
 
 	name := *tag
 	if count != nil {
-		name = fmt.Sprintf("%s.%d", name, count)
+		name = fmt.Sprintf("%s.%d", name, *count)
 	}
 
 	cpu, err := strconv.ParseFloat(*t.Cpu, 32)
@@ -346,7 +346,7 @@ apppack -a my-app ps restart web --force  # kill running containers (forced rest
 		if psRestartForce {
 			printSuccess(fmt.Sprintf("forcefully restarted %s (running containers stopped; ECS will relaunch them)", processType))
 		} else {
-			printSuccess(fmt.Sprintf("triggered rolling restart of %s", processType))
+			printSuccess("triggered rolling restart of " + processType)
 		}
 	},
 }
@@ -375,7 +375,7 @@ var (
 func init() {
 	rootCmd.AddCommand(psCmd)
 	psCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	psCmd.MarkPersistentFlagRequired("app-name")
+	_ = psCmd.MarkPersistentFlagRequired("app-name")
 	psCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 
 	psCmd.AddCommand(psResizeCmd)

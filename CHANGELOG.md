@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* AWS API calls made by the CLI now identify themselves in CloudTrail. Requests carry `app/apppack-cli#<version>` in their user agent, so AppPack activity in your account is distinguishable from any other Go SDK client.
+* Upgraded GoReleaser.
+* Dropped five unused dependencies.
+
+## [4.8.4] - 2026-09-24
+
+### Changed
+
+* Upgraded the AWS SDK.
+
+## [4.8.3] - 2026-09-22
+
 ### Fixed
 
+* Interactive prompts no longer hide the options listed above the default. Any select whose default wasn't the first option rendered only from the default down, so `create app`'s "Public S3 Bucket" prompt defaulting to `no` showed no `yes` at all, and the instance-class pickers hid every class above the default. Pressing an arrow key revealed the missing options. Affects the yes/no addon prompts (private/public S3, SQS, database, Redis, Aurora, multi-AZ), the database and Redis instance-class pickers, and the database/Redis instance selectors.
 * `config list -j` works again. `-j` was a shorthand for `--json` on `config list` before 4.7.0 promoted `--json` to a global flag, and removing the global shorthand in 4.8.2 took `config list -j` with it. The shorthand is registered on `config list` again; `--json` continues to work everywhere.
+* The CLI now exits non-zero when it panics. A recovered panic was reported to Sentry and printed a message, but the process still exited 0, so CI jobs and scripts treated a crashed command as a success. The panic message now goes to stderr.
 
 ## [4.8.2] - 2026-08-10
 
