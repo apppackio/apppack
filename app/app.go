@@ -908,6 +908,17 @@ func (a *App) GetConfig() (ConfigVariables, error) {
 	return NewConfigVariables(parameters), nil
 }
 
+// GetConfigKeys returns the names of the app's config variables without
+// reading their values. Used by `apppack diagnose`, which must never see
+// secret values. Do not replace this with GetConfig.
+func (a *App) GetConfigKeys() ([]string, error) {
+	ssmSvc := ssm.NewFromConfig(a.Session)
+
+	return ConfigKeys(func(in *ssm.GetParametersByPathInput) (*ssm.GetParametersByPathOutput, error) {
+		return ssmSvc.GetParametersByPath(context.Background(), in)
+	}, a.ConfigPrefix())
+}
+
 // GetConfigWithManaged returns a list of config parameters for the app with managed value populated
 func (a *App) GetConfigWithManaged() (ConfigVariables, error) {
 	configVars, err := a.GetConfig()
