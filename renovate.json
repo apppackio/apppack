@@ -13,15 +13,6 @@
   "osvVulnerabilityAlerts": true,
   "packageRules": [
     {
-      "description": "The AWS SDK ships ~35 separately versioned modules that release in lockstep. Ungrouped, they would never drain at prConcurrentLimit 1.",
-      "groupName": "aws sdk",
-      "matchPackageNames": [
-        "github.com/aws/aws-sdk-go-v2",
-        "github.com/aws/aws-sdk-go-v2/**",
-        "github.com/aws/smithy-go"
-      ]
-    },
-    {
       "description": "The workflows' go-version inputs (depName `go`) and the two .tool-versions pins (depNames `golang` and `golangci-lint`) all track the same toolchain; bump them in one PR. golangci-lint especially cannot lag: it type-checks through a vendored x/tools that only reads export data from Go releases it already knows about.",
       "groupName": "go runtime",
       "matchDepNames": [
@@ -43,15 +34,14 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "generateBranchConfig derives a branch's dependencyDashboardApproval with `.some()` over its upgrades, so a single gated upgrade gates the whole branch. The aws sdk group is the one place where direct and indirect gomod deps share a branch, and its 15 indirect modules would park the 14 direct ones behind a checkbox. Let them ride along ungated instead — MVS drags them forward with their direct siblings anyway.",
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["indirect"],
+      "description": "The AWS SDK ships ~35 separately versioned modules that release in lockstep. Ungrouped, they would never drain at prConcurrentLimit 1. This rule must stay below the indirect rule above: later rules win, and generateBranchConfig derives a branch's dependencyDashboardApproval with `.some()` over its upgrades, so one gated upgrade gates the whole branch. This group is the one place where direct and indirect gomod deps share a branch, so without the override here its 15 indirect modules would park the 14 direct ones behind a checkbox. MVS drags them forward with their direct siblings anyway.",
+      "groupName": "aws sdk",
+      "dependencyDashboardApproval": false,
       "matchPackageNames": [
         "github.com/aws/aws-sdk-go-v2",
         "github.com/aws/aws-sdk-go-v2/**",
         "github.com/aws/smithy-go"
-      ],
-      "dependencyDashboardApproval": false
+      ]
     }
   ],
   "platformAutomerge": true,
