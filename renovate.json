@@ -43,7 +43,7 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "The aws sdk group above drains 14 direct modules in one PR. Enabling indirect updates would pull in 15 indirect siblings carrying dependencyDashboardApproval, mixing approval-gated upgrades into that branch; leave them disabled so the group keeps flowing as it does today.",
+      "description": "generateBranchConfig derives a branch's dependencyDashboardApproval with `.some()` over its upgrades, so a single gated upgrade gates the whole branch. The aws sdk group is the one place where direct and indirect gomod deps share a branch, and its 15 indirect modules would park the 14 direct ones behind a checkbox. Let them ride along ungated instead — MVS drags them forward with their direct siblings anyway.",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],
       "matchPackageNames": [
@@ -51,7 +51,7 @@
         "github.com/aws/aws-sdk-go-v2/**",
         "github.com/aws/smithy-go"
       ],
-      "enabled": false
+      "dependencyDashboardApproval": false
     }
   ],
   "platformAutomerge": true,
