@@ -27,14 +27,14 @@
       "minimumReleaseAge": null
     },
     {
-      "description": "Go indirect dependencies are disabled by default, which also silently swallows their security advisories: x/crypto sat on 33 CVEs with skipReason `disabled` and no update. Enable them so advisories can reach them, but park the routine ones behind a dashboard checkbox — there are ~40 and none earns a PR on its own. The vulnerabilityAlerts config force-sets dependencyDashboardApproval to false, so an indirect dep with a CVE still gets an immediate PR, and skips both minimumReleaseAge and the concurrency limits.",
+      "description": "Renovate ignores indirect Go dependencies by default, so security advisories against them never turn into fixes. Enable them, but hold routine updates behind a dashboard checkbox so that every transitive bump doesn't become a PR; vulnerability fixes skip the checkbox on their own.",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],
       "enabled": true,
       "dependencyDashboardApproval": true
     },
     {
-      "description": "The AWS SDK ships ~35 separately versioned modules that release in lockstep. Ungrouped, they would never drain at prConcurrentLimit 1. This rule must stay below the indirect rule above: later rules win, and generateBranchConfig derives a branch's dependencyDashboardApproval with `.some()` over its upgrades, so one gated upgrade gates the whole branch. This group is the one place where direct and indirect gomod deps share a branch, so without the override here its 15 indirect modules would park the 14 direct ones behind a checkbox. MVS drags them forward with their direct siblings anyway.",
+      "description": "The AWS SDK ships ~35 separately versioned modules that release in lockstep. Ungrouped, they would never drain at prConcurrentLimit 1. Keep this rule below the indirect one: a branch waits for approval if any single update in it does, and this group holds both direct and indirect modules.",
       "groupName": "aws sdk",
       "dependencyDashboardApproval": false,
       "matchPackageNames": [
