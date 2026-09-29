@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/ddb"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
-	"github.com/charmbracelet/huh"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"

@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
-	"github.com/charmbracelet/huh"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )

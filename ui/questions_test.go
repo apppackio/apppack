@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/ui/uitest"
-	"github.com/charmbracelet/huh"
 )
 
 func TestBooleanAsYesNo(t *testing.T) {

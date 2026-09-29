@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/ui/uitest"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 )
 
 // --- AppRepositoryURLForm ---
@@ -135,8 +135,8 @@ func TestAppPrivateS3Form_SelectYes(t *testing.T) {
 	form, selectedPtr := AppPrivateS3Form("Private S3?", "Help text.", false)
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
-	tm.Send(tea.KeyMsg{Type: tea.KeyUp})
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyUp})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	uitest.WaitDone(t, tm)
 
 	if *selectedPtr != "yes" {
@@ -501,8 +501,8 @@ func TestAppDataLossConfirmForm_Confirm(t *testing.T) {
 	// explicitly moves focus to the affirmative option.
 	form, confirmedPtr := AppDataLossConfirmForm()
 	tm := uitest.RunForm(t, form)
-	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyLeft})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	uitest.WaitDone(t, tm)
 
 	if !*confirmedPtr {
