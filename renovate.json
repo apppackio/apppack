@@ -34,6 +34,24 @@
       "description": "A pin fixes a floating tag to the version already in use, so there is no newer release to age. Renovate synthesizes pin updates with no releaseTimestamp, and the default minimumReleaseAgeBehaviour of timestamp-required holds those pending forever.",
       "matchUpdateTypes": ["pin"],
       "minimumReleaseAge": null
+    },
+    {
+      "description": "Go indirect dependencies are disabled by default, which also silently swallows their security advisories: x/crypto sat on 33 CVEs with skipReason `disabled` and no update. Enable them so advisories can reach them, but park the routine ones behind a dashboard checkbox — there are ~40 and none earns a PR on its own. The vulnerabilityAlerts config force-sets dependencyDashboardApproval to false, so an indirect dep with a CVE still gets an immediate PR, and skips both minimumReleaseAge and the concurrency limits.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "enabled": true,
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "The aws sdk group above drains 14 direct modules in one PR. Enabling indirect updates would pull in 15 indirect siblings carrying dependencyDashboardApproval, mixing approval-gated upgrades into that branch; leave them disabled so the group keeps flowing as it does today.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "matchPackageNames": [
+        "github.com/aws/aws-sdk-go-v2",
+        "github.com/aws/aws-sdk-go-v2/**",
+        "github.com/aws/smithy-go"
+      ],
+      "enabled": false
     }
   ],
   "platformAutomerge": true,
