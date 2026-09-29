@@ -34,7 +34,7 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "The AWS SDK ships ~35 separately versioned modules that release in lockstep. Ungrouped, they would never drain at prConcurrentLimit 1. Keep this rule below the indirect one: a branch waits for approval if any single update in it does, and this group holds both direct and indirect modules.",
+      "description": "The AWS SDK is split across many separately versioned modules that release in lockstep. One PR each would outpace prConcurrentLimit, so group them. Keep this rule below the indirect one: a branch waits for approval if any single update in it does, and this group holds both direct and indirect modules.",
       "groupName": "aws sdk",
       "dependencyDashboardApproval": false,
       "matchPackageNames": [
