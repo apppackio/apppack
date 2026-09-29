@@ -32,7 +32,7 @@ require (
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260316093931-f2fb44ab3145
 	github.com/cli/safeexec v1.0.1
 	github.com/dustin/go-humanize v1.1.0
-	github.com/getsentry/sentry-go v0.36.2
+	github.com/getsentry/sentry-go v0.49.0
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.7.0
