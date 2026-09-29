@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Upgraded GoReleaser.
 * Dropped five unused dependencies.
 * Upgraded the S3 transfer library used by `db dump` and `db load`.
+* Upgraded the libraries behind the interactive prompts.
 
 ### Fixed
 

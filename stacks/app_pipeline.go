@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/auth"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ddb"
@@ -17,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/codebuild"
 	codebuildtypes "github.com/aws/aws-sdk-go-v2/service/codebuild/types"
-	"github.com/charmbracelet/huh"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-isatty"

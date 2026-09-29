@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/huh/v2"
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/apppackio/apppack/bridge"
 	"github.com/apppackio/apppack/ui"
@@ -18,7 +19,6 @@ import (
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	route53types "github.com/aws/aws-sdk-go-v2/service/route53/types"
-	"github.com/charmbracelet/huh"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )

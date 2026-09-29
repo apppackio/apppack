@@ -3,7 +3,7 @@ package uitest
 import (
 	"testing"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 )
 
 func newTestSelect(selected *int) *huh.Form {

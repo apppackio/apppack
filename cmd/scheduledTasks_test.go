@@ -3,8 +3,8 @@ package cmd
 import (
 	"testing"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/ui/uitest"
-	"github.com/charmbracelet/huh"
 )
 
 func TestScheduledTaskDeleteForm_SelectFirst(t *testing.T) {

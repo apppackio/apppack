@@ -24,12 +24,12 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
-	"github.com/charmbracelet/huh"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
