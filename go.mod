@@ -27,7 +27,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.79.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.2
 	github.com/aws/session-manager-plugin v0.0.0-20260615221425-930a08e65d3a
-	github.com/aws/smithy-go v1.28.3
+	github.com/aws/smithy-go v1.28.4
 	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/x/exp/teatest/v2 v2.0.0-20260927004216-9c77d672503d
 	github.com/cli/safeexec v1.0.1
