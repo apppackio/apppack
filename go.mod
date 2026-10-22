@@ -33,7 +33,7 @@ require (
 	github.com/cli/safeexec v1.0.1
 	github.com/dustin/go-humanize v1.1.0
 	github.com/getsentry/sentry-go v0.50.0
-	github.com/go-jose/go-jose/v4 v4.1.5
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.9.0
 	github.com/juju/ansiterm v1.0.0
