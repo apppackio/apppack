@@ -4,7 +4,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/apppackio/apppack/stacks"
@@ -65,14 +67,28 @@ func TestTemplateURLConsistentAcrossStacks(t *testing.T) {
 func TestTemplateURLTableIsComplete(t *testing.T) {
 	t.Parallel()
 
-	pkgs, err := parser.ParseDir(token.NewFileSet(), ".", nil, 0)
+	paths, err := filepath.Glob("*.go")
 	require.NoError(t, err)
-	pkg, ok := pkgs["stacks"]
-	require.True(t, ok, "stacks package not found")
+
+	fset := token.NewFileSet()
+	files := make([]*ast.File, 0, len(paths))
+
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		require.NoError(t, err)
+
+		files = append(files, file)
+	}
+
+	require.NotEmpty(t, files, "no stacks source files found")
 
 	var found []string
 
-	for _, file := range pkg.Files {
+	for _, file := range files {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Recv == nil || fn.Name.Name != "TemplateURL" {
