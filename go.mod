@@ -11,10 +11,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.9
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.9
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.14
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.4.17
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.4.18
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.82.1
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.75.0
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.90.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.90.1
 	github.com/aws/aws-sdk-go-v2/service/codebuild v1.78.5
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.72.0
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.102.0
@@ -23,11 +23,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.4
 	github.com/aws/aws-sdk-go-v2/service/rds v1.131.0
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.70.4
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.3
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.4
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.80.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.4
 	github.com/aws/session-manager-plugin v0.0.0-20260615221425-930a08e65d3a
-	github.com/aws/smithy-go v1.28.5
+	github.com/aws/smithy-go v1.28.6
 	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/x/exp/teatest/v2 v2.0.0-20260927004216-9c77d672503d
 	github.com/cli/safeexec v1.0.1
@@ -54,7 +54,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.1 // indirect
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.22 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.23 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.3 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.6 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.6 // indirect
