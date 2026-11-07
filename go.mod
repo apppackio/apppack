@@ -8,23 +8,23 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.1
 	github.com/apppackio/saw v1.1.0
 	github.com/aws/aws-sdk-go-v2 v1.47.5
-	github.com/aws/aws-sdk-go-v2/config v1.33.12
-	github.com/aws/aws-sdk-go-v2/credentials v1.20.12
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.16
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.1
+	github.com/aws/aws-sdk-go-v2/config v1.33.13
+	github.com/aws/aws-sdk-go-v2/credentials v1.20.13
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.17
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.2
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.82.3
-	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.75.2
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.90.3
-	github.com/aws/aws-sdk-go-v2/service/codebuild v1.78.7
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.72.2
-	github.com/aws/aws-sdk-go-v2/service/ecs v1.103.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.75.3
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.91.0
+	github.com/aws/aws-sdk-go-v2/service/codebuild v1.78.8
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.72.3
+	github.com/aws/aws-sdk-go-v2/service/ecs v1.103.1
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.64.2
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.63.6
-	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.6
+	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.7
 	github.com/aws/aws-sdk-go-v2/service/rds v1.131.2
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.70.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.6
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.81.1
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.81.2
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.6
 	github.com/aws/session-manager-plugin v0.0.0-20260615221425-930a08e65d3a
 	github.com/aws/smithy-go v1.28.7
@@ -59,16 +59,16 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.8 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.8 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.46.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.46.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.13.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/kms v1.62.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.12.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.39.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/kms v1.62.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.12.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.39.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.1 // indirect
 	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
