@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* `db shell`, `db dump` and `db load` work with databases hosted outside AppPack (Neon, Crunchy, PlanetScale and others). Set `DATABASE_URL` with `config set` or `config import`, then run `modify app`; the CLI reads the engine from the URL. `config set` now prints this next step when it applies.
+* `db shell`, `db dump` and `db load` work with databases hosted outside AppPack (Neon, Crunchy, PlanetScale and others). Set `DATABASE_URL` with `config set` or `config import`, then run `modify app`; the CLI reads the engine from the URL. `config set` now prints this next step when it applies. `db load` drops and recreates the database, so it also needs a database user allowed to do that, which some hosted providers don't grant.
 
 ### Changed
 
