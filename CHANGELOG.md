@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* `db shell`, `db dump` and `db load` work with databases hosted outside AppPack (Neon, Crunchy, PlanetScale and others). Set `DATABASE_URL` with `config set` or `config import`, then run `modify app`; the CLI reads the engine from the URL. `config set` now prints this next step when it applies.
+
 ### Changed
 
 * AWS API calls made by the CLI now identify themselves in CloudTrail. Requests carry `app/apppack-cli#<version>` in their user agent, so AppPack activity in your account is distinguishable from any other Go SDK client.
