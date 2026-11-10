@@ -66,7 +66,7 @@ func CheckForUpdate(ctx context.Context, client *http.Client, stateFilePath, rep
 
 // GetLatestReleaseInfo fetches the latest release information from GitHub.
 func GetLatestReleaseInfo(ctx context.Context, client *http.Client, repo string) (*ReleaseInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo), http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo), http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -78,10 +78,10 @@ func GetLatestReleaseInfo(ctx context.Context, client *http.Client, repo string)
 
 	defer func() {
 		_, _ = io.Copy(io.Discard, res.Body)
-		res.Body.Close()
+		_ = res.Body.Close()
 	}()
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected HTTP %d", res.StatusCode)
 	}
 
@@ -97,6 +97,7 @@ func GetLatestReleaseInfo(ctx context.Context, client *http.Client, repo string)
 }
 
 func getStateEntry(stateFilePath string) (*StateEntry, error) {
+	// #nosec G304 -- stateFilePath is the CLI's own state file location
 	content, err := os.ReadFile(stateFilePath)
 	if err != nil {
 		return nil, err

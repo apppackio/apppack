@@ -135,7 +135,7 @@ var versionUpdateCmd = &cobra.Command{
 		checkErr(err)
 
 		ui.Spinner.Stop()
-		printSuccess(fmt.Sprintf("Updated to version %s", strings.TrimPrefix(release.Version, "v")))
+		printSuccess("Updated to version " + strings.TrimPrefix(release.Version, "v"))
 	},
 }
 

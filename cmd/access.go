@@ -86,11 +86,11 @@ func adminSession(sessionDuration int) (aws.Config, error) {
 	if UseAWSCredentials {
 		ctx := context.Background()
 		if region != "" {
-			cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+			cfg, err := config.LoadDefaultConfig(ctx, auth.WithUserAgentAppID(), config.WithRegion(region))
 			return cfg, auth.FriendlyAWSConfigError(err)
 		}
 
-		cfg, err := config.LoadDefaultConfig(ctx)
+		cfg, err := config.LoadDefaultConfig(ctx, auth.WithUserAgentAppID())
 		if err != nil {
 			return aws.Config{}, auth.FriendlyAWSConfigError(err)
 		}
@@ -224,7 +224,7 @@ func init() {
 	rootCmd.AddCommand(accessCmd)
 
 	accessCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	accessCmd.MarkPersistentFlagRequired("app-name")
+	_ = accessCmd.MarkPersistentFlagRequired("app-name")
 	accessCmd.PersistentFlags().StringVarP(
 		&AccountIDorAlias,
 		"account",

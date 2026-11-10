@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/ui/uitest"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 )
 
 // --- AppRepositoryURLForm ---
@@ -136,8 +136,8 @@ func TestAppPrivateS3Form_SelectYes(t *testing.T) {
 	form, selectedPtr := AppPrivateS3Form("Private S3?", "Help text.", false)
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
-	tm.Send(tea.KeyMsg{Type: tea.KeyUp})
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyUp})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	uitest.WaitDone(t, tm)
 
 	if *selectedPtr != "yes" {
@@ -243,7 +243,7 @@ func TestAppDatabaseStackForm_SelectFirst(t *testing.T) {
 		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb"),
 	}
 
-	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?")
+	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?", "")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
 	uitest.SelectFirst(tm) // accept first option
@@ -260,7 +260,7 @@ func TestAppDatabaseStackForm_SelectSecond(t *testing.T) {
 		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb"),
 	}
 
-	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?")
+	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?", "")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm)  // pass Note
 	uitest.SelectNth(tm, 1) // select second option
@@ -272,16 +272,16 @@ func TestAppDatabaseStackForm_SelectSecond(t *testing.T) {
 }
 
 // TestAppDatabaseStackForm_PreservesSelection verifies that when the caller
-// marks a non-first option as pre-selected (via .Selected(true)), the form
-// starts with that option focused. This matches the real-world `modify app`
-// workflow where the existing database is re-presented to the user.
+// passes the existing stack name as defaultValue, the form starts with that
+// option focused. This matches the real-world `modify app` workflow where
+// the existing database is re-presented to the user.
 func TestAppDatabaseStackForm_PreservesSelection(t *testing.T) {
 	options := []huh.Option[string]{
 		huh.NewOption("mydb (postgres)", "apppack-database-mydb"),
-		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb").Selected(true),
+		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb"),
 	}
 
-	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?")
+	form, selectedPtr := AppDatabaseStackForm(options, "Which database cluster?", "apppack-database-otherdb")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
 	uitest.SelectFirst(tm) // accept currently-focused option (should be the pre-selected second one)
@@ -289,6 +289,33 @@ func TestAppDatabaseStackForm_PreservesSelection(t *testing.T) {
 
 	if *selectedPtr != "apppack-database-otherdb" {
 		t.Errorf("expected pre-selected 'apppack-database-otherdb' to be preserved, got %q", *selectedPtr)
+	}
+}
+
+// TestAppDatabaseStackForm_RendersAllOptionsWhenDefaultIsNotFirst is a
+// regression test for https://github.com/apppackio/apppack/issues/181: when
+// defaultValue matches a non-first option, every option must still render
+// on initial paint.
+func TestAppDatabaseStackForm_RendersAllOptionsWhenDefaultIsNotFirst(t *testing.T) {
+	options := []huh.Option[string]{
+		huh.NewOption("mydb (postgres)", "apppack-database-mydb"),
+		huh.NewOption("otherdb (mysql)", "apppack-database-otherdb"),
+		huh.NewOption("thirddb (postgres)", "apppack-database-thirddb"),
+	}
+
+	form, _ := AppDatabaseStackForm(options, "Which database cluster?", "apppack-database-thirddb")
+	view := uitest.RenderView(form, 100, 40)
+
+	idx := strings.Index(view, "Database Cluster")
+	if idx == -1 {
+		t.Fatalf("expected view to contain the select title, got:\n%s", view)
+	}
+	optionRows := view[idx:]
+
+	for _, label := range []string{"mydb (postgres)", "otherdb (mysql)", "thirddb (postgres)"} {
+		if !strings.Contains(optionRows, label) {
+			t.Errorf("expected %q to be rendered, got:\n%s", label, optionRows)
+		}
 	}
 }
 
@@ -326,7 +353,7 @@ func TestAppRedisStackForm_SelectFirst(t *testing.T) {
 		huh.NewOption("otherredis", "apppack-redis-otherredis"),
 	}
 
-	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?")
+	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?", "")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
 	uitest.SelectFirst(tm) // accept first option
@@ -343,7 +370,7 @@ func TestAppRedisStackForm_SelectSecond(t *testing.T) {
 		huh.NewOption("otherredis", "apppack-redis-otherredis"),
 	}
 
-	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?")
+	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?", "")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm)  // pass Note
 	uitest.SelectNth(tm, 1) // select second option
@@ -354,15 +381,16 @@ func TestAppRedisStackForm_SelectSecond(t *testing.T) {
 	}
 }
 
-// TestAppRedisStackForm_PreservesSelection verifies the pre-existing selection
-// (via .Selected(true)) is honored, matching the `modify app` flow.
+// TestAppRedisStackForm_PreservesSelection verifies that when the caller
+// passes the existing stack name as defaultValue, the form starts with that
+// option focused, matching the `modify app` flow.
 func TestAppRedisStackForm_PreservesSelection(t *testing.T) {
 	options := []huh.Option[string]{
 		huh.NewOption("myredis", "apppack-redis-myredis"),
-		huh.NewOption("otherredis", "apppack-redis-otherredis").Selected(true),
+		huh.NewOption("otherredis", "apppack-redis-otherredis"),
 	}
 
-	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?")
+	form, selectedPtr := AppRedisStackForm(options, "Which Redis instance?", "apppack-redis-otherredis")
 	tm := uitest.RunForm(t, form)
 	uitest.SelectFirst(tm) // pass Note
 	uitest.SelectFirst(tm) // accept currently-focused option (should be pre-selected second)
@@ -370,6 +398,33 @@ func TestAppRedisStackForm_PreservesSelection(t *testing.T) {
 
 	if *selectedPtr != "apppack-redis-otherredis" {
 		t.Errorf("expected pre-selected 'apppack-redis-otherredis' to be preserved, got %q", *selectedPtr)
+	}
+}
+
+// TestAppRedisStackForm_RendersAllOptionsWhenDefaultIsNotFirst is a
+// regression test for https://github.com/apppackio/apppack/issues/181: when
+// defaultValue matches a non-first option, every option must still render
+// on initial paint.
+func TestAppRedisStackForm_RendersAllOptionsWhenDefaultIsNotFirst(t *testing.T) {
+	options := []huh.Option[string]{
+		huh.NewOption("myredis", "apppack-redis-myredis"),
+		huh.NewOption("otherredis", "apppack-redis-otherredis"),
+		huh.NewOption("thirdredis", "apppack-redis-thirdredis"),
+	}
+
+	form, _ := AppRedisStackForm(options, "Which Redis instance?", "apppack-redis-thirdredis")
+	view := uitest.RenderView(form, 100, 40)
+
+	idx := strings.Index(view, "Redis Cluster")
+	if idx == -1 {
+		t.Fatalf("expected view to contain the select title, got:\n%s", view)
+	}
+	optionRows := view[idx:]
+
+	for _, label := range []string{"myredis", "otherredis", "thirdredis"} {
+		if !strings.Contains(optionRows, label) {
+			t.Errorf("expected %q to be rendered, got:\n%s", label, optionRows)
+		}
 	}
 }
 
@@ -447,8 +502,8 @@ func TestAppDataLossConfirmForm_Confirm(t *testing.T) {
 	// explicitly moves focus to the affirmative option.
 	form, confirmedPtr := AppDataLossConfirmForm()
 	tm := uitest.RunForm(t, form)
-	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyLeft})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	uitest.WaitDone(t, tm)
 
 	if !*confirmedPtr {
@@ -688,22 +743,22 @@ func TestEngineFromDatabaseURL(t *testing.T) {
 		wantUnrecognizedScheme string
 	}{
 		{name: "empty string", rawURL: ""},
-		{name: "postgres", rawURL: "postgres://user:pass@host:5432/db", wantEngine: "postgres"},
-		{name: "postgresql", rawURL: "postgresql://user:pass@host:5432/db", wantEngine: "postgres"},
-		{name: "pgsql", rawURL: "pgsql://user:pass@host:5432/db", wantEngine: "postgres"},
-		{name: "psql", rawURL: "psql://user:pass@host:5432/db", wantEngine: "postgres"},
-		{name: "mysql", rawURL: "mysql://user:pass@host:3306/db", wantEngine: "mysql"},
-		{name: "mysql2", rawURL: "mysql2://user:pass@host:3306/db", wantEngine: "mysql"},
-		{name: "mariadb", rawURL: "mariadb://user:pass@host:3306/db", wantEngine: "mysql"},
-		{name: "scheme comparison is case-insensitive", rawURL: "POSTGRES://user:pass@host/db", wantEngine: "postgres"},
+		{name: "postgres", rawURL: "postgres://user@host:5432/db", wantEngine: "postgres"},
+		{name: "postgresql", rawURL: "postgresql://user@host:5432/db", wantEngine: "postgres"},
+		{name: "pgsql", rawURL: "pgsql://user@host:5432/db", wantEngine: "postgres"},
+		{name: "psql", rawURL: "psql://user@host:5432/db", wantEngine: "postgres"},
+		{name: "mysql", rawURL: "mysql://user@host:3306/db", wantEngine: "mysql"},
+		{name: "mysql2", rawURL: "mysql2://user@host:3306/db", wantEngine: "mysql"},
+		{name: "mariadb", rawURL: "mariadb://user@host:3306/db", wantEngine: "mysql"},
+		{name: "scheme comparison is case-insensitive", rawURL: "POSTGRES://user@host/db", wantEngine: "postgres"},
 		{
 			name:                   "unknown scheme",
-			rawURL:                 "mongodb://user:pass@host:27017/db",
+			rawURL:                 "mongodb://user@host:27017/db",
 			wantUnrecognizedScheme: "mongodb",
 		},
 		{name: "malformed URL (parse error)", rawURL: "://not-a-url"},
 		{name: "malformed URL (no scheme)", rawURL: "not a url at all"},
-		{
+		{ //nolint:gosec // G101: fake credential; the password is what this case tests
 			// Guards against substring matching: the whole URL contains "mysql" (in
 			// the password) but the scheme is postgres, so the result must be postgres.
 			name:       "password contains mysql but scheme is postgres",
@@ -713,7 +768,6 @@ func TestEngineFromDatabaseURL(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -746,21 +800,21 @@ func TestDetectExternalDatabaseEngine(t *testing.T) {
 		{
 			name:        "managed database via DatabaseStackName forces empty even with a postgres DATABASE_URL",
 			params:      AppStackParameters{Type: "app", DatabaseStackName: "apppack-database-mydb"},
-			databaseURL: "postgres://user:pass@host/db",
+			databaseURL: "postgres://user@host/db",
 			fetchOK:     true,
 			wantEngine:  "",
 		},
 		{
 			name:        "managed database via DatabaseAddonEnabled forces empty even with a postgres DATABASE_URL",
 			params:      AppStackParameters{Type: "app", DatabaseAddonEnabled: true},
-			databaseURL: "postgres://user:pass@host/db",
+			databaseURL: "postgres://user@host/db",
 			fetchOK:     true,
 			wantEngine:  "",
 		},
 		{
 			name:        "pipeline forces empty even with a postgres DATABASE_URL",
 			params:      AppStackParameters{Type: "pipeline"},
-			databaseURL: "postgres://user:pass@host/db",
+			databaseURL: "postgres://user@host/db",
 			fetchOK:     true,
 			wantEngine:  "",
 		},
@@ -773,21 +827,21 @@ func TestDetectExternalDatabaseEngine(t *testing.T) {
 		{
 			name:        "postgres DATABASE_URL is detected for a plain app",
 			params:      AppStackParameters{Type: "app"},
-			databaseURL: "postgres://user:pass@host/db",
+			databaseURL: "postgres://user@host/db",
 			fetchOK:     true,
 			wantEngine:  "postgres",
 		},
 		{
 			name:        "mysql DATABASE_URL is detected for a plain app",
 			params:      AppStackParameters{Type: "app"},
-			databaseURL: "mysql://user:pass@host/db",
+			databaseURL: "mysql://user@host/db",
 			fetchOK:     true,
 			wantEngine:  "mysql",
 		},
 		{
 			name:        "unrecognized scheme yields empty (warning is side effect, not asserted here)",
 			params:      AppStackParameters{Type: "app"},
-			databaseURL: "mongodb://user:pass@host/db",
+			databaseURL: "mongodb://user@host/db",
 			fetchOK:     true,
 			wantEngine:  "",
 		},
@@ -832,7 +886,7 @@ func TestDetectExternalDatabaseEngineIdempotent(t *testing.T) {
 
 	// DATABASE_URL set to postgres -- engine detected.
 	fetchDatabaseURL = func(_ aws.Config, _ string) (string, bool) {
-		return "postgres://user:pass@host/db", true
+		return "postgres://user@host/db", true
 	}
 
 	p.detectExternalDatabaseEngine(aws.Config{})

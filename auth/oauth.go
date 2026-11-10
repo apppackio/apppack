@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +42,21 @@ type OauthConfig struct {
 	TokenURL      string
 }
 
+// postJSON sends a JSON POST. It exists because http.Post cannot carry a
+// context, so the request could not be cancelled.
+func postJSON(url string, body []byte) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(
+		context.Background(), http.MethodPost, url, bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	return http.DefaultClient.Do(req)
+}
+
 func (o *OauthConfig) GetDeviceCode() (*DeviceCodeResp, error) {
 	reqBody, err := json.Marshal(map[string]string{
 		"client_id": o.ClientID, "scope": strings.Join(o.Scope, " "), "audience": o.Audience,
@@ -51,12 +67,13 @@ func (o *OauthConfig) GetDeviceCode() (*DeviceCodeResp, error) {
 
 	logrus.WithFields(logrus.Fields{"url": deviceCodeURL}).Debug("fetching device code")
 
-	resp, err := http.Post(deviceCodeURL, "application/json", bytes.NewBuffer(reqBody))
+	resp, err := postJSON(deviceCodeURL, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	// Read-only: a Close failure here tells the caller nothing actionable.
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		text, _ := io.ReadAll(resp.Body)
@@ -99,12 +116,13 @@ func (o *OauthConfig) RefreshTokens(tokens *Tokens) (*Tokens, error) {
 func (o *OauthConfig) TokenRequest(jsonData []byte) (*Tokens, error) {
 	logrus.WithFields(logrus.Fields{"url": o.TokenURL}).Debug("fetching token")
 
-	resp, err := http.Post(o.TokenURL, "application/json", bytes.NewBuffer(jsonData))
+	resp, err := postJSON(o.TokenURL, jsonData)
 	if err != nil {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	// Read-only: a Close failure here tells the caller nothing actionable.
+	defer func() { _ = resp.Body.Close() }()
 
 	contents, err := io.ReadAll(resp.Body)
 	if err != nil {

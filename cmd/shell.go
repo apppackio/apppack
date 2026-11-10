@@ -24,12 +24,12 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
-	"github.com/charmbracelet/huh"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
@@ -292,5 +292,5 @@ func init() {
 	shellCmd.PersistentFlags().BoolVarP(&shellLive, "live", "l", false, "connect to a live process")
 	shellCmd.Flags().Float64Var(&shellCPU, "cpu", 0.5, "CPU cores available for task")
 	shellCmd.Flags().StringVar(&shellMem, "memory", "1G", "memory (e.g. '2G', '512M') available for task")
-	shellCmd.MarkPersistentFlagRequired("app-name")
+	_ = shellCmd.MarkPersistentFlagRequired("app-name")
 }

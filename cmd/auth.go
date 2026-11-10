@@ -213,8 +213,8 @@ var accountsCmd = &cobra.Command{
 		w := new(tabwriter.Writer)
 		// minwidth, tabwidth, padding, padchar, flags
 		w.Init(os.Stdout, 0, 8, 1, '\t', 0)
-		fmt.Fprintln(w, "Alias\tID\tDefault Region")
-		fmt.Fprintln(w, "-----\t--\t--------------")
+		_, _ = fmt.Fprintln(w, "Alias\tID\tDefault Region")
+		_, _ = fmt.Fprintln(w, "-----\t--\t--------------")
 		var alias string
 		for _, admin := range admins {
 			if admin.AccountAlias == "" {
@@ -222,9 +222,9 @@ var accountsCmd = &cobra.Command{
 			} else {
 				alias = admin.AccountAlias
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", alias, admin.AccountID, admin.Region)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", alias, admin.AccountID, admin.Region)
 		}
-		w.Flush()
+		_ = w.Flush()
 	},
 }
 

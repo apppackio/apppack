@@ -19,25 +19,22 @@ var classOrder = []struct {
 	{"medium", 3},
 	{"large", 4},
 	{"xlarge", 5},
-	{"metal", 9999},
 }
 
-// instanceNameWeight creates a sortable string for instance classes
+// instanceNameWeight creates a sortable string for instance classes.
+//
+// The only inputs are RDS DBInstanceClass and ElastiCache CacheNodeType
+// values, which are always <prefix>.<family>.<size>. Anything else sorts
+// under its own name -- `db.serverless` is the one real two-part class, and
+// stacks/database.go filters it out before we get here.
 func instanceNameWeight(name string) string {
 	parts := strings.Split(name, ".")
-
-	var class string
-
-	var size string
-
-	// remove db. or cache. prefix
-	if len(parts) == 3 {
-		class = parts[1]
-		size = parts[2]
-	} else {
-		class = parts[0]
-		size = parts[1]
+	if len(parts) != 3 {
+		return name
 	}
+
+	// drop the db./cache. prefix so entries group by instance family
+	class, size := parts[1], parts[2]
 	// extract multiplier (8xlarge) from size
 	re := regexp.MustCompile(`\d+`)
 	multiplier := re.FindString(size)

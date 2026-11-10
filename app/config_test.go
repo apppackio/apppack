@@ -72,7 +72,7 @@ func TestConfigVariablesToConsole(t *testing.T) {
 
 	expected := []byte("FOO:\t\t\tbar\nLONGERVARIABLEFOO:\tbaz\n")
 
-	w.Flush()
+	_ = w.Flush()
 
 	actual := out.Bytes()
 	if !bytes.Equal(actual, expected) {

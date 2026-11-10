@@ -3,10 +3,10 @@ package cmd
 import (
 	"testing"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/ui/uitest"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
-	"github.com/charmbracelet/huh"
 )
 
 func TestFormatTaskSize(t *testing.T) {

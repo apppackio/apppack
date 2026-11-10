@@ -167,7 +167,14 @@ func StructToCloudformationParameters(s Parameters) ([]types.Parameter, error) {
 				return nil, fmt.Errorf("%s is not a slice of strings", field.Name)
 			}
 
-			val := f.Interface().([]string)
+			// Not a bare assertion: Elem().Kind() being String still allows a
+			// named type such as `type Tags []string`, whose dynamic type is
+			// not []string and would panic here.
+			val, ok := f.Interface().([]string)
+			if !ok {
+				return nil, fmt.Errorf("%s is not a []string", field.Name)
+			}
+
 			param = types.Parameter{
 				ParameterKey:   aws.String(paramName),
 				ParameterValue: aws.String(strings.Join(val, ",")),

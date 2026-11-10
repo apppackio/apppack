@@ -3,8 +3,8 @@ package stacks
 import (
 	"testing"
 
+	"charm.land/huh/v2"
 	"github.com/apppackio/apppack/ui/uitest"
-	"github.com/charmbracelet/huh"
 )
 
 func TestClusterSelectForm_SelectFirst(t *testing.T) {

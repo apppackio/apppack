@@ -206,9 +206,7 @@ func populateLineChart(appMetrics metrics.AppMetrics, lc *linechart.LineChart) (
 		color := appMetrics.MetricColor(&name)
 
 		var values []float64
-		for _, v := range metric.Values {
-			values = append(values, v)
-		}
+		values = append(values, metric.Values...)
 
 		labels := labelsFromTimestamps(metric.Timestamps, appMetrics.GetOptions().UTC)
 
@@ -446,6 +444,6 @@ var dashCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(dashCmd)
 	dashCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	dashCmd.MarkPersistentFlagRequired("app-name")
+	_ = dashCmd.MarkPersistentFlagRequired("app-name")
 	dashCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 }

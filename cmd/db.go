@@ -27,8 +27,9 @@ import (
 
 	"github.com/apppackio/apppack/app"
 	"github.com/apppackio/apppack/ui"
+	"github.com/apppackio/saw/blade"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -39,16 +40,38 @@ import (
 
 var dbOutputFile string
 
-func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string) error {
-	ui.Spinner.Suffix = " downloading " + outputFile
-	downloader := manager.NewDownloader(s3.NewFromConfig(cfg))
+// Each of these names just the one method its caller uses, so the transfer
+// manager client already satisfies them and a test fake is a plain struct with
+// one method.
+type (
+	objectDownloader interface {
+		DownloadObject(context.Context, *transfermanager.DownloadObjectInput, ...func(*transfermanager.Options)) (*transfermanager.DownloadObjectOutput, error)
+	}
 
+	objectUploader interface {
+		UploadObject(context.Context, *transfermanager.UploadObjectInput, ...func(*transfermanager.Options)) (*transfermanager.UploadObjectOutput, error)
+	}
+)
+
+func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string) error {
+	return downloadObject(transfermanager.New(s3.NewFromConfig(cfg)), objInput, outputFile)
+}
+
+func downloadObject(s3Svc objectDownloader, objInput *s3.GetObjectInput, outputFile string) error {
+	ui.Spinner.Suffix = " downloading " + outputFile
+
+	// #nosec G304 -- outputFile is the destination the user asked for
 	file, err := os.Create(outputFile)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = file.Close() }()
 
-	_, err = downloader.Download(context.Background(), file, objInput)
+	_, err = s3Svc.DownloadObject(context.Background(), &transfermanager.DownloadObjectInput{
+		Bucket:   objInput.Bucket,
+		Key:      objInput.Key,
+		WriterAt: file,
+	})
 	if err != nil {
 		return err
 	}
@@ -56,10 +79,12 @@ func downloadFile(cfg aws.Config, objInput *s3.GetObjectInput, outputFile string
 	return nil
 }
 
-func uploadFile(cfg aws.Config, uploadInput *s3.PutObjectInput) error {
-	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
+func uploadFile(cfg aws.Config, uploadInput *transfermanager.UploadObjectInput) error {
+	return uploadObject(transfermanager.New(s3.NewFromConfig(cfg)), uploadInput)
+}
 
-	_, err := uploader.Upload(context.Background(), uploadInput)
+func uploadObject(s3Svc objectUploader, uploadInput *transfermanager.UploadObjectInput) error {
+	_, err := s3Svc.UploadObject(context.Background(), uploadInput)
 	if err != nil {
 		return err
 	}
@@ -162,14 +187,14 @@ func taskLogs(cfg aws.Config, task *ecstypes.Task) error {
 	taskID := taskArnParts[len(taskArnParts)-1]
 	sawConfig.Group = logConfig.Options["awslogs-group"]
 	sawConfig.Start = task.StartedAt.Format(time.RFC3339)
-	// Use prefix-based filtering instead of directly setting streams
-	// since saw library uses v1 SDK types for Streams
+	// Filter by stream prefix rather than naming the stream outright. The
+	// prefix identifies exactly one stream here, so the two are equivalent.
 	sawConfig.Prefix = fmt.Sprintf("%s/%s/%s",
 		logConfig.Options["awslogs-stream-prefix"],
 		*containerDefn.Name,
 		taskID)
 
-	newBlade(cfg).GetEvents()
+	blade.NewBladeWithConfig(cfg, &sawConfig, &sawOutputConfig).GetEvents()
 
 	return nil
 }
@@ -227,7 +252,7 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			checkErr(err)
 			remoteFile = fmt.Sprintf("s3://%s/%s", *getObjectInput.Bucket, *getObjectInput.Key)
 			ui.Spinner.Suffix = " uploading " + args[0]
-			err = uploadFile(app.Session, &s3.PutObjectInput{
+			err = uploadFile(app.Session, &transfermanager.UploadObjectInput{
 				Bucket: getObjectInput.Bucket,
 				Key:    getObjectInput.Key,
 				Body:   file,
@@ -251,11 +276,11 @@ WARNING: This is a destructive action which will delete the contents of your rem
 			taskOverride,
 			true,
 		)
+		checkErr(err)
 		ui.Spinner.Stop()
 		fmt.Println(aurora.Faint("starting task " + *task.TaskArn))
 		ui.StartSpinner()
 		ui.Spinner.Suffix = " loading database"
-		checkErr(err)
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
 		ui.Spinner.Stop()
@@ -276,7 +301,7 @@ func init() {
 	rootCmd.AddCommand(dbCmd)
 
 	dbCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	dbCmd.MarkPersistentFlagRequired("app-name")
+	_ = dbCmd.MarkPersistentFlagRequired("app-name")
 	dbCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
 	dbCmd.AddCommand(dbShellCmd)
 	dbCmd.AddCommand(dbDumpCmd)

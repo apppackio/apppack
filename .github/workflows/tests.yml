@@ -1,0 +1,60 @@
+---
+name: tests
+
+on:
+  pull_request:
+  # Branch pushes are covered by `pull_request`, so `push` is limited to
+  # main. A bare `push:` here would run everything twice on every PR.
+  push:
+    branches:
+      - main
+
+jobs:
+  # `go test ./...` covers the package tests and the testscript-driven CLI
+  # tests in integration_test.go, so this is not a unit-test-only job.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .tool-versions
+      - name: Test
+        run: go test ./... -v -cover -coverprofile=coverage.out
+      # Tees rather than redirecting so the table lands in the job log
+      # too: a step summary cannot be read back through the API, so a
+      # silent breakage would otherwise look exactly like success.
+      - name: Coverage summary
+        if: always()
+        run: .github/scripts/coverage-summary.sh | tee -a "$GITHUB_STEP_SUMMARY"
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .tool-versions
+      - name: Vet
+        run: go vet ./...
+      # One `golangci-lint run` covers both `make lint` and `make fmt`:
+      # `run` also reports the formatters a config enables explicitly, and
+      # .golangci.toml enables gofumpt and gci. See
+      # https://github.com/golangci/golangci-lint-action/issues/1304.
+      #
+      # The action checks .golangci.toml against the JSON schema first
+      # (`verify` defaults to true). That matters: the config once declared
+      # version 2 while written in v1 syntax, so every unrecognised key --
+      # including the linter set and every exclusion -- was silently ignored
+      # for an unknown length of time.
+      #
+      # `version-file` reads the pin from .tool-versions, so CI and a local
+      # run use the same golangci-lint.
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version-file: .tool-versions

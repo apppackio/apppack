@@ -22,6 +22,9 @@ func (m *MockAWS) GetParameter(input *ssm.GetParameterInput) (*string, error) {
 		return nil, args.Error(1)
 	}
 
+	// Panicking is the point: a mock set up to return the wrong type is a
+	// broken test, and should fail loudly rather than return a silent nil.
+	//nolint:forcetypeassert // deliberate panic on mock misconfiguration
 	return args.Get(0).(*string), args.Error(1)
 }
 
@@ -40,11 +43,12 @@ func (m *MockAWS) ValidateEventbridgeCron(rule string) error {
 func TestScheduledTasksNoParameter(t *testing.T) {
 	t.Parallel()
 
+	mockAWS := &MockAWS{}
 	a := &app.App{
 		Name: "test",
-		AWS:  &MockAWS{},
+		AWS:  mockAWS,
 	}
-	a.AWS.(*MockAWS).On(
+	mockAWS.On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: aws.String("/apppack/apps/test/scheduled-tasks")},
 	).Return(nil, errors.New("parameter not found"))
@@ -62,25 +66,26 @@ func TestScheduledTasksNoParameter(t *testing.T) {
 func TestScheduledTasksCreate(t *testing.T) {
 	t.Parallel()
 
+	mockAWS := &MockAWS{}
 	a := &app.App{
 		Name: "test",
-		AWS:  &MockAWS{},
+		AWS:  mockAWS,
 	}
 	parameterName := "/apppack/apps/test/scheduled-tasks"
-	a.AWS.(*MockAWS).On(
+	mockAWS.On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
 	).Return(nil, errors.New("parameter not found"))
 
 	schedule := "0/10 * * * ? *"
-	a.AWS.(*MockAWS).On(
+	mockAWS.On(
 		"ValidateEventbridgeCron",
 		schedule,
 	).Return(nil)
 
 	command := "echo hello"
 	parameterType := ssmtypes.ParameterTypeString
-	a.AWS.(*MockAWS).On(
+	mockAWS.On(
 		"PutParameter",
 		&ssm.PutParameterInput{
 			Name:      &parameterName,
@@ -107,19 +112,20 @@ func TestScheduledTasksCreate(t *testing.T) {
 func TestScheduledTasksDelete(t *testing.T) {
 	t.Parallel()
 
+	mockAWS := &MockAWS{}
 	a := &app.App{
 		Name: "test",
-		AWS:  &MockAWS{},
+		AWS:  mockAWS,
 	}
 	parameterName := "/apppack/apps/test/scheduled-tasks"
 	schedule := "0/10 * * * ? *"
 	command := "echo hello"
-	a.AWS.(*MockAWS).On(
+	mockAWS.On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
 	).Return(aws.String(fmt.Sprintf("[{\"schedule\":%q,\"command\":%q}]", schedule, command)), nil)
 	parameterType := ssmtypes.ParameterTypeString
-	a.AWS.(*MockAWS).On(
+	mockAWS.On(
 		"PutParameter",
 		&ssm.PutParameterInput{
 			Name:      &parameterName,
@@ -142,12 +148,13 @@ func TestScheduledTasksDelete(t *testing.T) {
 func TestScheduledTasksDeleteEmpty(t *testing.T) {
 	t.Parallel()
 
+	mockAWS := &MockAWS{}
 	a := &app.App{
 		Name: "test",
-		AWS:  &MockAWS{},
+		AWS:  mockAWS,
 	}
 	parameterName := "/apppack/apps/test/scheduled-tasks"
-	a.AWS.(*MockAWS).On(
+	mockAWS.On(
 		"GetParameter",
 		&ssm.GetParameterInput{Name: &parameterName},
 	).Return(aws.String("[]"), nil)
