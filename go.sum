@@ -340,6 +340,8 @@ github.com/aws/aws-sdk-go-v2/service/codebuild v1.78.11 h1:iil1LhhRRDCf4b/fIh6Gn
 github.com/aws/aws-sdk-go-v2/service/codebuild v1.78.11/go.mod h1:aO9+r7RLsJ3j7oh5qivZnbxPT8rHmcKticqxdy7lzjU=
 github.com/aws/aws-sdk-go-v2/service/codebuild v1.78.12 h1:1leXm1hUObAS3Olyz3cHoLqxIYkjLCsG3e+nZBew09s=
 github.com/aws/aws-sdk-go-v2/service/codebuild v1.78.12/go.mod h1:nw9J9NmOsBl+w/y4A8wOLlzWtD3YC0Wd+iVGb10mxAg=
+github.com/aws/aws-sdk-go-v2/service/codebuild v1.79.0 h1:w5/h6ETIOHLJ+diFkNTmF3VP/BL66KVOjXNdZAJ2s6A=
+github.com/aws/aws-sdk-go-v2/service/codebuild v1.79.0/go.mod h1:nw9J9NmOsBl+w/y4A8wOLlzWtD3YC0Wd+iVGb10mxAg=
 github.com/aws/aws-sdk-go-v2/service/dynamodb v1.69.1 h1:bKwiQA6SKqFXBO+1IwP/hTwCU5RlqeitG4gVvSuMN8U=
 github.com/aws/aws-sdk-go-v2/service/dynamodb v1.69.1/go.mod h1:Gm+i2GlUsFNlzoBq8VXF44XHbKANn3tV8nYBBp3rN8Q=
 github.com/aws/aws-sdk-go-v2/service/dynamodb v1.70.0 h1:fgV0Q447Bgc0IPEf1dSl35bLoAxU5wqo2lRgRjJ+bUs=
