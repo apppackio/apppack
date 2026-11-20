@@ -13,7 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.21
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.7
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.83.0
-	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.75.7
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.76.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.92.2
 	github.com/aws/aws-sdk-go-v2/service/codebuild v1.79.0
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.74.0
@@ -22,7 +22,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.64.0
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.11
 	github.com/aws/aws-sdk-go-v2/service/rds v1.133.0
-	github.com/aws/aws-sdk-go-v2/service/route53 v1.70.10
+	github.com/aws/aws-sdk-go-v2/service/route53 v1.71.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.82.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.52.0
