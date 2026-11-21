@@ -189,10 +189,14 @@ var psCmd = &cobra.Command{
 
 			fmt.Printf("%s %s %s ", aurora.Faint("==="), aurora.Green(proc), aurora.White(status.Command))
 			if status.MinProcesses == status.MaxProcesses {
-				fmt.Printf("(%s)\n", aurora.Yellow(strconv.Itoa(status.MinProcesses)))
+				fmt.Printf("(%s)", aurora.Yellow(strconv.Itoa(status.MinProcesses)))
 			} else {
-				fmt.Printf("(%s)\n", aurora.Yellow(fmt.Sprintf("%d - %d", status.MinProcesses, status.MaxProcesses)))
+				fmt.Printf("(%s)", aurora.Yellow(fmt.Sprintf("%d - %d", status.MinProcesses, status.MaxProcesses)))
 			}
+			if status.Strategy == strategyReplace {
+				fmt.Printf(" %s", aurora.Magenta(strategyReplace))
+			}
+			fmt.Println()
 			sort.SliceStable(tasks, func(i, j int) bool {
 				if tasks[i].StartedAt == nil {
 					return false
@@ -310,6 +314,64 @@ apppack -a my-app ps scale worker 1-4  # autoscale worker service from 1 to 4 pr
 	},
 }
 
+const (
+	strategyRolling = "rolling"
+	strategyReplace = "replace"
+)
+
+var psStrategyReset bool
+
+// psStrategyCmd represents the strategy command
+var psStrategyCmd = &cobra.Command{
+	Use:   "strategy <process_type> [rolling|replace]",
+	Short: "set how new versions of a process type are rolled out",
+	Long: `Set how new versions of a process type are rolled out on deploy.
+
+rolling (default): new processes start and pass health checks before old ones stop.
+replace: old processes stop before new ones start. Use it for processes that must
+never run twice at once (e.g. celery beat, data producers). The process is down
+during each deploy, and a failed deploy leaves it down until ECS rolls back.
+
+This overrides ` + "`strategy`" + ` in apppack.toml. Use --reset to go back to apppack.toml.
+The change triggers a redeploy of the current build.`,
+	Example: `apppack -a my-app ps strategy beat replace   # stop old processes before starting new ones
+apppack -a my-app ps strategy beat --reset   # use the strategy from apppack.toml`,
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.RangeArgs(1, 2),
+	Run: func(_ *cobra.Command, args []string) {
+		processType := args[0]
+		ui.StartSpinner()
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
+		checkErr(err)
+		if a.IsReviewApp() {
+			_, err = a.ReviewAppExists()
+			checkErr(err)
+		}
+		var status *app.Process
+		if err = a.LoadDeployStatus(); err == nil {
+			status, _ = a.DeployStatus.FindProcess(processType)
+		}
+		var strategy, out string
+		switch {
+		case psStrategyReset == (len(args) == 2):
+			checkErr(errors.New("give a strategy or --reset"))
+		case psStrategyReset:
+			out = processType + " will use the strategy from apppack.toml (default: rolling)"
+		case args[1] == strategyRolling || args[1] == strategyReplace:
+			strategy = args[1]
+			out = fmt.Sprintf("%s will deploy with the %s strategy", processType, strategy)
+		default:
+			checkErr(fmt.Errorf("unknown strategy %q -- use %q or %q", args[1], strategyRolling, strategyReplace))
+		}
+		checkErr(a.SetScaleParameter(processType, nil, nil, nil, nil, &strategy))
+		ui.Spinner.Stop()
+		if strategy == strategyReplace && status != nil && status.MaxProcesses > 1 {
+			printWarning(fmt.Sprintf("%s runs up to %d processes; with replace, all of them stop before new ones start.\n", processType, status.MaxProcesses))
+		}
+		printSuccess(out)
+	},
+}
+
 // psRestartCmd represents the restart command
 var psRestartCmd = &cobra.Command{
 	Use:   "restart <process_type>",
@@ -385,6 +447,9 @@ func init() {
 	_ = psResizeCmd.MarkFlagRequired("memory")
 
 	psCmd.AddCommand(psScaleCmd)
+
+	psCmd.AddCommand(psStrategyCmd)
+	psStrategyCmd.Flags().BoolVar(&psStrategyReset, "reset", false, "remove the CLI override and use the strategy from apppack.toml")
 
 	psCmd.AddCommand(psRestartCmd)
 	psRestartCmd.Flags().BoolVar(&psRestartForce, "force", false, "forcefully restart by killing running containers instead of a graceful rolling restart")
