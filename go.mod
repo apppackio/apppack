@@ -7,33 +7,33 @@ require (
 	charm.land/huh/v2 v2.0.3
 	github.com/apparentlymart/go-cidr v1.1.1
 	github.com/apppackio/saw v1.1.0
-	github.com/aws/aws-sdk-go-v2 v1.47.5
-	github.com/aws/aws-sdk-go-v2/config v1.33.13
-	github.com/aws/aws-sdk-go-v2/credentials v1.20.13
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.17
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.2
-	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.82.3
-	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.75.3
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.91.0
-	github.com/aws/aws-sdk-go-v2/service/codebuild v1.78.8
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.72.3
-	github.com/aws/aws-sdk-go-v2/service/ecs v1.103.1
-	github.com/aws/aws-sdk-go-v2/service/elasticache v1.64.2
-	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.63.6
-	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.7
-	github.com/aws/aws-sdk-go-v2/service/rds v1.131.2
-	github.com/aws/aws-sdk-go-v2/service/route53 v1.70.6
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.6
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.81.2
-	github.com/aws/aws-sdk-go-v2/service/sts v1.51.6
+	github.com/aws/aws-sdk-go-v2 v1.48.0
+	github.com/aws/aws-sdk-go-v2/config v1.33.19
+	github.com/aws/aws-sdk-go-v2/credentials v1.21.1
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.23
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.9
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.84.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.76.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.92.2
+	github.com/aws/aws-sdk-go-v2/service/codebuild v1.79.0
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.74.1
+	github.com/aws/aws-sdk-go-v2/service/ecs v1.106.0
+	github.com/aws/aws-sdk-go-v2/service/elasticache v1.66.0
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.64.0
+	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.11
+	github.com/aws/aws-sdk-go-v2/service/rds v1.133.0
+	github.com/aws/aws-sdk-go-v2/service/route53 v1.71.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.115.0
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.83.0
+	github.com/aws/aws-sdk-go-v2/service/sts v1.52.0
 	github.com/aws/session-manager-plugin v0.0.0-20260615221425-930a08e65d3a
-	github.com/aws/smithy-go v1.28.7
+	github.com/aws/smithy-go v1.28.9
 	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/x/exp/teatest/v2 v2.0.0-20260927004216-9c77d672503d
 	github.com/cli/safeexec v1.0.1
 	github.com/dustin/go-humanize v1.1.0
 	github.com/getsentry/sentry-go v0.50.0
-	github.com/go-jose/go-jose/v4 v4.1.8
+	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.9.0
 	github.com/juju/ansiterm v1.0.0
@@ -44,9 +44,9 @@ require (
 	github.com/rogpeppe/go-internal v1.16.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/text v0.43.0
+	golang.org/x/text v0.44.0
 )
 
 require (
@@ -54,21 +54,21 @@ require (
 	charm.land/lipgloss/v2 v2.0.1 // indirect
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.25 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.5 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.8 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.8 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.46.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.13.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/kms v1.62.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.12.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.39.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.1 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.27 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.9 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.12 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.12 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.12 // indirect
+	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.48.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.25 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.13.12 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.12 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.12 // indirect
+	github.com/aws/aws-sdk-go-v2/service/kms v1.63.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.13.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.39.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.5 // indirect
 	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
@@ -104,12 +104,12 @@ require (
 	github.com/xo/terminfo v1.0.0 // indirect
 	github.com/xtaci/smux v1.5.35 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/term v0.46.0 // indirect
-	golang.org/x/tools v0.51.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/term v0.48.0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
 )
 
 // https://github.com/aws/session-manager-plugin/issues/73
