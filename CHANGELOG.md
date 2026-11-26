@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * `db dump --no-download` leaves the dump in S3 and prints its location instead of downloading it. Add `--json` to get the location as JSON.
 * `db dumps` command to list the database dumps stored for an app.
+* `db load --from-app <app>` replaces this app's database with a copy of another app's, in one step and without downloading it to your machine. Use `--from-app <app>:<dump>` to load an existing dump from `db dumps`. Postgres only.
 
 ### Changed
 
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Logging in works on machines that have no user cache directory yet. Saving the auth token failed with `mkdir .../io.apppack: no such file or directory` on slim containers and fresh CI users, because only the last segment of the path was being created.
 * `ps resize` no longer warns "Service does not exist" when resizing `postdeploy` or `pr-predestroy`.
 * `db dump` exits with an error status when the dump fails. It used to print the error and exit successfully.
+* `db load` exits with an error status when the load fails. It used to exit successfully.
 
 ## [4.8.4] - 2026-09-24
 
