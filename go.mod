@@ -8,22 +8,22 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.1
 	github.com/apppackio/saw v1.1.0
 	github.com/aws/aws-sdk-go-v2 v1.48.0
-	github.com/aws/aws-sdk-go-v2/config v1.33.19
-	github.com/aws/aws-sdk-go-v2/credentials v1.21.1
+	github.com/aws/aws-sdk-go-v2/config v1.33.20
+	github.com/aws/aws-sdk-go-v2/credentials v1.21.2
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.23
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.9
-	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.84.0
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.10
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.85.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.76.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.92.2
 	github.com/aws/aws-sdk-go-v2/service/codebuild v1.79.0
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.74.1
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.106.0
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.66.0
-	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.64.0
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.64.1
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.11
 	github.com/aws/aws-sdk-go-v2/service/rds v1.133.0
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.71.0
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.115.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.116.0
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.83.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.52.0
 	github.com/aws/session-manager-plugin v0.0.0-20260615221425-930a08e65d3a
@@ -66,7 +66,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.12 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.12 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kms v1.63.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.13.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.14.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.39.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.5 // indirect
 	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
