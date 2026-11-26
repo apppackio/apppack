@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,6 +42,7 @@ import (
 )
 
 var (
+	dbFrom       string
 	dbOutputFile string
 	dbNoDownload bool
 )
@@ -223,7 +225,8 @@ var dbDumpsCmd = &cobra.Command{
 	Use:   "dumps",
 	Short: "list the database dumps stored in S3",
 	Long: "List the dumps in the app's dump bucket, newest first: those made by `db dump` (dumps/), " +
-		"those uploaded by `db load` (uploads/) and any others.",
+		"those uploaded by `db load` (uploads/) and any others.\n\n" +
+		"A key from this list can be loaded into another app with `db load --from-app <app>:<key>`.",
 	Args:                  cobra.NoArgs,
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, _ []string) {
@@ -320,24 +323,86 @@ func flagIsSet(flags *pflag.FlagSet, name string) bool {
 	return found
 }
 
+// accountOf returns the AWS account an app runs in, read from its cluster ARN
+// (arn:aws:ecs:<region>:<account>:cluster/<name>).
+func accountOf(a *app.App) string {
+	if parts := strings.Split(a.Settings.Cluster.ARN, ":"); len(parts) > 4 {
+		return parts[4]
+	}
+
+	return ""
+}
+
+// copyFailedExit is the load task's exit status when --from-app could not copy
+// the dump into the target's bucket, which happens before anything is dropped.
+const copyFailedExit = 64
+
+// fromRe splits --from-app into an app and an optional dump: "app", "app:dump",
+// "pipeline:12" (a review app) or "pipeline:12:dump". A dump name made only
+// of digits cannot be told from a review app; give its full name.
+var fromRe = regexp.MustCompile(`^([^:]+(?::\d+)?)(?::(.+))?$`)
+
+func parseFrom(from string) (appName, dump string) {
+	m := fromRe.FindStringSubmatch(from)
+	if m == nil {
+		return from, ""
+	}
+
+	return m[1], m[2]
+}
+
 // dbLoadCmd represents the db load command
 var dbLoadCmd = &cobra.Command{
-	Use:   "load <dumpfile>",
+	Use:   "load [<dumpfile>]",
 	Short: "load a dump file into the remote database",
 	Long: `The dump file can either be local (in which case it will first be uploaded to S3. Or you can specify a file already on S3 by using "s3://..." as the first argument.
 
+With --from-app <app> the database of another app is dumped and loaded in one step, without passing through this machine. Postgres only.
+Use --from-app <app>:<dump> to reuse an existing dump in that app's bucket instead of taking a new one, e.g. --from-app my-app:weekly.
+
 WARNING: This is a destructive action which will delete the contents of your remote database in order to load the dump in.
 	`,
-	Args:                  cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if dbFrom != "" {
+			return cobra.NoArgs(cmd, args)
+		}
+
+		return cobra.ExactArgs(1)(cmd, args)
+	},
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		var remoteFile string
+		initApp := app.Init // the local `app` below shadows the package
+		fromApp, fromDump := parseFrom(dbFrom)
+		// before anything else: copying an app onto itself would only destroy it
+		if fromApp == AppName {
+			checkErr(fmt.Errorf("--from-app and --app-name are both %s; they must be different apps", AppName))
+		}
+		loaded := fromApp + " database into " + AppName
+		if dbFrom == "" {
+			loaded = "database dump from " + args[0]
+		}
 		ui.StartSpinner()
 		// db dump load can be really slow, let people open longer sessions to wait for it to finish
-		app, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
+		app, err := initApp(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
 		checkErr(err)
 		checkErr(app.LoadSettings())
 		isPostgres := strings.Contains(app.Settings.DBUtils.Engine, "postgres")
+		source := app
+		if dbFrom != "" {
+			source, err = initApp(fromApp, UseAWSCredentials, MaxSessionDurationSeconds)
+			checkErr(err)
+			checkErr(source.LoadSettings())
+			// Having access to both apps is not enough: someone who works across
+			// customers could copy one tenant's data into another's account.
+			if src, dst := accountOf(source), accountOf(app); src != dst {
+				checkErr(fmt.Errorf("%s is in AWS account %s and %s is in %s; --from-app only copies within one account", fromApp, src, AppName, dst))
+			}
+			// ponytail: Postgres only; the MySQL db-utils image has no curl
+			if !isPostgres || !strings.Contains(source.Settings.DBUtils.Engine, "postgres") {
+				checkErr(errors.New("--from-app is only supported between Postgres databases"))
+			}
+		}
 		// exit if we're not using postgres and --jobs is set
 		if !isPostgres && flagIsSet(cmd.Flags(), "jobs") {
 			checkErr(errors.New("the --jobs/-j flag is only supported for Postgres databases"))
@@ -348,9 +413,59 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		family, err := app.DBDumpLoadFamily()
 		checkErr(err)
 		ui.Spinner.Stop()
-		confirmAction("This will destroy any data that is currently in the database.", AppName)
+		warning := "This will destroy any data that is currently in the database."
+		if dbFrom != "" {
+			// -a is destroyed and --from-app is copied; say which is which
+			warning = fmt.Sprintf("This replaces %s's database with a copy of %s's.", AppName, fromApp)
+		}
+		confirmAction(warning, AppName)
 		ui.StartSpinner()
-		if strings.HasPrefix(args[0], "s3://") {
+		command := []string{"load-from-s3.sh"}
+		var env []ecstypes.KeyValuePair
+		if dbFrom != "" {
+			var dump *s3.GetObjectInput
+			if fromDump != "" {
+				// An existing dump: its name in the source app's dump bucket, with or
+				// without the dumps/ prefix and extension.
+				bucket := source.Settings.DBUtils.S3Bucket
+				var head *s3.HeadObjectOutput
+				for _, key := range []string{fromDump, "dumps/" + fromDump, fromDump + ".dump", "dumps/" + fromDump + ".dump"} {
+					head, err = s3.NewFromConfig(source.Session).HeadObject(context.Background(), &s3.HeadObjectInput{Bucket: &bucket, Key: &key})
+					if err == nil {
+						dump = &s3.GetObjectInput{Bucket: &bucket, Key: &key}
+
+						break
+					}
+				}
+				if dump == nil {
+					checkErr(fmt.Errorf("cannot read dump %q in %s's dump bucket %s: %w", fromDump, fromApp, bucket, err))
+				}
+				ui.Spinner.Stop()
+				progress(fmt.Sprintf("using existing dump %s (%d MB, from %s)", s3URL(dump), aws.ToInt64(head.ContentLength)>>20, aws.ToTime(head.LastModified).Format(time.RFC3339)))
+			} else {
+				dump = dumpToS3(source)
+				progress("dump stored at " + s3URL(dump))
+			}
+			// The load task cannot read the source app's bucket, so it fetches
+			// the dump through a short-lived link into its own bucket first.
+			// It is signed with the source session, so it also dies with that session.
+			presigned, err := s3.NewPresignClient(s3.NewFromConfig(source.Session)).PresignGetObject(
+				context.Background(), dump, s3.WithPresignExpires(5*time.Minute),
+			)
+			checkErr(err)
+			dest, err := app.DBDumpLocation("uploads/")
+			checkErr(err)
+			remoteFile = s3URL(dest)
+			progress("copying to " + remoteFile)
+			env = append(env, ecstypes.KeyValuePair{Name: aws.String("DUMP_URL"), Value: &presigned.URL})
+			// pipefail: a failed download must not reach the load, which drops the database first
+			// ponytail: streams through `aws s3 cp -`, which needs --expected-size above ~50GB
+			command = []string{
+				"bash", "-c",
+				`set -euo pipefail; curl -fsSL "$DUMP_URL" | aws s3 cp --no-progress - "$0" || exit ` + strconv.Itoa(copyFailedExit) + `; exec load-from-s3.sh "$0"`,
+			}
+			ui.StartSpinner()
+		} else if strings.HasPrefix(args[0], "s3://") {
 			remoteFile = args[0]
 		} else {
 			file, err := os.Open(args[0])
@@ -368,18 +483,14 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		}
 		taskOverride := &ecstypes.TaskOverride{}
 		if isPostgres {
-			taskOverride.ContainerOverrides = []ecstypes.ContainerOverride{
-				{
-					Name: aws.String("app"),
-					Environment: []ecstypes.KeyValuePair{
-						{Name: aws.String("PG_RESTORE_JOBS"), Value: aws.String(strconv.Itoa(postgresLoadJobs))},
-					},
-				},
-			}
+			env = append(env, ecstypes.KeyValuePair{Name: aws.String("PG_RESTORE_JOBS"), Value: aws.String(strconv.Itoa(postgresLoadJobs))})
+		}
+		if len(env) > 0 {
+			taskOverride.ContainerOverrides = []ecstypes.ContainerOverride{{Name: aws.String("app"), Environment: env}}
 		}
 		task, err := app.StartTask(
 			family,
-			[]string{"load-from-s3.sh", remoteFile},
+			append(command, remoteFile),
 			taskOverride,
 			true,
 		)
@@ -391,16 +502,23 @@ WARNING: This is a destructive action which will delete the contents of your rem
 		exitCode, err := app.WaitForTaskStopped(task)
 		checkErr(err)
 		ui.Spinner.Stop()
-		// pg_restore can have inconsequential errors... don't assume failure, but notify user
-		if *exitCode != 0 && isPostgres {
-			_ = taskLogs(app.Session, task)
-			printWarning("check pg_restore output")
-		} else if *exitCode != 0 {
-			_ = taskLogs(app.Session, task)
-			printError("database load failed")
-		} else {
-			printSuccess("loaded database dump from " + args[0])
+		if *exitCode == 0 {
+			printSuccess("loaded " + loaded)
+
+			return
 		}
+		_ = taskLogs(app.Session, task)
+		switch {
+		case dbFrom != "" && *exitCode == copyFailedExit:
+			printError("could not copy the dump; the database was not touched")
+		case isPostgres:
+			// pg_restore can have inconsequential errors... don't assume the data is bad, but notify user
+			printWarning("the load task reported errors; check the output above (some pg_restore errors are harmless)")
+		default:
+			printError("database load failed")
+		}
+		// a failed load used to exit 0, which hid it from scripts
+		os.Exit(1)
 	},
 }
 
@@ -417,5 +535,6 @@ func init() {
 	dbDumpCmd.MarkFlagsMutuallyExclusive("output", "no-download")
 	dbCmd.AddCommand(dbDumpsCmd)
 	dbCmd.AddCommand(dbLoadCmd)
+	dbLoadCmd.Flags().StringVar(&dbFrom, "from-app", "", "load another app's database instead of a file: <app> for a fresh dump, <app>:<dump> for an existing one")
 	dbLoadCmd.Flags().IntVarP(&postgresLoadJobs, "jobs", "j", 2, "number of jobs to use for the load (passed through as --jobs to pg_restore -- Postgres only)")
 }

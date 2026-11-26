@@ -118,3 +118,18 @@ func TestUploadObjectReturnsError(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "access denied")
 }
+
+func TestParseFrom(t *testing.T) {
+	tests := []struct{ from, app, dump string }{
+		{"my-app", "my-app", ""},
+		{"my-app:weekly", "my-app", "weekly"},
+		{"my-app:dumps/20261125-me@example.com.dump", "my-app", "dumps/20261125-me@example.com.dump"},
+		{"my-pipeline:12", "my-pipeline:12", ""},
+		{"my-pipeline:12:weekly", "my-pipeline:12", "weekly"},
+	}
+	for _, tt := range tests {
+		appName, dump := parseFrom(tt.from)
+		require.Equal(t, tt.app, appName, tt.from)
+		require.Equal(t, tt.dump, dump, tt.from)
+	}
+}
