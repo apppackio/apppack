@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* `db dump --no-download` leaves the dump in S3 and prints its location instead of downloading it. Add `--json` to get the location as JSON.
+* `db dumps` command to list the database dumps stored for an app.
+
 ### Changed
 
 * AWS API calls made by the CLI now identify themselves in CloudTrail. Requests carry `app/apppack-cli#<version>` in their user agent, so AppPack activity in your account is distinguishable from any other Go SDK client.
@@ -20,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `dash` no longer labels the utilization graphs `web utilization (%%)`. The stray second percent sign came from a format string that is handed straight to the renderer, so it was never consumed.
 * Logging in works on machines that have no user cache directory yet. Saving the auth token failed with `mkdir .../io.apppack: no such file or directory` on slim containers and fresh CI users, because only the last segment of the path was being created.
 * `ps resize` no longer warns "Service does not exist" when resizing `postdeploy` or `pr-predestroy`.
+* `db dump` exits with an error status when the dump fails. It used to print the error and exit successfully.
 
 ## [4.8.4] - 2026-09-24
 

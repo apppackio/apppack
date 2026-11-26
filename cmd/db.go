@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/apppackio/apppack/app"
@@ -38,7 +40,10 @@ import (
 	"github.com/spf13/pflag"
 )
 
-var dbOutputFile string
+var (
+	dbOutputFile string
+	dbNoDownload bool
+)
 
 // Each of these names just the one method its caller uses, so the transfer
 // manager client already satisfies them and a test fake is a plain struct with
@@ -114,11 +119,53 @@ var dbShellCmd = &cobra.Command{
 	},
 }
 
+// progress prints a status line. --json prints one JSON document, so it is
+// silent there.
+func progress(text string) {
+	if !AsJSON {
+		fmt.Println(aurora.Faint(text))
+	}
+}
+
+func s3URL(obj *s3.GetObjectInput) string {
+	return fmt.Sprintf("s3://%s/%s", *obj.Bucket, *obj.Key)
+}
+
+// dumpToS3 runs the dump task for a and waits for it. It exits non-zero on
+// failure, so a script never mistakes a failure for a location.
+func dumpToS3(a *app.App) *s3.GetObjectInput {
+	task, obj, err := a.DBDump()
+	checkErr(err)
+	ui.Spinner.Stop()
+	progress("starting task " + *task.TaskArn)
+	ui.StartSpinner()
+	ui.Spinner.Suffix = " dumping " + a.Name + " database"
+	exitCode, err := a.WaitForTaskStopped(task)
+	checkErr(err)
+	ui.Spinner.Stop()
+	if *exitCode != 0 {
+		_ = taskLogs(a.Session, task)
+		checkErr(errors.New("database dump failed"))
+	}
+
+	return obj
+}
+
+// dumpJSON is the `db dump --json` output.
+type dumpJSON struct {
+	S3URL string `json:"s3_url"`
+	Key   string `json:"key"`
+	File  string `json:"file,omitempty"`
+}
+
 // dbDumpCmd represents the db load command
 var dbDumpCmd = &cobra.Command{
-	Use:                   "dump",
-	Short:                 "dump the database to a local file",
-	Long:                  "Dump the database to `<app-name>.dump` in the current directory",
+	Use:   "dump",
+	Short: "dump the database to a local file",
+	Long: "Dump the database to `<app-name>.dump` in the current directory.\n\n" +
+		"With --no-download the dump stays in S3 and its location is printed on the last line, " +
+		"ready to pass to `db load`. " +
+		"With --json the location is printed as JSON and nothing else.",
 	DisableFlagsInUseLine: true,
 	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
@@ -133,31 +180,91 @@ var dbDumpCmd = &cobra.Command{
 				checkErr(os.MkdirAll(dir, 0o750))
 			}
 		}
-		task, getObjectInput, err := app.DBDump()
-		checkErr(err)
-		ui.Spinner.Stop()
-		fmt.Println(aurora.Faint("starting task " + *task.TaskArn))
+		getObjectInput := dumpToS3(app)
+		result := dumpJSON{S3URL: s3URL(getObjectInput), Key: *getObjectInput.Key}
+		if !dbNoDownload {
+			if dbOutputFile == "" {
+				if strings.HasSuffix(*getObjectInput.Key, ".sql.gz") {
+					dbOutputFile = app.Name + ".sql.gz"
+				} else {
+					dbOutputFile = app.Name + ".dump"
+				}
+			}
+			progress("dump stored at " + result.S3URL)
+			ui.StartSpinner()
+			err = downloadFile(app.Session, getObjectInput, dbOutputFile)
+			checkErr(err)
+			ui.Spinner.Stop()
+			result.File = dbOutputFile
+		}
+		switch {
+		case AsJSON:
+			checkErr(printJSON(result))
+		case dbNoDownload:
+			printSuccess("Dumped database to S3")
+			// Plain and last, so a script can take it with `tail -1`.
+			fmt.Println(result.S3URL)
+		default:
+			printSuccess("Dumped database to " + dbOutputFile)
+		}
+	},
+}
+
+// dumpListJSON is one row of the `db dumps --json` output.
+type dumpListJSON struct {
+	Key          string    `json:"key"`
+	S3URL        string    `json:"s3_url"`
+	Size         int64     `json:"size"`
+	LastModified time.Time `json:"last_modified"`
+}
+
+// dbDumpsCmd represents the db dumps command
+var dbDumpsCmd = &cobra.Command{
+	Use:   "dumps",
+	Short: "list the database dumps stored in S3",
+	Long: "List the dumps in the app's dump bucket, newest first: those made by `db dump` (dumps/), " +
+		"those uploaded by `db load` (uploads/) and any others.",
+	Args:                  cobra.NoArgs,
+	DisableFlagsInUseLine: true,
+	Run: func(_ *cobra.Command, _ []string) {
 		ui.StartSpinner()
-		ui.Spinner.Suffix = " dumping database"
-		exitCode, err := app.WaitForTaskStopped(task)
+		a, err := app.Init(AppName, UseAWSCredentials, SessionDurationSeconds)
 		checkErr(err)
-		if *exitCode != 0 {
-			_ = taskLogs(app.Session, task)
-			printError("database dump failed")
+		checkErr(a.LoadSettings())
+		bucket := a.Settings.DBUtils.S3Bucket
+		dumps := []dumpListJSON{}
+		pages := s3.NewListObjectsV2Paginator(s3.NewFromConfig(a.Session), &s3.ListObjectsV2Input{Bucket: &bucket})
+		for pages.HasMorePages() {
+			page, err := pages.NextPage(context.Background())
+			checkErr(err)
+			for _, obj := range page.Contents {
+				dumps = append(dumps, dumpListJSON{
+					Key:          *obj.Key,
+					S3URL:        fmt.Sprintf("s3://%s/%s", bucket, *obj.Key),
+					Size:         aws.ToInt64(obj.Size),
+					LastModified: aws.ToTime(obj.LastModified),
+				})
+			}
+		}
+		sort.Slice(dumps, func(i, j int) bool { return dumps[i].LastModified.After(dumps[j].LastModified) })
+		ui.Spinner.Stop()
+		if AsJSON {
+			checkErr(printJSON(dumps))
 
 			return
 		}
-		if dbOutputFile == "" {
-			if strings.HasSuffix(*getObjectInput.Key, ".sql.gz") {
-				dbOutputFile = app.Name + ".sql.gz"
-			} else {
-				dbOutputFile = app.Name + ".dump"
-			}
+		if len(dumps) == 0 {
+			fmt.Println(aurora.Faint("no dumps in s3://" + bucket))
+
+			return
 		}
-		err = downloadFile(app.Session, getObjectInput, dbOutputFile)
-		checkErr(err)
-		ui.Spinner.Stop()
-		printSuccess("Dumped database to " + dbOutputFile)
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		// write errors surface in Flush
+		_, _ = fmt.Fprintln(w, "MODIFIED\tSIZE\tKEY")
+		for _, d := range dumps {
+			_, _ = fmt.Fprintf(w, "%s\t%d MB\t%s\n", d.LastModified.Local().Format("2006-01-02 15:04"), d.Size>>20, d.Key)
+		}
+		checkErr(w.Flush())
 	},
 }
 
@@ -306,6 +413,9 @@ func init() {
 	dbCmd.AddCommand(dbShellCmd)
 	dbCmd.AddCommand(dbDumpCmd)
 	dbDumpCmd.Flags().StringVarP(&dbOutputFile, "output", "o", "", "path to output file -- default will be <app-name> with the appropriate extension for the database")
+	dbDumpCmd.Flags().BoolVar(&dbNoDownload, "no-download", false, "leave the dump in S3 and print its location instead of downloading it")
+	dbDumpCmd.MarkFlagsMutuallyExclusive("output", "no-download")
+	dbCmd.AddCommand(dbDumpsCmd)
 	dbCmd.AddCommand(dbLoadCmd)
 	dbLoadCmd.Flags().IntVarP(&postgresLoadJobs, "jobs", "j", 2, "number of jobs to use for the load (passed through as --jobs to pg_restore -- Postgres only)")
 }
