@@ -8,24 +8,24 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.1
 	github.com/apppackio/saw v1.1.0
 	github.com/aws/aws-sdk-go-v2 v1.48.0
-	github.com/aws/aws-sdk-go-v2/config v1.33.20
-	github.com/aws/aws-sdk-go-v2/credentials v1.21.2
+	github.com/aws/aws-sdk-go-v2/config v1.33.21
+	github.com/aws/aws-sdk-go-v2/credentials v1.21.3
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.23
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.10
-	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.85.0
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.11
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.86.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.76.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.92.2
 	github.com/aws/aws-sdk-go-v2/service/codebuild v1.79.0
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.74.1
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.106.0
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.66.0
-	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.64.1
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.65.0
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.11
-	github.com/aws/aws-sdk-go-v2/service/rds v1.133.0
-	github.com/aws/aws-sdk-go-v2/service/route53 v1.71.0
+	github.com/aws/aws-sdk-go-v2/service/rds v1.134.0
+	github.com/aws/aws-sdk-go-v2/service/route53 v1.72.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.116.0
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.83.0
-	github.com/aws/aws-sdk-go-v2/service/sts v1.52.0
+	github.com/aws/aws-sdk-go-v2/service/sts v1.53.0
 	github.com/aws/session-manager-plugin v0.0.0-20260615221425-930a08e65d3a
 	github.com/aws/smithy-go v1.28.9
 	github.com/briandowns/spinner v1.23.2
