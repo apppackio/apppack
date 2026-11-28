@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/apppackio/apppack/app"
 	"github.com/logrusorgru/aurora"
@@ -24,27 +25,50 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// openCmd represents the open command
-var openCmd = &cobra.Command{
-	Use:   "open",
-	Short: "open the app in a browser",
-	Run: func(_ *cobra.Command, _ []string) {
-		a, err := app.Init(AppName, UseAWSCredentials, MaxSessionDurationSeconds)
-		checkErr(err)
-		u, err := a.URL(nil)
-		checkErr(err)
-		fmt.Printf("opening %s\n", aurora.Bold(*u))
-		err = browser.OpenURL(*u)
-		if err != nil {
-			fmt.Println("Open this URL in your browser to view logs:")
-			fmt.Println(*u)
-		}
-	},
+type openOptions struct {
+	appName           string
+	useAWSCredentials bool
+}
+
+func newOpenCmd() *cobra.Command {
+	o := &openOptions{}
+
+	cmd := &cobra.Command{
+		Use:   "open",
+		Short: "open the app in a browser",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return o.run(cmd.OutOrStdout())
+		},
+	}
+
+	cmd.PersistentFlags().StringVarP(&o.appName, "app-name", "a", "", "app name (required)")
+	_ = cmd.MarkPersistentFlagRequired("app-name")
+	cmd.PersistentFlags().BoolVar(&o.useAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
+
+	return cmd
+}
+
+func (o *openOptions) run(out io.Writer) error {
+	a, err := app.Init(o.appName, o.useAWSCredentials, MaxSessionDurationSeconds)
+	if err != nil {
+		return err
+	}
+
+	u, err := a.URL(nil)
+	if err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(out, "opening %s\n", aurora.Bold(*u))
+
+	if err := browser.OpenURL(*u); err != nil {
+		_, _ = fmt.Fprintln(out, "Open this URL in your browser to view it:")
+		_, _ = fmt.Fprintln(out, *u)
+	}
+
+	return nil
 }
 
 func init() {
-	rootCmd.AddCommand(openCmd)
-	openCmd.PersistentFlags().StringVarP(&AppName, "app-name", "a", "", "app name (required)")
-	_ = openCmd.MarkPersistentFlagRequired("app-name")
-	openCmd.PersistentFlags().BoolVar(&UseAWSCredentials, "aws-credentials", false, "use AWS credentials instead of AppPack.io federation")
+	registerCommand(newOpenCmd)
 }
