@@ -1130,8 +1130,8 @@ func (*AppStack) Capabilities() []types.Capability {
 
 func (*AppStack) TemplateURL(release *string) *string {
 	url := appFormationURL
-	if release != nil {
-		url = strings.Replace(appFormationURL, "/latest/", fmt.Sprintf("/%s/", *release), 1)
+	if release != nil && *release != "" {
+		url = strings.Replace(url, "/latest/", fmt.Sprintf("/%s/", *release), 1)
 	}
 
 	return &url
