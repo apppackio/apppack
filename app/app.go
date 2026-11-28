@@ -162,6 +162,7 @@ type Process struct {
 	MaxProcesses int    `dynamodbav:"max_processes" json:"max_processes"`
 	State        string `dynamodbav:"state"         json:"state"`
 	Command      string `dynamodbav:"command"       json:"command"`
+	Strategy     string `dynamodbav:"strategy"      json:"strategy,omitempty"`
 }
 
 // locationName is the tag used by aws-sdk internally
@@ -1169,10 +1170,12 @@ type Scaling struct {
 	Memory       int `json:"memory"`
 	MinProcesses int `json:"min_processes"`
 	MaxProcesses int `json:"max_processes"`
+	// Strategy overrides the apppack.toml deploy strategy; empty means not overridden
+	Strategy string `json:"strategy,omitempty"`
 }
 
 func (a *App) ResizeProcess(processType string, cpu, memory int) error {
-	return a.SetScaleParameter(processType, nil, nil, &cpu, &memory)
+	return a.SetScaleParameter(processType, nil, nil, &cpu, &memory, nil)
 }
 
 // RestartProcess restarts the ECS service or tasks for the given processType.
@@ -1253,12 +1256,12 @@ func getTagFromTask(task *ecstypes.Task, key string) (string, error) {
 }
 
 func (a *App) ScaleProcess(processType string, minProcessCount, maxProcessCount int) error {
-	return a.SetScaleParameter(processType, &minProcessCount, &maxProcessCount, nil, nil)
+	return a.SetScaleParameter(processType, &minProcessCount, &maxProcessCount, nil, nil, nil)
 }
 
-// SetScaleParameter updates process count and cpu/ram with any non-nil values provided
+// SetScaleParameter updates process count, cpu/ram and deploy strategy with any non-nil values provided
 // if it is not yet set, the defaults from ECSConfig will be used
-func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessCount, cpu, memory *int) error {
+func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessCount, cpu, memory *int, strategy *string) error {
 	ssmSvc := ssm.NewFromConfig(a.Session)
 
 	var parameterName string
@@ -1324,6 +1327,10 @@ func (a *App) SetScaleParameter(processType string, minProcessCount, maxProcessC
 
 	if memory != nil {
 		scaling[processType].Memory = *memory
+	}
+
+	if strategy != nil {
+		scaling[processType].Strategy = *strategy
 	}
 
 	scalingJSON, err := json.Marshal(scaling)
